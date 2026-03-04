@@ -1,5 +1,5 @@
 // BizEngine View Client SDK — minimal skeleton for CTO to integrate with Svelte 5
-import type { Views, DataRef, ViewSnapshotMsg, TableDiffMsg, ViewDiffMsg, PatchOp } from "./views";
+import type { Views, DataRef, ViewSnapshotMsg, TableDiffMsg, ViewDiffMsg } from "./views";
 
 type ViewKey = keyof Views;
 
@@ -20,10 +20,10 @@ interface ViewSubscription<K extends ViewKey> {
  * ArcanaClient provides typed view subscriptions with real-time updates.
  *
  * Usage:
- *   const client = new ArcanaClient("/api/v1", centrifugoClient);
+ *   const client = new ArcanaClient("/api/v1");
+ *   client.setWorkspace(wsID);
  *   const result = await client.subscribe("orders_list", { status: "active" });
- *   // result.refs + result.tables contain initial data
- *   // Centrifugo delivers table_diff / view_diff automatically
+ *   // Centrifugo delivers table_diff / view_diff — wire handleSnapshot/handleTableDiff/handleViewDiff
  */
 export class ArcanaClient {
   private baseURL: string;
@@ -85,7 +85,7 @@ export class ArcanaClient {
     this.subscriptions.delete(paramsHash);
   }
 
-  async active(): Promise<ViewSubscription<ViewKey>[]> {
+  async active(): Promise<{ view: string; params_hash: string; version: number }[]> {
     const resp = await fetch(
       `${this.baseURL}/workspaces/${this.wsID}/views/active`,
       { credentials: "include" }
@@ -117,7 +117,7 @@ export class ArcanaClient {
     if (!sub) return;
     sub.refs = msg.refs;
     sub.version = msg.version;
-    // TODO: CTO — merge msg.tables into Svelte tableStore
+    // TODO: CTO — merge msg.tables into Svelte tableStore (replace, not merge)
   }
 
   handleTableDiff(msg: TableDiffMsg): void {
@@ -130,8 +130,17 @@ export class ArcanaClient {
     const sub = this.subscriptions.get(msg.params_hash);
     if (!sub) return;
     sub.version = msg.version;
-    // TODO: CTO — apply msg.refs_patch to viewStore refs
-    // merge msg.tables into tableStore for new records
-    void msg;
+
+    for (const op of msg.refs_patch) {
+      if (op.op === "add" && op.value) {
+        sub.refs.push(op.value as DataRef);
+      } else if (op.op === "replace" && op.value === null) {
+        const idx = parseInt(op.path.replace("/", ""), 10);
+        if (!isNaN(idx) && idx < sub.refs.length) {
+          sub.refs.splice(idx, 1);
+        }
+      }
+    }
+    // TODO: CTO — merge msg.tables into Svelte tableStore for new records
   }
 }
