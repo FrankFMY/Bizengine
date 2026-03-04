@@ -89,9 +89,13 @@ func (b *LocalBus) Publish(ctx context.Context, event types.Event) error {
 	}
 	b.mu.RUnlock()
 
+	// Detach from caller context so subscribers are not cancelled
+	// when the HTTP request completes.
+	bgCtx := context.WithoutCancel(ctx)
+
 	for _, handler := range matching {
 		go func(h Subscriber) {
-			if err := h.HandleEvent(ctx, event); err != nil {
+			if err := h.HandleEvent(bgCtx, event); err != nil {
 				log.Error().
 					Err(err).
 					Str("event_type", event.Type).

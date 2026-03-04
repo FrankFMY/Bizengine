@@ -68,7 +68,7 @@ func parsePage(r *http.Request) types.PageRequest {
 // decodeJSON decodes the request body into v.
 func decodeJSON(r *http.Request, v any) error {
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
-		return errs.NewBadRequest("invalid request body")
+		return errs.NewBadRequest("invalid request body: " + err.Error())
 	}
 	return nil
 }
