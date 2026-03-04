@@ -13,19 +13,39 @@ import (
 	"github.com/bizengine/engine/pkg/types"
 )
 
-// writeJSON writes a JSON response.
-func writeJSON(w http.ResponseWriter, status int, v any) {
+// respondOK writes a successful JSON response wrapped in the standard envelope.
+func respondOK(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(v)
+	json.NewEncoder(w).Encode(types.Response{OK: true, Data: data})
 }
 
-// writeError writes an error response based on typed errors.
-func writeError(w http.ResponseWriter, err error) {
+// respondCreated writes a 201 Created response wrapped in the standard envelope.
+func respondCreated(w http.ResponseWriter, data any) {
+	respondOK(w, http.StatusCreated, data)
+}
+
+// respondError writes an error response wrapped in the standard envelope.
+func respondError(w http.ResponseWriter, err error) {
 	status := errs.HTTPStatus(err)
-	writeJSON(w, status, types.ErrorResponse{
-		Code:    string(errs.GetCode(err)),
-		Message: errs.GetMessage(err),
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(types.Response{
+		OK: false,
+		Error: &types.ResponseError{
+			Code:    string(errs.GetCode(err)),
+			Details: errs.GetMessage(err),
+		},
+	})
+}
+
+// respondValidation writes a 422 validation error response.
+func respondValidation(w http.ResponseWriter, v errs.ValidationErrors) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnprocessableEntity)
+	json.NewEncoder(w).Encode(types.Response{
+		OK:         false,
+		Validation: v,
 	})
 }
 

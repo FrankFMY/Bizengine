@@ -9,7 +9,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/bizengine/engine/internal/core/auth"
 	"github.com/bizengine/engine/pkg/errs"
 	"github.com/bizengine/engine/pkg/types"
 )
@@ -268,50 +267,6 @@ func (r *AuthRepo) RemoveMember(ctx context.Context, wsID, userID uuid.UUID) err
 	return nil
 }
 
-// CreateRefreshToken stores a hashed refresh token.
-func (r *AuthRepo) CreateRefreshToken(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) (uuid.UUID, error) {
-	id := uuid.New()
-	_, err := r.pool.Exec(ctx,
-		`INSERT INTO refresh_tokens (id, user_id, token_hash, expires_at, created_at)
-		 VALUES ($1, $2, $3, $4, NOW())`,
-		id, userID, tokenHash, expiresAt,
-	)
-	return id, err
-}
-
-// GetRefreshToken returns a refresh token by hash.
-func (r *AuthRepo) GetRefreshToken(ctx context.Context, tokenHash string) (*auth.RefreshToken, error) {
-	var rt auth.RefreshToken
-	err := r.pool.QueryRow(ctx,
-		`SELECT id, user_id, token_hash, expires_at, created_at, revoked_at
-		 FROM refresh_tokens WHERE token_hash = $1`, tokenHash,
-	).Scan(&rt.ID, &rt.UserID, &rt.TokenHash, &rt.ExpiresAt, &rt.CreatedAt, &rt.RevokedAt)
-	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, errs.NewNotFound("refresh token not found")
-		}
-		return nil, err
-	}
-	return &rt, nil
-}
-
-// RevokeRefreshToken marks a refresh token as revoked.
-func (r *AuthRepo) RevokeRefreshToken(ctx context.Context, tokenHash string) error {
-	_, err := r.pool.Exec(ctx,
-		`UPDATE refresh_tokens SET revoked_at = NOW() WHERE token_hash = $1 AND revoked_at IS NULL`,
-		tokenHash,
-	)
-	return err
-}
-
-// RevokeAllUserTokens revokes all refresh tokens for a user.
-func (r *AuthRepo) RevokeAllUserTokens(ctx context.Context, userID uuid.UUID) error {
-	_, err := r.pool.Exec(ctx,
-		`UPDATE refresh_tokens SET revoked_at = NOW() WHERE user_id = $1 AND revoked_at IS NULL`,
-		userID,
-	)
-	return err
-}
 
 func isDuplicateKey(err error) bool {
 	return err != nil && (contains(err.Error(), "duplicate key") || contains(err.Error(), "23505"))

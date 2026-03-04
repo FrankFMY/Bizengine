@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
 
@@ -29,20 +28,4 @@ type Repository interface {
 	ListMembers(ctx context.Context, wsID uuid.UUID) ([]types.WorkspaceMember, error)
 	UpdateMemberRole(ctx context.Context, wsID, userID uuid.UUID, role string) error
 	RemoveMember(ctx context.Context, wsID, userID uuid.UUID) error
-
-	// Refresh Tokens
-	CreateRefreshToken(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) (uuid.UUID, error)
-	GetRefreshToken(ctx context.Context, tokenHash string) (*RefreshToken, error)
-	RevokeRefreshToken(ctx context.Context, tokenHash string) error
-	RevokeAllUserTokens(ctx context.Context, userID uuid.UUID) error
-}
-
-// RefreshToken represents a stored refresh token.
-type RefreshToken struct {
-	ID        uuid.UUID
-	UserID    uuid.UUID
-	TokenHash string
-	ExpiresAt time.Time
-	CreatedAt time.Time
-	RevokedAt *time.Time
 }

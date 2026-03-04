@@ -23,42 +23,42 @@ func NewProcessHandler(engine *process.Engine) *ProcessHandler {
 func (h *ProcessHandler) ListDefinitions(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
 	defs, err := h.engine.ListDefinitions(r.Context(), wsID)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, defs)
+	respondOK(w, http.StatusOK,defs)
 }
 
 // GetDefinition handles GET /api/v1/workspaces/{wsID}/processes/definitions/{defID}.
 func (h *ProcessHandler) GetDefinition(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	defID := chi.URLParam(r, "defID")
 
 	def, err := h.engine.GetDefinition(r.Context(), defID, &wsID)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, def)
+	respondOK(w, http.StatusOK,def)
 }
 
 // ListInstances handles GET /api/v1/workspaces/{wsID}/processes/instances.
 func (h *ProcessHandler) ListInstances(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
@@ -67,11 +67,11 @@ func (h *ProcessHandler) ListInstances(w http.ResponseWriter, r *http.Request) {
 
 	instances, total, err := h.engine.ListInstances(r.Context(), wsID, status, page.Limit, page.Offset)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	respondOK(w, http.StatusOK,map[string]any{
 		"items":  instances,
 		"total":  total,
 		"limit":  page.Limit,
@@ -83,41 +83,41 @@ func (h *ProcessHandler) ListInstances(w http.ResponseWriter, r *http.Request) {
 func (h *ProcessHandler) GetInstance(w http.ResponseWriter, r *http.Request) {
 	instID, err := parseUUID(r, "instID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
 	inst, err := h.engine.GetInstance(r.Context(), instID)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, inst)
+	respondOK(w, http.StatusOK,inst)
 }
 
 // GetByEntity handles GET /api/v1/workspaces/{wsID}/processes/entity/{entityID}.
 func (h *ProcessHandler) GetByEntity(w http.ResponseWriter, r *http.Request) {
 	entityID, err := parseUUID(r, "entityID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
 	instances, err := h.engine.GetInstancesByEntity(r.Context(), entityID)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, instances)
+	respondOK(w, http.StatusOK,instances)
 }
 
 // Trigger handles POST /api/v1/workspaces/{wsID}/processes/trigger.
 func (h *ProcessHandler) Trigger(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	var input struct {
@@ -126,20 +126,20 @@ func (h *ProcessHandler) Trigger(w http.ResponseWriter, r *http.Request) {
 		Data      json.RawMessage `json:"data,omitempty"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
 	entityID, err := parseUUIDString(input.EntityID)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
 	if err := h.engine.TriggerManual(r.Context(), wsID, entityID, input.EventType, input.Data); err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	respondOK(w, http.StatusOK, nil)
 }

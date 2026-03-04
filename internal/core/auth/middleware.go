@@ -3,7 +3,7 @@ package auth
 import (
 	"context"
 	"net/http"
-	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -14,49 +14,146 @@ const (
 	ctxKeyUserID      contextKey = "user_id"
 	ctxKeyWorkspaceID contextKey = "workspace_id"
 	ctxKeyRole        contextKey = "role"
+	ctxKeySessionID   contextKey = "session_id"
+	ctxKeySeanceID    contextKey = "seance_id"
 )
 
-// Middleware extracts JWT from Authorization header and populates context.
-func Middleware(authSvc *Service) func(http.Handler) http.Handler {
+// Exported context keys for testing.
+var (
+	ExportedCtxKeyUserID      = ctxKeyUserID
+	ExportedCtxKeyWorkspaceID = ctxKeyWorkspaceID
+	ExportedCtxKeyRole        = ctxKeyRole
+)
+
+// ExportedCtxKeySeanceID returns the seance context key for testing.
+func ExportedCtxKeySeanceID() contextKey { return ctxKeySeanceID }
+
+const (
+	cookieSession = "teco_session"
+	cookieSeance  = "teco_seance"
+)
+
+// Middleware reads session/seance cookies and populates context.
+func Middleware(svc *Service) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			header := r.Header.Get("Authorization")
-			if header == "" {
-				http.Error(w, `{"code":"UNAUTHORIZED","message":"missing authorization header"}`, http.StatusUnauthorized)
+			sessionCookie, err := r.Cookie(cookieSession)
+			if err != nil || sessionCookie.Value == "" {
+				writeAuthPlain(w, "SESSION")
 				return
 			}
 
-			tokenStr := strings.TrimPrefix(header, "Bearer ")
-			if tokenStr == header {
-				http.Error(w, `{"code":"UNAUTHORIZED","message":"invalid authorization format"}`, http.StatusUnauthorized)
-				return
-			}
+			store := svc.Store()
+			ctx := r.Context()
 
-			claims, err := authSvc.VerifyToken(tokenStr)
+			sess, err := store.GetSession(ctx, sessionCookie.Value)
 			if err != nil {
-				http.Error(w, `{"code":"UNAUTHORIZED","message":"invalid or expired token"}`, http.StatusUnauthorized)
+				writeAuthPlain(w, "SESSION")
 				return
 			}
 
-			userID, err := uuid.Parse(claims.Subject)
+			seanceCookie, err := r.Cookie(cookieSeance)
+			if err != nil || seanceCookie.Value == "" {
+				writeAuthPlain(w, "SEANCE")
+				return
+			}
+
+			seance, err := store.GetSeance(ctx, seanceCookie.Value)
 			if err != nil {
-				http.Error(w, `{"code":"UNAUTHORIZED","message":"invalid user id in token"}`, http.StatusUnauthorized)
+				writeAuthPlain(w, "SEANCE")
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), ctxKeyUserID, userID)
-			ctx = context.WithValue(ctx, ctxKeyRole, claims.Role)
+			if seance.SessionID != sessionCookie.Value {
+				writeAuthPlain(w, "SEANCE")
+				return
+			}
 
-			if claims.WsID != "" {
-				wsID, err := uuid.Parse(claims.WsID)
-				if err == nil {
-					ctx = context.WithValue(ctx, ctxKeyWorkspaceID, wsID)
-				}
+			store.SlideSeance(ctx, seanceCookie.Value, svc.SeanceTTL())
+
+			ctx = context.WithValue(ctx, ctxKeyUserID, sess.UserID)
+			ctx = context.WithValue(ctx, ctxKeyRole, sess.Role)
+			ctx = context.WithValue(ctx, ctxKeySessionID, sess.ID)
+			ctx = context.WithValue(ctx, ctxKeySeanceID, seanceCookie.Value)
+
+			if sess.WorkspaceID != uuid.Nil {
+				ctx = context.WithValue(ctx, ctxKeyWorkspaceID, sess.WorkspaceID)
 			}
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// SessionOnlyMiddleware validates only the session cookie (for /unlock where seance is expired).
+func SessionOnlyMiddleware(svc *Service) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			sessionCookie, err := r.Cookie(cookieSession)
+			if err != nil || sessionCookie.Value == "" {
+				writeAuthPlain(w, "SESSION")
+				return
+			}
+
+			sess, err := svc.Store().GetSession(r.Context(), sessionCookie.Value)
+			if err != nil {
+				writeAuthPlain(w, "SESSION")
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), ctxKeyUserID, sess.UserID)
+			ctx = context.WithValue(ctx, ctxKeySessionID, sess.ID)
+			ctx = context.WithValue(ctx, ctxKeyRole, sess.Role)
+
+			if sess.WorkspaceID != uuid.Nil {
+				ctx = context.WithValue(ctx, ctxKeyWorkspaceID, sess.WorkspaceID)
+			}
+
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+// SetAuthCookies sets teco_session and teco_seance cookies.
+func SetAuthCookies(w http.ResponseWriter, sess *Session, seance *Seance, sessionTTL, seanceTTL time.Duration, secure bool) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     cookieSession,
+		Value:    sess.ID,
+		Path:     "/",
+		MaxAge:   int(sessionTTL.Seconds()),
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     cookieSeance,
+		Value:    seance.ID,
+		Path:     "/",
+		MaxAge:   int(seanceTTL.Seconds()),
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// ClearAuthCookies removes auth cookies.
+func ClearAuthCookies(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     cookieSession,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     cookieSeance,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 // UserIDFromCtx extracts user_id from context.
@@ -75,4 +172,22 @@ func WorkspaceIDFromCtx(ctx context.Context) (uuid.UUID, bool) {
 func RoleFromCtx(ctx context.Context) string {
 	role, _ := ctx.Value(ctxKeyRole).(string)
 	return role
+}
+
+// SessionIDFromCtx extracts session ID from context.
+func SessionIDFromCtx(ctx context.Context) (string, bool) {
+	id, ok := ctx.Value(ctxKeySessionID).(string)
+	return id, ok
+}
+
+// SeanceIDFromCtx extracts seance ID from context.
+func SeanceIDFromCtx(ctx context.Context) (string, bool) {
+	id, ok := ctx.Value(ctxKeySeanceID).(string)
+	return id, ok
+}
+
+func writeAuthPlain(w http.ResponseWriter, body string) {
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusUnauthorized)
+	w.Write([]byte(`"` + body + `"`))
 }

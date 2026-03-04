@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -8,8 +9,198 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/bizengine/engine/pkg/errs"
 	"github.com/bizengine/engine/pkg/types"
 )
+
+// --- mock repo ---
+
+type mockRepo struct {
+	users      map[string]*types.User
+	usersById  map[uuid.UUID]*types.User
+	workspaces map[uuid.UUID]*types.Workspace
+	members    map[string]*types.WorkspaceMember
+}
+
+func newMockRepo() *mockRepo {
+	return &mockRepo{
+		users:      make(map[string]*types.User),
+		usersById:  make(map[uuid.UUID]*types.User),
+		workspaces: make(map[uuid.UUID]*types.Workspace),
+		members:    make(map[string]*types.WorkspaceMember),
+	}
+}
+
+func (m *mockRepo) CreateUser(_ context.Context, u *types.User) error {
+	if _, ok := m.users[u.Email]; ok {
+		return errs.NewConflict("email exists")
+	}
+	cp := *u
+	m.users[u.Email] = &cp
+	m.usersById[u.ID] = &cp
+	return nil
+}
+
+func (m *mockRepo) GetUserByEmail(_ context.Context, email string) (*types.User, error) {
+	u, ok := m.users[email]
+	if !ok {
+		return nil, errs.NewNotFound("not found")
+	}
+	cp := *u
+	return &cp, nil
+}
+
+func (m *mockRepo) GetUserByID(_ context.Context, id uuid.UUID) (*types.User, error) {
+	u, ok := m.usersById[id]
+	if !ok {
+		return nil, errs.NewNotFound("not found")
+	}
+	cp := *u
+	return &cp, nil
+}
+
+func (m *mockRepo) CreateWorkspace(_ context.Context, ws *types.Workspace) error {
+	cp := *ws
+	m.workspaces[ws.ID] = &cp
+	return nil
+}
+
+func (m *mockRepo) GetWorkspace(_ context.Context, id uuid.UUID) (*types.Workspace, error) {
+	ws, ok := m.workspaces[id]
+	if !ok {
+		return nil, errs.NewNotFound("not found")
+	}
+	cp := *ws
+	return &cp, nil
+}
+
+func (m *mockRepo) GetWorkspaceBySlug(_ context.Context, slug string) (*types.Workspace, error) {
+	for _, ws := range m.workspaces {
+		if ws.Slug == slug {
+			cp := *ws
+			return &cp, nil
+		}
+	}
+	return nil, errs.NewNotFound("not found")
+}
+
+func (m *mockRepo) ListUserWorkspaces(_ context.Context, userID uuid.UUID) ([]types.Workspace, error) {
+	var result []types.Workspace
+	for _, mem := range m.members {
+		if mem.UserID == userID {
+			if ws, ok := m.workspaces[mem.WorkspaceID]; ok {
+				result = append(result, *ws)
+			}
+		}
+	}
+	return result, nil
+}
+
+func (m *mockRepo) UpdateWorkspace(_ context.Context, ws *types.Workspace) error {
+	m.workspaces[ws.ID] = ws
+	return nil
+}
+
+func (m *mockRepo) AddMember(_ context.Context, mem *types.WorkspaceMember) error {
+	key := mem.WorkspaceID.String() + ":" + mem.UserID.String()
+	cp := *mem
+	m.members[key] = &cp
+	return nil
+}
+
+func (m *mockRepo) GetMember(_ context.Context, wsID, userID uuid.UUID) (*types.WorkspaceMember, error) {
+	key := wsID.String() + ":" + userID.String()
+	mem, ok := m.members[key]
+	if !ok {
+		return nil, errs.NewNotFound("not found")
+	}
+	cp := *mem
+	return &cp, nil
+}
+
+func (m *mockRepo) ListMembers(_ context.Context, _ uuid.UUID) ([]types.WorkspaceMember, error) {
+	return nil, nil
+}
+
+func (m *mockRepo) UpdateMemberRole(_ context.Context, _, _ uuid.UUID, _ string) error {
+	return nil
+}
+
+func (m *mockRepo) RemoveMember(_ context.Context, _, _ uuid.UUID) error {
+	return nil
+}
+
+// --- mock session store ---
+
+type mockStore struct {
+	sessions map[string]*Session
+	seances  map[string]*Seance
+	sesSet   map[string][]string
+}
+
+func newMockStore() *mockStore {
+	return &mockStore{
+		sessions: make(map[string]*Session),
+		seances:  make(map[string]*Seance),
+		sesSet:   make(map[string][]string),
+	}
+}
+
+func (m *mockStore) CreateSession(_ context.Context, s *Session, _ time.Duration) error {
+	cp := *s
+	m.sessions[s.ID] = &cp
+	return nil
+}
+
+func (m *mockStore) GetSession(_ context.Context, id string) (*Session, error) {
+	s, ok := m.sessions[id]
+	if !ok {
+		return nil, errs.NewUnauthorized("session expired")
+	}
+	cp := *s
+	return &cp, nil
+}
+
+func (m *mockStore) UpdateSession(_ context.Context, s *Session, _ time.Duration) error {
+	cp := *s
+	m.sessions[s.ID] = &cp
+	return nil
+}
+
+func (m *mockStore) DeleteSession(_ context.Context, id string) error {
+	delete(m.sessions, id)
+	return nil
+}
+
+func (m *mockStore) CreateSeance(_ context.Context, s *Seance, _ time.Duration) error {
+	cp := *s
+	m.seances[s.ID] = &cp
+	m.sesSet[s.SessionID] = append(m.sesSet[s.SessionID], s.ID)
+	return nil
+}
+
+func (m *mockStore) GetSeance(_ context.Context, id string) (*Seance, error) {
+	s, ok := m.seances[id]
+	if !ok {
+		return nil, errs.NewUnauthorized("seance expired")
+	}
+	cp := *s
+	return &cp, nil
+}
+
+func (m *mockStore) SlideSeance(_ context.Context, _ string, _ time.Duration) error {
+	return nil
+}
+
+func (m *mockStore) DeleteSessionSeances(_ context.Context, sessionID string) error {
+	for _, id := range m.sesSet[sessionID] {
+		delete(m.seances, id)
+	}
+	delete(m.sesSet, sessionID)
+	return nil
+}
+
+// --- tests ---
 
 func TestHasPermission_Owner(t *testing.T) {
 	assert.True(t, HasPermission("owner", nil, "entity.create"))
@@ -50,42 +241,151 @@ func TestHasPermission_UnknownRole(t *testing.T) {
 	assert.False(t, HasPermission("unknown", nil, "entity.read"))
 }
 
-func TestVerifyToken_RoundTrip(t *testing.T) {
-	svc := NewService(nil, "test-secret-32-chars-minimum!!!!!", 15*time.Minute, 720*time.Hour)
+func TestRegister_CreatesSessionAndSeance(t *testing.T) {
+	repo := newMockRepo()
+	store := newMockStore()
+	svc := NewService(repo, store, 72*time.Hour, 10*time.Minute)
 
-	user := &types.User{
-		ID:       uuid.New(),
+	result, err := svc.Register(context.Background(), RegisterInput{
 		Email:    "test@example.com",
+		Password: "password123",
 		FullName: "Test User",
-	}
-	wsID := uuid.New()
+	})
 
-	token, err := svc.issueAccessToken(user, &wsID, "admin")
 	require.NoError(t, err)
-	require.NotEmpty(t, token)
-
-	claims, err := svc.VerifyToken(token)
-	require.NoError(t, err)
-	assert.Equal(t, user.ID.String(), claims.Subject)
-	assert.Equal(t, user.Email, claims.Email)
-	assert.Equal(t, "admin", claims.Role)
-	assert.Equal(t, wsID.String(), claims.WsID)
+	assert.Equal(t, "test@example.com", result.User.Email)
+	assert.NotNil(t, result.Session)
+	assert.NotNil(t, result.Seance)
+	assert.NotEmpty(t, result.Session.ID)
+	assert.Equal(t, result.Session.ID, result.Seance.SessionID)
 }
 
-func TestVerifyToken_Invalid(t *testing.T) {
-	svc := NewService(nil, "test-secret-32-chars-minimum!!!!!", 15*time.Minute, 720*time.Hour)
+func TestRegister_ShortPassword(t *testing.T) {
+	repo := newMockRepo()
+	store := newMockStore()
+	svc := NewService(repo, store, 72*time.Hour, 10*time.Minute)
 
-	_, err := svc.VerifyToken("invalid-token")
+	_, err := svc.Register(context.Background(), RegisterInput{
+		Email:    "test@example.com",
+		Password: "short",
+		FullName: "Test User",
+	})
 	assert.Error(t, err)
 }
 
-func TestVerifyToken_WrongSecret(t *testing.T) {
-	svc1 := NewService(nil, "secret-one-32-chars-minimum!!!!!", 15*time.Minute, 720*time.Hour)
-	svc2 := NewService(nil, "secret-two-32-chars-minimum!!!!!", 15*time.Minute, 720*time.Hour)
+func TestLogin_Success(t *testing.T) {
+	repo := newMockRepo()
+	store := newMockStore()
+	svc := NewService(repo, store, 72*time.Hour, 10*time.Minute)
 
-	user := &types.User{ID: uuid.New(), Email: "test@example.com"}
-	token, _ := svc1.issueAccessToken(user, nil, "admin")
+	_, err := svc.Register(context.Background(), RegisterInput{
+		Email:    "login@example.com",
+		Password: "password123",
+		FullName: "Test User",
+	})
+	require.NoError(t, err)
 
-	_, err := svc2.VerifyToken(token)
+	result, err := svc.Login(context.Background(), LoginInput{
+		Email:    "login@example.com",
+		Password: "password123",
+	})
+	require.NoError(t, err)
+	assert.NotNil(t, result.Session)
+	assert.NotNil(t, result.Seance)
+}
+
+func TestLogin_WrongPassword(t *testing.T) {
+	repo := newMockRepo()
+	store := newMockStore()
+	svc := NewService(repo, store, 72*time.Hour, 10*time.Minute)
+
+	svc.Register(context.Background(), RegisterInput{
+		Email: "login@example.com", Password: "password123", FullName: "Test",
+	})
+
+	_, err := svc.Login(context.Background(), LoginInput{
+		Email: "login@example.com", Password: "wrong",
+	})
+	assert.Error(t, err)
+}
+
+func TestLogout_DeletesSessionAndSeances(t *testing.T) {
+	repo := newMockRepo()
+	store := newMockStore()
+	svc := NewService(repo, store, 72*time.Hour, 10*time.Minute)
+
+	result, _ := svc.Register(context.Background(), RegisterInput{
+		Email: "logout@example.com", Password: "password123", FullName: "Test",
+	})
+
+	err := svc.Logout(context.Background(), result.Session.ID)
+	require.NoError(t, err)
+
+	_, err = store.GetSession(context.Background(), result.Session.ID)
+	assert.Error(t, err)
+
+	_, err = store.GetSeance(context.Background(), result.Seance.ID)
+	assert.Error(t, err)
+}
+
+func TestUnlock_CreatesNewSeance(t *testing.T) {
+	repo := newMockRepo()
+	store := newMockStore()
+	svc := NewService(repo, store, 72*time.Hour, 10*time.Minute)
+
+	result, _ := svc.Register(context.Background(), RegisterInput{
+		Email: "unlock@example.com", Password: "password123", FullName: "Test",
+	})
+
+	// Simulate seance expiry
+	delete(store.seances, result.Seance.ID)
+
+	seance, err := svc.Unlock(context.Background(), result.Session.ID, "password123")
+	require.NoError(t, err)
+	assert.NotEmpty(t, seance.ID)
+	assert.Equal(t, result.Session.ID, seance.SessionID)
+}
+
+func TestUnlock_WrongPassword(t *testing.T) {
+	repo := newMockRepo()
+	store := newMockStore()
+	svc := NewService(repo, store, 72*time.Hour, 10*time.Minute)
+
+	result, _ := svc.Register(context.Background(), RegisterInput{
+		Email: "unlock2@example.com", Password: "password123", FullName: "Test",
+	})
+
+	_, err := svc.Unlock(context.Background(), result.Session.ID, "wrong")
+	assert.Error(t, err)
+}
+
+func TestSwitchWorkspace(t *testing.T) {
+	repo := newMockRepo()
+	store := newMockStore()
+	svc := NewService(repo, store, 72*time.Hour, 10*time.Minute)
+
+	result, _ := svc.Register(context.Background(), RegisterInput{
+		Email: "switch@example.com", Password: "password123", FullName: "Test",
+	})
+
+	ws, err := svc.CreateWorkspace(context.Background(), result.User.ID, "Test WS", "test-ws")
+	require.NoError(t, err)
+
+	sess, err := svc.SwitchWorkspace(context.Background(), result.Session.ID, ws.ID)
+	require.NoError(t, err)
+	assert.Equal(t, ws.ID, sess.WorkspaceID)
+	assert.Equal(t, "owner", sess.Role)
+}
+
+func TestSwitchWorkspace_NotMember(t *testing.T) {
+	repo := newMockRepo()
+	store := newMockStore()
+	svc := NewService(repo, store, 72*time.Hour, 10*time.Minute)
+
+	result, _ := svc.Register(context.Background(), RegisterInput{
+		Email: "switch2@example.com", Password: "password123", FullName: "Test",
+	})
+
+	_, err := svc.SwitchWorkspace(context.Background(), result.Session.ID, uuid.New())
 	assert.Error(t, err)
 }

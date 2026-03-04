@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
+
+	"github.com/bizengine/engine/pkg/errs"
 )
 
 // CORS middleware adds CORS headers.
@@ -47,7 +49,7 @@ func Recoverer(next http.Handler) http.Handler {
 		defer func() {
 			if rvr := recover(); rvr != nil {
 				log.Error().Interface("panic", rvr).Str("path", r.URL.Path).Msg("recovered from panic")
-				http.Error(w, `{"code":"INTERNAL_ERROR","message":"internal server error"}`, http.StatusInternalServerError)
+				respondError(w, errs.NewInternal("internal server error"))
 			}
 		}()
 		next.ServeHTTP(w, r)

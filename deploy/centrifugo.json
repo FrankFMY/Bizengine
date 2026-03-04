@@ -1,0 +1,27 @@
+{
+  "port": 8001,
+  "api_key": "centrifugo-api-key-change-me",
+  "admin": false,
+  "proxy_connect_endpoint": "http://host.docker.internal:8080/api/internal/centrifugo/connect",
+  "proxy_connect_timeout": "5s",
+  "allowed_origins": ["*"],
+  "client_channel_limit": 128,
+  "channel_namespaces": [
+    {
+      "name": "workspace",
+      "presence": true,
+      "join_leave": false,
+      "history_size": 100,
+      "history_ttl": "300s",
+      "force_recovery": true
+    },
+    {
+      "name": "views",
+      "presence": false,
+      "join_leave": false,
+      "history_size": 50,
+      "history_ttl": "120s",
+      "force_recovery": true
+    }
+  ]
+}

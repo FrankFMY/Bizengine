@@ -4,14 +4,24 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/bizengine/engine/internal/core/auth"
 )
+
+// ViewUnsubscriber cleans up view subscriptions (e.g., on logout).
+type ViewUnsubscriber interface {
+	UnsubscribeAll(seanceID string)
+}
 
 // RouterDeps holds all dependencies for the REST router.
 type RouterDeps struct {
 	AuthSvc      *auth.Service
 	AuthRepo     auth.Repository
+	CookieSecure bool
+	Disconnector Disconnector
+	ViewUnsub    ViewUnsubscriber
+	RedisClient  *redis.Client
 	EntityH      *EntityHandler
 	EventH       *EventHandler
 	WorkspaceH   *WorkspaceHandler
@@ -22,6 +32,7 @@ type RouterDeps struct {
 	HRH          *HRHandler
 	FinanceH     *FinanceHandler
 	LogisticsH   *LogisticsHandler
+	ViewsH       *ViewsHandler
 }
 
 // NewRouter creates a Chi router with all routes configured.
@@ -32,31 +43,43 @@ func NewRouter(deps RouterDeps) http.Handler {
 	r.Use(Recoverer)
 	r.Use(CORS)
 	r.Use(Logger)
+	r.Use(TrimStrings)
+	r.Use(UnwrapRequest)
 
 	// Health check (no auth)
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+		respondOK(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 
 	r.Route("/api/v1", func(r chi.Router) {
+		authH := NewAuthHandler(deps.AuthSvc, deps.CookieSecure, deps.Disconnector, deps.ViewUnsub)
+
 		// Auth endpoints (no auth middleware)
 		r.Route("/auth", func(r chi.Router) {
-			authH := NewAuthHandler(deps.AuthSvc)
 			r.Post("/register", authH.Register)
 			r.Post("/login", authH.Login)
-			r.Post("/refresh", authH.Refresh)
-			r.Post("/logout", authH.Logout)
 
-			// Switch requires auth
+			// Logout and unlock only require a valid session (seance may be expired)
+			r.Group(func(r chi.Router) {
+				r.Use(auth.SessionOnlyMiddleware(deps.AuthSvc))
+				r.Post("/logout", authH.Logout)
+				r.Post("/unlock", authH.Unlock)
+			})
+
+			// Switch and check require full auth (session + seance)
 			r.Group(func(r chi.Router) {
 				r.Use(auth.Middleware(deps.AuthSvc))
 				r.Post("/switch", authH.SwitchWorkspace)
+				r.Get("/check", authH.Check)
 			})
 		})
 
 		// Authenticated endpoints
 		r.Group(func(r chi.Router) {
 			r.Use(auth.Middleware(deps.AuthSvc))
+			if deps.RedisClient != nil {
+				r.Use(Idempotency(deps.RedisClient))
+			}
 
 			// Workspaces
 			r.Post("/workspaces", deps.WorkspaceH.Create)
@@ -189,6 +212,16 @@ func NewRouter(deps RouterDeps) http.Handler {
 
 					r.Get("/reports/trial-balance", deps.FinanceH.GetTrialBalance)
 				})
+
+				// Views (reactive subscriptions)
+				if deps.ViewsH != nil {
+					r.Route("/views", func(r chi.Router) {
+						r.Post("/subscribe", deps.ViewsH.Subscribe)
+						r.Post("/unsubscribe", deps.ViewsH.Unsubscribe)
+						r.Get("/active", deps.ViewsH.Active)
+						r.Post("/sync", deps.ViewsH.Sync)
+					})
+				}
 			})
 		})
 	})

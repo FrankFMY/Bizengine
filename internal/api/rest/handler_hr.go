@@ -24,31 +24,31 @@ func NewHRHandler(hrSvc *hr.Service) *HRHandler {
 func (h *HRHandler) HireEmployee(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
 	var input hr.HireInput
 	if err := decodeJSON(r, &input); err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
 	emp, err := h.hrSvc.HireEmployee(r.Context(), wsID, input, &userID)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, emp)
+	respondCreated(w,emp)
 }
 
 // ListEmployees handles GET /api/v1/workspaces/{wsID}/hr/employees.
 func (h *HRHandler) ListEmployees(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
@@ -60,11 +60,11 @@ func (h *HRHandler) ListEmployees(w http.ResponseWriter, r *http.Request) {
 
 	employees, total, err := h.hrSvc.ListEmployees(r.Context(), wsID, filter)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	respondOK(w, http.StatusOK,map[string]any{
 		"items":  employees,
 		"total":  total,
 		"limit":  filter.Page.Limit,
@@ -76,63 +76,63 @@ func (h *HRHandler) ListEmployees(w http.ResponseWriter, r *http.Request) {
 func (h *HRHandler) GetEmployee(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	id, err := parseUUID(r, "id")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
 	emp, err := h.hrSvc.GetEmployee(r.Context(), wsID, id)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, emp)
+	respondOK(w, http.StatusOK,emp)
 }
 
 // UpdateEmployee handles PUT /api/v1/workspaces/{wsID}/hr/employees/{id}.
 func (h *HRHandler) UpdateEmployee(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	id, err := parseUUID(r, "id")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
 	var input hr.UpdateEmployeeInput
 	if err := decodeJSON(r, &input); err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
 	emp, err := h.hrSvc.UpdateEmployee(r.Context(), wsID, id, input, &userID)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, emp)
+	respondOK(w, http.StatusOK,emp)
 }
 
 // TerminateEmployee handles POST /api/v1/workspaces/{wsID}/hr/employees/{id}/terminate.
 func (h *HRHandler) TerminateEmployee(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	id, err := parseUUID(r, "id")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
@@ -141,47 +141,47 @@ func (h *HRHandler) TerminateEmployee(w http.ResponseWriter, r *http.Request) {
 		Reason string `json:"reason"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
 	if err := h.hrSvc.TerminateEmployee(r.Context(), wsID, id, input.Reason, &userID); err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	respondOK(w, http.StatusOK, nil)
 }
 
 // CreateShift handles POST /api/v1/workspaces/{wsID}/hr/shifts.
 func (h *HRHandler) CreateShift(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
 	var input hr.CreateShiftInput
 	if err := decodeJSON(r, &input); err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
 	shift, err := h.hrSvc.CreateShift(r.Context(), wsID, input, &userID)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, shift)
+	respondCreated(w,shift)
 }
 
 // ListShifts handles GET /api/v1/workspaces/{wsID}/hr/shifts.
 func (h *HRHandler) ListShifts(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
@@ -208,11 +208,11 @@ func (h *HRHandler) ListShifts(w http.ResponseWriter, r *http.Request) {
 
 	shifts, total, err := h.hrSvc.ListShifts(r.Context(), wsID, filter)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	respondOK(w, http.StatusOK,map[string]any{
 		"items":  shifts,
 		"total":  total,
 		"limit":  filter.Page.Limit,
@@ -224,57 +224,57 @@ func (h *HRHandler) ListShifts(w http.ResponseWriter, r *http.Request) {
 func (h *HRHandler) UpdateShift(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	id, err := parseUUID(r, "id")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
 	var input hr.UpdateShiftInput
 	if err := decodeJSON(r, &input); err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
 	shift, err := h.hrSvc.UpdateShift(r.Context(), wsID, id, input, &userID)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, shift)
+	respondOK(w, http.StatusOK,shift)
 }
 
 // DeleteShift handles DELETE /api/v1/workspaces/{wsID}/hr/shifts/{id}.
 func (h *HRHandler) DeleteShift(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	id, err := parseUUID(r, "id")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
 	if err := h.hrSvc.DeleteShift(r.Context(), wsID, id); err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	respondOK(w, http.StatusOK, nil)
 }
 
 // ClockIn handles POST /api/v1/workspaces/{wsID}/hr/timesheets/clock-in.
 func (h *HRHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
@@ -284,13 +284,13 @@ func (h *HRHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 		ShiftID    *string `json:"shift_id"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
 	empID, err := parseUUIDString(input.EmployeeID)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
@@ -298,7 +298,7 @@ func (h *HRHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 	if input.ShiftID != nil && *input.ShiftID != "" {
 		id, err := parseUUIDString(*input.ShiftID)
 		if err != nil {
-			writeError(w, err)
+			respondError(w, err)
 			return
 		}
 		shiftID = &id
@@ -306,41 +306,41 @@ func (h *HRHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 
 	ts, err := h.hrSvc.ClockIn(r.Context(), wsID, empID, shiftID, &userID)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, ts)
+	respondCreated(w,ts)
 }
 
 // ClockOut handles POST /api/v1/workspaces/{wsID}/hr/timesheets/{id}/clock-out.
 func (h *HRHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	id, err := parseUUID(r, "id")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
 	ts, err := h.hrSvc.ClockOut(r.Context(), wsID, id, &userID)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, ts)
+	respondOK(w, http.StatusOK,ts)
 }
 
 // ListTimesheets handles GET /api/v1/workspaces/{wsID}/hr/timesheets.
 func (h *HRHandler) ListTimesheets(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
@@ -367,11 +367,11 @@ func (h *HRHandler) ListTimesheets(w http.ResponseWriter, r *http.Request) {
 
 	timesheets, total, err := h.hrSvc.ListTimesheets(r.Context(), wsID, filter)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	respondOK(w, http.StatusOK,map[string]any{
 		"items":  timesheets,
 		"total":  total,
 		"limit":  filter.Page.Limit,
@@ -383,20 +383,20 @@ func (h *HRHandler) ListTimesheets(w http.ResponseWriter, r *http.Request) {
 func (h *HRHandler) ApproveTimesheet(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	id, err := parseUUID(r, "id")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
 	if err := h.hrSvc.ApproveTimesheet(r.Context(), wsID, id, &userID); err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	respondOK(w, http.StatusOK, nil)
 }

@@ -1,9 +1,9 @@
 package rest
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
-	"bytes"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -170,12 +170,26 @@ func (m *mockEntityEventStore) GetByType(_ context.Context, _ uuid.UUID, _ strin
 
 type mockEntityBus struct{}
 
-func (m *mockEntityBus) Publish(_ context.Context, _ types.Event) error          { return nil }
-func (m *mockEntityBus) Subscribe(_ string, _ event.Subscriber)                  {}
-func (m *mockEntityBus) SubscribePattern(_ string, _ event.Subscriber)           {}
-func (m *mockEntityBus) SubscribeAll(_ event.Subscriber)                         {}
+func (m *mockEntityBus) Publish(_ context.Context, _ types.Event) error { return nil }
+func (m *mockEntityBus) Subscribe(_ string, _ event.Subscriber)        {}
+func (m *mockEntityBus) SubscribePattern(_ string, _ event.Subscriber) {}
+func (m *mockEntityBus) SubscribeAll(_ event.Subscriber)               {}
 
 // --- helpers ---
+
+// injectAuthContext is a middleware that injects auth context directly,
+// bypassing cookie-based auth for entity handler tests.
+func injectAuthContext(userID, wsID uuid.UUID, role string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx := r.Context()
+			ctx = context.WithValue(ctx, auth.ExportedCtxKeyUserID, userID)
+			ctx = context.WithValue(ctx, auth.ExportedCtxKeyWorkspaceID, wsID)
+			ctx = context.WithValue(ctx, auth.ExportedCtxKeyRole, role)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
 
 func setupEntityRouter(repo *mockEntityRepo) (http.Handler, uuid.UUID) {
 	store := &mockEntityEventStore{}
@@ -183,20 +197,10 @@ func setupEntityRouter(repo *mockEntityRepo) (http.Handler, uuid.UUID) {
 	svc := entity.NewService(repo, store, bus)
 	h := NewEntityHandler(svc)
 	wsID := uuid.New()
-
-	// Create a chi router with entity routes, injecting auth context via middleware
-	authRepo := newMockAuthRepo()
-	authSvc := auth.NewService(authRepo, "test-secret-key-32-bytes-long!!!", 15*time.Minute, 7*24*time.Hour)
-
-	// Register a test user and get a token
-	result, _ := authSvc.Register(context.Background(), auth.RegisterInput{
-		Email:    "entity-test@example.com",
-		Password: "password123",
-		FullName: "Test User",
-	})
+	userID := uuid.New()
 
 	r := chi.NewRouter()
-	r.Use(auth.Middleware(authSvc))
+	r.Use(injectAuthContext(userID, wsID, "owner"))
 	r.Route("/workspaces/{wsID}", func(r chi.Router) {
 		r.Post("/entities", h.Create)
 		r.Get("/entities", h.List)
@@ -205,20 +209,7 @@ func setupEntityRouter(repo *mockEntityRepo) (http.Handler, uuid.UUID) {
 		r.Delete("/entities/{id}", h.Delete)
 	})
 
-	// Store the access token in the router context via a wrapper
-	return &authedHandler{handler: r, token: result.AccessToken}, wsID
-}
-
-type authedHandler struct {
-	handler http.Handler
-	token   string
-}
-
-func (h *authedHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("Authorization") == "" {
-		r.Header.Set("Authorization", "Bearer "+h.token)
-	}
-	h.handler.ServeHTTP(w, r)
+	return r, wsID
 }
 
 func doGet(handler http.Handler, path string) *httptest.ResponseRecorder {
@@ -246,6 +237,20 @@ func doDelete(handler http.Handler, path string) *httptest.ResponseRecorder {
 
 // --- tests ---
 
+// unwrapData extracts .Data from a types.Response envelope.
+func unwrapData(t *testing.T, w *httptest.ResponseRecorder) json.RawMessage {
+	t.Helper()
+	var resp types.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.True(t, resp.OK, "expected ok=true, got body: %s", w.Body.String())
+	if resp.Data == nil {
+		return nil
+	}
+	raw, err := json.Marshal(resp.Data)
+	require.NoError(t, err)
+	return raw
+}
+
 func TestEntityCreateSuccess(t *testing.T) {
 	repo := newMockEntityRepo()
 	router, wsID := setupEntityRouter(repo)
@@ -257,7 +262,7 @@ func TestEntityCreateSuccess(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, w.Code)
 	var e types.Entity
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &e))
+	require.NoError(t, json.Unmarshal(unwrapData(t, w), &e))
 	assert.Equal(t, "product", e.Kind)
 	assert.Equal(t, "Widget", e.Name)
 	assert.Equal(t, wsID, e.WorkspaceID)
@@ -281,14 +286,14 @@ func TestEntityCreateUnauthorized(t *testing.T) {
 	svc := entity.NewService(repo, store, bus)
 	h := NewEntityHandler(svc)
 
-	authRepo := newMockAuthRepo()
-	authSvc := auth.NewService(authRepo, "test-secret-key-32-bytes-long!!!", 15*time.Minute, 7*24*time.Hour)
+	sessStore := newMockSessionStore()
+	authSvc := auth.NewService(newMockAuthRepo(), sessStore, 72*time.Hour, 10*time.Minute)
 
 	r := chi.NewRouter()
 	r.Use(auth.Middleware(authSvc))
 	r.Post("/workspaces/{wsID}/entities", h.Create)
 
-	// Send request without Authorization header
+	// Send request without cookies
 	wsID := uuid.New()
 	b, _ := json.Marshal(map[string]string{"kind": "product", "name": "W"})
 	req := httptest.NewRequest("POST", fmt.Sprintf("/workspaces/%s/entities", wsID), bytes.NewReader(b))
@@ -303,7 +308,6 @@ func TestEntityListSuccess(t *testing.T) {
 	repo := newMockEntityRepo()
 	router, wsID := setupEntityRouter(repo)
 
-	// Seed entities
 	for i := 0; i < 3; i++ {
 		id := uuid.New()
 		repo.entities[id] = &types.Entity{ID: id, WorkspaceID: wsID, Kind: "product", Name: fmt.Sprintf("P%d", i)}
@@ -313,7 +317,7 @@ func TestEntityListSuccess(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var result types.PageResponse[types.Entity]
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
+	require.NoError(t, json.Unmarshal(unwrapData(t, w), &result))
 	assert.Equal(t, 3, result.Total)
 	assert.Len(t, result.Items, 3)
 }
@@ -322,7 +326,6 @@ func TestEntityListFilterByKind(t *testing.T) {
 	repo := newMockEntityRepo()
 	router, wsID := setupEntityRouter(repo)
 
-	// Seed mixed entities
 	for i := 0; i < 2; i++ {
 		id := uuid.New()
 		repo.entities[id] = &types.Entity{ID: id, WorkspaceID: wsID, Kind: "product", Name: fmt.Sprintf("P%d", i)}
@@ -334,7 +337,7 @@ func TestEntityListFilterByKind(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var result types.PageResponse[types.Entity]
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
+	require.NoError(t, json.Unmarshal(unwrapData(t, w), &result))
 	assert.Equal(t, 2, result.Total)
 }
 
@@ -349,7 +352,7 @@ func TestEntityGetSuccess(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var e types.Entity
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &e))
+	require.NoError(t, json.Unmarshal(unwrapData(t, w), &e))
 	assert.Equal(t, "Widget", e.Name)
 }
 
@@ -375,7 +378,7 @@ func TestEntityUpdateSuccess(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var e types.Entity
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &e))
+	require.NoError(t, json.Unmarshal(unwrapData(t, w), &e))
 	assert.Equal(t, "New", e.Name)
 }
 
@@ -387,5 +390,6 @@ func TestEntityDeleteSuccess(t *testing.T) {
 	repo.entities[id] = &types.Entity{ID: id, WorkspaceID: wsID, Kind: "product", Name: "W"}
 
 	w := doDelete(router, fmt.Sprintf("/workspaces/%s/entities/%s", wsID, id))
-	assert.Equal(t, http.StatusNoContent, w.Code)
+	assert.Equal(t, http.StatusOK, w.Code)
+	unwrapData(t, w)
 }

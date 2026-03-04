@@ -15,9 +15,11 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	"github.com/bizengine/engine/internal/api/centrifugo"
 	"github.com/bizengine/engine/internal/api/rest"
-	"github.com/bizengine/engine/internal/api/ws"
 	"github.com/bizengine/engine/internal/core/auth"
+	"github.com/bizengine/engine/internal/views"
+	viewDefs "github.com/bizengine/engine/internal/views/defs"
 	"github.com/bizengine/engine/internal/core/entity"
 	"github.com/bizengine/engine/internal/core/event"
 	"github.com/bizengine/engine/internal/core/process"
@@ -28,6 +30,7 @@ import (
 	"github.com/bizengine/engine/internal/module/order"
 	"github.com/bizengine/engine/internal/module/warehouse"
 	"github.com/bizengine/engine/internal/storage/postgres"
+	redisStore "github.com/bizengine/engine/internal/storage/redis"
 	"github.com/bizengine/engine/pkg/config"
 	"github.com/bizengine/engine/pkg/dsl"
 	"github.com/bizengine/engine/pkg/types"
@@ -54,6 +57,17 @@ func main() {
 	defer pool.Close()
 	log.Info().Msg("connected to PostgreSQL")
 
+	// Redis
+	redisClient := redisStore.NewClient(cfg.Redis)
+	defer redisClient.Close()
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		log.Fatal().Err(err).Msg("failed to connect to Redis")
+	}
+	log.Info().Msg("connected to Redis")
+
+	// Session store
+	sessionStore := redisStore.NewSessionStore(redisClient)
+
 	// Core: Event Store + Bus
 	eventStore := postgres.NewEventStore(pool)
 	eventBus := event.NewLocalBus()
@@ -64,7 +78,7 @@ func main() {
 
 	// Core: Auth
 	authRepo := postgres.NewAuthRepo(pool)
-	authSvc := auth.NewService(authRepo, cfg.JWT.Secret, cfg.JWT.AccessTTL, cfg.JWT.RefreshTTL)
+	authSvc := auth.NewService(authRepo, sessionStore, cfg.Session.SessionTTL, cfg.Session.SeanceTTL)
 
 	// Modules: Catalog
 	catalogRepo := postgres.NewCatalogRepo(pool)
@@ -98,19 +112,40 @@ func main() {
 	// Inter-module event subscriptions
 	setupEventSubscriptions(eventBus, warehouseSvc, processEngine, financeSvc)
 
-	// WebSocket Hub
-	wsHub := ws.NewHub(authSvc)
-	go wsHub.Run()
+	// Centrifugo publisher: forward events to Centrifugo for real-time delivery
+	centPub := centrifugo.NewPublisher(cfg.Centrifugo.APIURL, cfg.Centrifugo.APIKey)
+	eventBus.SubscribeAll(event.SubscriberFunc(centPub.HandleEvent))
 
-	// Subscribe hub to all events for real-time delivery
-	eventBus.SubscribeAll(event.SubscriberFunc(wsHub.HandleEvent))
+	// View system
+	viewRegistry := views.NewRegistry()
+	viewDefs.RegisterAll(viewRegistry)
+	log.Info().Int("views", len(viewRegistry.All())).Msg("registered view definitions")
+	viewPub := views.NewCentrifugoViewPublisher(cfg.Centrifugo.APIURL, cfg.Centrifugo.APIKey)
+	viewManager := views.NewManager(viewRegistry, pool, viewPub)
+
+	// Event bus → view invalidation
+	eventBus.SubscribeAll(event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
+		changes := views.EventToChanges(ev)
+		for _, ch := range changes {
+			viewManager.Invalidate(ctx, ch)
+		}
+		return nil
+	}))
+
+	// Centrifugo connect/subscribe proxy handlers
+	connectHandler := centrifugo.NewConnectHandler(sessionStore, cfg.Session.SeanceTTL)
+	subscribeHandler := centrifugo.NewSubscribeHandler(sessionStore, cfg.Session.SeanceTTL)
 
 	// REST Router
 	router := rest.NewRouter(rest.RouterDeps{
-		AuthSvc:    authSvc,
-		AuthRepo:   authRepo,
-		EntityH:    rest.NewEntityHandler(entitySvc),
-		EventH:     rest.NewEventHandler(eventStore),
+		AuthSvc:      authSvc,
+		AuthRepo:     authRepo,
+		CookieSecure: cfg.Session.CookieSecure,
+		Disconnector: centPub,
+		ViewUnsub:    viewManager,
+		RedisClient:  redisClient,
+		EntityH:      rest.NewEntityHandler(entitySvc),
+		EventH:       rest.NewEventHandler(eventStore),
 		WorkspaceH: rest.NewWorkspaceHandler(authSvc, authRepo,
 			financeSvc.SeedDefaultAccounts,
 			func(ctx context.Context, wsID uuid.UUID) error {
@@ -127,12 +162,14 @@ func main() {
 		HRH:        rest.NewHRHandler(hrSvc),
 		FinanceH:   rest.NewFinanceHandler(financeSvc),
 		LogisticsH: rest.NewLogisticsHandler(logisticsSvc),
+		ViewsH:     rest.NewViewsHandler(viewManager),
 	})
 
-	// Add WebSocket endpoint to router
+	// Wrap router with internal endpoints for Centrifugo proxy
 	mux := http.NewServeMux()
 	mux.Handle("/", router)
-	mux.HandleFunc("/api/v1/ws", wsHub.ServeWS)
+	mux.HandleFunc("POST /api/internal/centrifugo/connect", connectHandler.ServeHTTP)
+	mux.HandleFunc("POST /api/internal/centrifugo/subscribe", subscribeHandler.ServeHTTP)
 
 	// HTTP Server
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
@@ -165,10 +202,7 @@ func main() {
 		log.Error().Err(err).Msg("http server shutdown error")
 	}
 
-	// 2. Close WebSocket hub
-	wsHub.Close()
-
-	// 3. Close database pool
+	// 2. Close database pool
 	pool.Close()
 
 	log.Info().Msg("server stopped")

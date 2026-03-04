@@ -22,20 +22,18 @@ import (
 // --- auth repo mock ---
 
 type mockAuthRepo struct {
-	users         map[string]*types.User
-	usersById     map[uuid.UUID]*types.User
-	workspaces    map[uuid.UUID]*types.Workspace
-	members       map[string]*types.WorkspaceMember
-	refreshTokens map[string]*auth.RefreshToken
+	users      map[string]*types.User
+	usersById  map[uuid.UUID]*types.User
+	workspaces map[uuid.UUID]*types.Workspace
+	members    map[string]*types.WorkspaceMember
 }
 
 func newMockAuthRepo() *mockAuthRepo {
 	return &mockAuthRepo{
-		users:         make(map[string]*types.User),
-		usersById:     make(map[uuid.UUID]*types.User),
-		workspaces:    make(map[uuid.UUID]*types.Workspace),
-		members:       make(map[string]*types.WorkspaceMember),
-		refreshTokens: make(map[string]*auth.RefreshToken),
+		users:      make(map[string]*types.User),
+		usersById:  make(map[uuid.UUID]*types.User),
+		workspaces: make(map[uuid.UUID]*types.Workspace),
+		members:    make(map[string]*types.WorkspaceMember),
 	}
 }
 
@@ -94,8 +92,7 @@ func (m *mockAuthRepo) GetWorkspaceBySlug(_ context.Context, slug string) (*type
 
 func (m *mockAuthRepo) ListUserWorkspaces(_ context.Context, userID uuid.UUID) ([]types.Workspace, error) {
 	var result []types.Workspace
-	for key, mem := range m.members {
-		_ = key
+	for _, mem := range m.members {
 		if mem.UserID == userID {
 			if ws, ok := m.workspaces[mem.WorkspaceID]; ok {
 				result = append(result, *ws)
@@ -127,61 +124,109 @@ func (m *mockAuthRepo) GetMember(_ context.Context, wsID, userID uuid.UUID) (*ty
 	return &cp, nil
 }
 
-func (m *mockAuthRepo) ListMembers(_ context.Context, wsID uuid.UUID) ([]types.WorkspaceMember, error) {
+func (m *mockAuthRepo) ListMembers(_ context.Context, _ uuid.UUID) ([]types.WorkspaceMember, error) {
 	return nil, nil
 }
 
-func (m *mockAuthRepo) UpdateMemberRole(_ context.Context, wsID, userID uuid.UUID, role string) error {
+func (m *mockAuthRepo) UpdateMemberRole(_ context.Context, _, _ uuid.UUID, _ string) error {
 	return nil
 }
 
-func (m *mockAuthRepo) RemoveMember(_ context.Context, wsID, userID uuid.UUID) error {
+func (m *mockAuthRepo) RemoveMember(_ context.Context, _, _ uuid.UUID) error {
 	return nil
 }
 
-func (m *mockAuthRepo) CreateRefreshToken(_ context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) (uuid.UUID, error) {
-	id := uuid.New()
-	now := time.Now()
-	m.refreshTokens[tokenHash] = &auth.RefreshToken{
-		ID:        id,
-		UserID:    userID,
-		TokenHash: tokenHash,
-		ExpiresAt: expiresAt,
-		CreatedAt: now,
+// --- mock session store ---
+
+type mockSessionStore struct {
+	sessions map[string]*auth.Session
+	seances  map[string]*auth.Seance
+	sesSet   map[string][]string // sessionID -> seanceIDs
+}
+
+func newMockSessionStore() *mockSessionStore {
+	return &mockSessionStore{
+		sessions: make(map[string]*auth.Session),
+		seances:  make(map[string]*auth.Seance),
+		sesSet:   make(map[string][]string),
 	}
-	return id, nil
 }
 
-func (m *mockAuthRepo) GetRefreshToken(_ context.Context, tokenHash string) (*auth.RefreshToken, error) {
-	rt, ok := m.refreshTokens[tokenHash]
+func (m *mockSessionStore) CreateSession(_ context.Context, s *auth.Session, _ time.Duration) error {
+	cp := *s
+	m.sessions[s.ID] = &cp
+	return nil
+}
+
+func (m *mockSessionStore) GetSession(_ context.Context, id string) (*auth.Session, error) {
+	s, ok := m.sessions[id]
 	if !ok {
-		return nil, errs.NewNotFound("token not found")
+		return nil, errs.NewUnauthorized("session expired")
 	}
-	cp := *rt
+	cp := *s
 	return &cp, nil
 }
 
-func (m *mockAuthRepo) RevokeRefreshToken(_ context.Context, tokenHash string) error {
-	if rt, ok := m.refreshTokens[tokenHash]; ok {
-		now := time.Now()
-		rt.RevokedAt = &now
-	}
+func (m *mockSessionStore) UpdateSession(_ context.Context, s *auth.Session, _ time.Duration) error {
+	cp := *s
+	m.sessions[s.ID] = &cp
 	return nil
 }
 
-func (m *mockAuthRepo) RevokeAllUserTokens(_ context.Context, userID uuid.UUID) error {
+func (m *mockSessionStore) DeleteSession(_ context.Context, id string) error {
+	delete(m.sessions, id)
+	return nil
+}
+
+func (m *mockSessionStore) CreateSeance(_ context.Context, s *auth.Seance, _ time.Duration) error {
+	cp := *s
+	m.seances[s.ID] = &cp
+	m.sesSet[s.SessionID] = append(m.sesSet[s.SessionID], s.ID)
+	return nil
+}
+
+func (m *mockSessionStore) GetSeance(_ context.Context, id string) (*auth.Seance, error) {
+	s, ok := m.seances[id]
+	if !ok {
+		return nil, errs.NewUnauthorized("seance expired")
+	}
+	cp := *s
+	return &cp, nil
+}
+
+func (m *mockSessionStore) SlideSeance(_ context.Context, _ string, _ time.Duration) error {
+	return nil
+}
+
+func (m *mockSessionStore) DeleteSessionSeances(_ context.Context, sessionID string) error {
+	for _, id := range m.sesSet[sessionID] {
+		delete(m.seances, id)
+	}
+	delete(m.sesSet, sessionID)
 	return nil
 }
 
 // --- test helpers ---
 
 func setupAuthRouter(repo *mockAuthRepo) (*auth.Service, http.Handler) {
-	authSvc := auth.NewService(repo, "test-secret-key-32-bytes-long!!!", 15*time.Minute, 7*24*time.Hour)
+	store := newMockSessionStore()
+	authSvc := auth.NewService(repo, store, 72*time.Hour, 10*time.Minute)
 	r := chi.NewRouter()
-	h := NewAuthHandler(authSvc)
+	h := NewAuthHandler(authSvc, false, nil, nil)
 	r.Post("/auth/register", h.Register)
 	r.Post("/auth/login", h.Login)
-	r.Post("/auth/refresh", h.Refresh)
+
+	r.Group(func(r chi.Router) {
+		r.Use(auth.SessionOnlyMiddleware(authSvc))
+		r.Post("/auth/logout", h.Logout)
+		r.Post("/auth/unlock", h.Unlock)
+	})
+
+	r.Group(func(r chi.Router) {
+		r.Use(auth.Middleware(authSvc))
+		r.Get("/auth/check", h.Check)
+	})
+
 	return authSvc, r
 }
 
@@ -192,6 +237,56 @@ func doPost(handler http.Handler, path string, body any) *httptest.ResponseRecor
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 	return w
+}
+
+func doPostWithCookies(handler http.Handler, path string, body any, cookies []*http.Cookie) *httptest.ResponseRecorder {
+	b, _ := json.Marshal(body)
+	req := httptest.NewRequest("POST", path, bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	return w
+}
+
+func extractCookies(w *httptest.ResponseRecorder) []*http.Cookie {
+	resp := http.Response{Header: w.Header()}
+	return resp.Cookies()
+}
+
+func findCookie(cookies []*http.Cookie, name string) *http.Cookie {
+	for _, c := range cookies {
+		if c.Name == name {
+			return c
+		}
+	}
+	return nil
+}
+
+// unwrapOK unmarshals a types.Response, asserts ok==true, and returns .Data as map.
+func unwrapOK(t *testing.T, w *httptest.ResponseRecorder) map[string]any {
+	t.Helper()
+	var resp types.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.True(t, resp.OK, "expected ok=true, got body: %s", w.Body.String())
+	if resp.Data == nil {
+		return nil
+	}
+	data, ok := resp.Data.(map[string]any)
+	require.True(t, ok, "expected data to be map, got %T", resp.Data)
+	return data
+}
+
+// unwrapErr unmarshals a types.Response, asserts ok==false, and returns the error code.
+func unwrapErr(t *testing.T, w *httptest.ResponseRecorder) string {
+	t.Helper()
+	var resp types.Response
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	require.False(t, resp.OK, "expected ok=false")
+	require.NotNil(t, resp.Error)
+	return resp.Error.Code
 }
 
 // --- tests ---
@@ -207,11 +302,13 @@ func TestRegisterSuccess(t *testing.T) {
 	})
 
 	assert.Equal(t, http.StatusCreated, w.Code)
-	var result auth.AuthResult
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
-	assert.Equal(t, "test@example.com", result.User.Email)
-	assert.NotEmpty(t, result.AccessToken)
-	assert.NotEmpty(t, result.RefreshToken)
+
+	cookies := extractCookies(w)
+	assert.NotNil(t, findCookie(cookies, "teco_session"))
+	assert.NotNil(t, findCookie(cookies, "teco_seance"))
+
+	data := unwrapOK(t, w)
+	assert.Contains(t, data, "user")
 }
 
 func TestRegisterDuplicateEmail(t *testing.T) {
@@ -226,6 +323,7 @@ func TestRegisterDuplicateEmail(t *testing.T) {
 		"email": "dup@example.com", "password": "password456", "full_name": "User2",
 	})
 	assert.Equal(t, http.StatusConflict, w.Code)
+	assert.Equal(t, "CONFLICT", unwrapErr(t, w))
 }
 
 func TestRegisterMissingFields(t *testing.T) {
@@ -236,6 +334,7 @@ func TestRegisterMissingFields(t *testing.T) {
 		"email": "", "password": "",
 	})
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, "BAD_REQUEST", unwrapErr(t, w))
 }
 
 func TestLoginSuccess(t *testing.T) {
@@ -250,9 +349,14 @@ func TestLoginSuccess(t *testing.T) {
 		"email": "login@example.com", "password": "password123",
 	})
 	assert.Equal(t, http.StatusOK, w.Code)
-	var result auth.AuthResult
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
-	assert.NotEmpty(t, result.AccessToken)
+
+	cookies := extractCookies(w)
+	assert.NotNil(t, findCookie(cookies, "teco_session"))
+	assert.NotNil(t, findCookie(cookies, "teco_seance"))
+
+	data := unwrapOK(t, w)
+	assert.Contains(t, data, "user")
+	assert.Contains(t, data, "workspaces")
 }
 
 func TestLoginWrongPassword(t *testing.T) {
@@ -267,6 +371,7 @@ func TestLoginWrongPassword(t *testing.T) {
 		"email": "wp@example.com", "password": "wrongpassword",
 	})
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Equal(t, "UNAUTHORIZED", unwrapErr(t, w))
 }
 
 func TestLoginUnknownEmail(t *testing.T) {
@@ -277,34 +382,87 @@ func TestLoginUnknownEmail(t *testing.T) {
 		"email": "unknown@example.com", "password": "password123",
 	})
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Equal(t, "UNAUTHORIZED", unwrapErr(t, w))
 }
 
-func TestRefreshSuccess(t *testing.T) {
+func TestLogoutSuccess(t *testing.T) {
 	repo := newMockAuthRepo()
 	_, router := setupAuthRouter(repo)
 
 	w := doPost(router, "/auth/register", map[string]string{
-		"email": "refresh@example.com", "password": "password123", "full_name": "User",
+		"email": "logout@example.com", "password": "password123", "full_name": "User",
 	})
-	var regResult auth.AuthResult
-	json.Unmarshal(w.Body.Bytes(), &regResult)
+	cookies := extractCookies(w)
 
-	w = doPost(router, "/auth/refresh", map[string]string{
-		"refresh_token": regResult.RefreshToken,
-	})
+	w = doPostWithCookies(router, "/auth/logout", nil, cookies)
 	assert.Equal(t, http.StatusOK, w.Code)
+	unwrapOK(t, w)
 
-	var refreshResult auth.AuthResult
-	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &refreshResult))
-	assert.NotEmpty(t, refreshResult.AccessToken)
+	clearedCookies := extractCookies(w)
+	sc := findCookie(clearedCookies, "teco_session")
+	assert.NotNil(t, sc)
+	assert.Equal(t, -1, sc.MaxAge)
 }
 
-func TestRefreshInvalidToken(t *testing.T) {
+func TestCheckWithAuth(t *testing.T) {
 	repo := newMockAuthRepo()
 	_, router := setupAuthRouter(repo)
 
-	w := doPost(router, "/auth/refresh", map[string]string{
-		"refresh_token": "invalid-token",
+	w := doPost(router, "/auth/register", map[string]string{
+		"email": "check@example.com", "password": "password123", "full_name": "Check User",
 	})
+	cookies := extractCookies(w)
+
+	req := httptest.NewRequest("GET", "/auth/check", nil)
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	data := unwrapOK(t, w)
+	assert.Contains(t, data, "user_id")
+	assert.Contains(t, data, "session_id")
+	assert.Contains(t, data, "seance_id")
+	assert.Contains(t, data, "phone_id")
+	assert.Contains(t, data, "role")
+}
+
+func TestCheckWithoutAuth(t *testing.T) {
+	repo := newMockAuthRepo()
+	_, router := setupAuthRouter(repo)
+
+	req := httptest.NewRequest("GET", "/auth/check", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Auth middleware returns plain text "SESSION" — stays unchanged
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
+	assert.Equal(t, `"SESSION"`, w.Body.String())
+}
+
+func TestUnlockSuccess(t *testing.T) {
+	repo := newMockAuthRepo()
+	_, router := setupAuthRouter(repo)
+
+	w := doPost(router, "/auth/register", map[string]string{
+		"email": "unlock@example.com", "password": "password123", "full_name": "User",
+	})
+	cookies := extractCookies(w)
+
+	// Only session cookie (simulating expired seance)
+	sessCookie := findCookie(cookies, "teco_session")
+
+	w = doPostWithCookies(router, "/auth/unlock", map[string]string{
+		"password": "password123",
+	}, []*http.Cookie{sessCookie})
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	unwrapOK(t, w)
+
+	newCookies := extractCookies(w)
+	newSeance := findCookie(newCookies, "teco_seance")
+	assert.NotNil(t, newSeance)
+	assert.NotEmpty(t, newSeance.Value)
 }

@@ -10,13 +10,14 @@ import (
 
 // Config holds all application configuration.
 type Config struct {
-	Server   ServerConfig   `env:", prefix=SERVER_"`
-	DB       DBConfig       `env:", prefix=DB_"`
-	Redis    RedisConfig    `env:", prefix=REDIS_"`
-	NATS     NATSConfig     `env:", prefix=NATS_"`
-	JWT      JWTConfig      `env:", prefix=JWT_"`
-	LogLevel string         `env:"LOG_LEVEL, default=info"`
-	Env      string         `env:"ENV, default=development"`
+	Server      ServerConfig      `env:", prefix=SERVER_"`
+	DB          DBConfig          `env:", prefix=DB_"`
+	Redis       RedisConfig       `env:", prefix=REDIS_"`
+	NATS        NATSConfig        `env:", prefix=NATS_"`
+	Session     SessionConfig     `env:", prefix=SESSION_"`
+	Centrifugo  CentrifugoConfig  `env:", prefix=CENTRIFUGO_"`
+	LogLevel    string            `env:"LOG_LEVEL, default=info"`
+	Env         string            `env:"ENV, default=development"`
 }
 
 // ServerConfig holds HTTP server settings.
@@ -53,11 +54,17 @@ type NATSConfig struct {
 	Enabled bool   `env:"ENABLED, default=false"`
 }
 
-// JWTConfig holds JWT authentication settings.
-type JWTConfig struct {
-	Secret     string        `env:"SECRET, required"`
-	AccessTTL  time.Duration `env:"ACCESS_TTL, default=15m"`
-	RefreshTTL time.Duration `env:"REFRESH_TTL, default=720h"`
+// SessionConfig holds session/seance authentication settings.
+type SessionConfig struct {
+	SessionTTL   time.Duration `env:"TTL, default=72h"`
+	SeanceTTL    time.Duration `env:"SEANCE_TTL, default=10m"`
+	CookieSecure bool          `env:"COOKIE_SECURE, default=false"`
+}
+
+// CentrifugoConfig holds Centrifugo connection settings.
+type CentrifugoConfig struct {
+	APIURL string `env:"API_URL, default=http://localhost:8000/api"`
+	APIKey string `env:"API_KEY, default=centrifugo-api-key-change-me"`
 }
 
 // Load reads configuration from environment variables.

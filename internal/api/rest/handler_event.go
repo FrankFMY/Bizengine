@@ -21,7 +21,7 @@ func NewEventHandler(store event.Store) *EventHandler {
 func (h *EventHandler) List(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
@@ -39,20 +39,20 @@ func (h *EventHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 		events, err := h.store.GetByType(r.Context(), wsID, *eventType, since, page.Limit)
 		if err != nil {
-			writeError(w, err)
+			respondError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, events)
+		respondOK(w, http.StatusOK,events)
 		return
 	}
 
 	events, total, err := h.store.GetByWorkspace(r.Context(), wsID, page.Limit, page.Offset)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
+	respondOK(w, http.StatusOK,map[string]any{
 		"items":  events,
 		"total":  total,
 		"limit":  page.Limit,
@@ -64,12 +64,12 @@ func (h *EventHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *EventHandler) GetByEntity(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	entityID, err := parseUUID(r, "entityID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
@@ -84,9 +84,9 @@ func (h *EventHandler) GetByEntity(w http.ResponseWriter, r *http.Request) {
 
 	events, err := h.store.GetByEntity(r.Context(), wsID, entityID, since, page.Limit)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, events)
+	respondOK(w, http.StatusOK,events)
 }

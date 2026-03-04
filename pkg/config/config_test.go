@@ -10,8 +10,6 @@ import (
 )
 
 func TestLoad_Defaults(t *testing.T) {
-	t.Setenv("JWT_SECRET", "test-secret-at-least-32-characters")
-
 	cfg, err := Load(context.Background())
 	require.NoError(t, err)
 
@@ -23,15 +21,11 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, "disable", cfg.DB.SSLMode)
 	assert.Equal(t, "localhost:6379", cfg.Redis.Addr)
 	assert.Equal(t, false, cfg.NATS.Enabled)
-	assert.Equal(t, 15*time.Minute, cfg.JWT.AccessTTL)
-	assert.Equal(t, 720*time.Hour, cfg.JWT.RefreshTTL)
+	assert.Equal(t, 72*time.Hour, cfg.Session.SessionTTL)
+	assert.Equal(t, 10*time.Minute, cfg.Session.SeanceTTL)
+	assert.Equal(t, false, cfg.Session.CookieSecure)
 	assert.Equal(t, "info", cfg.LogLevel)
 	assert.Equal(t, "development", cfg.Env)
-}
-
-func TestLoad_MissingJWTSecret_Error(t *testing.T) {
-	_, err := Load(context.Background())
-	require.Error(t, err)
 }
 
 func TestDBConfig_DSN(t *testing.T) {

@@ -128,7 +128,22 @@ type PageResponse[T any] struct {
 	Offset int `json:"offset"`
 }
 
-// ErrorResponse is the standard API error format.
+// Response is the standard API envelope.
+type Response struct {
+	OK         bool           `json:"ok"`
+	Data       any            `json:"data,omitempty"`
+	Error      *ResponseError `json:"error,omitempty"`
+	Validation any            `json:"validation,omitempty"`
+}
+
+// ResponseError holds a machine-readable error code and optional details.
+type ResponseError struct {
+	Code    string `json:"code"`
+	Details string `json:"details,omitempty"`
+}
+
+// ErrorResponse is the legacy API error format.
+// Deprecated: use Response instead.
 type ErrorResponse struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`

@@ -1,14 +1,11 @@
-// Package auth provides JWT authentication, RBAC authorization, and HTTP middleware.
+// Package auth provides session-based authentication, RBAC authorization, and HTTP middleware.
 package auth
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
@@ -16,56 +13,49 @@ import (
 	"github.com/bizengine/engine/pkg/types"
 )
 
-// Claims represents JWT claims for an access token.
-type Claims struct {
-	jwt.RegisteredClaims
-	Email string `json:"email"`
-	Name  string `json:"name"`
-	WsID  string `json:"ws"`
-	Role  string `json:"role"`
-}
-
 // Service provides authentication operations.
 type Service struct {
-	repo       Repository
-	jwtSecret  []byte
-	accessTTL  time.Duration
-	refreshTTL time.Duration
+	repo         Repository
+	sessionStore SessionStore
+	sessionTTL   time.Duration
+	seanceTTL    time.Duration
 }
 
 // NewService creates a new auth service.
-func NewService(repo Repository, jwtSecret string, accessTTL, refreshTTL time.Duration) *Service {
+func NewService(repo Repository, store SessionStore, sessionTTL, seanceTTL time.Duration) *Service {
 	return &Service{
-		repo:       repo,
-		jwtSecret:  []byte(jwtSecret),
-		accessTTL:  accessTTL,
-		refreshTTL: refreshTTL,
+		repo:         repo,
+		sessionStore: store,
+		sessionTTL:   sessionTTL,
+		seanceTTL:    seanceTTL,
 	}
 }
 
 // RegisterInput is the input for user registration.
 type RegisterInput struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	FullName string `json:"full_name"`
+	Email    string    `json:"email"`
+	Password string    `json:"password"`
+	FullName string    `json:"full_name"`
+	PhoneID  uuid.UUID `json:"phone_id"`
 }
 
 // LoginInput is the input for user login.
 type LoginInput struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email    string    `json:"email"`
+	Password string    `json:"password"`
+	PhoneID  uuid.UUID `json:"phone_id"`
 }
 
-// AuthResult is the response for register/login/refresh.
-type AuthResult struct {
-	User         *types.User      `json:"user"`
-	AccessToken  string           `json:"access_token"`
-	RefreshToken string           `json:"refresh_token"`
-	Workspaces   []types.Workspace `json:"workspaces,omitempty"`
+// LoginResult is the response for register/login.
+type LoginResult struct {
+	User       *types.User       `json:"user"`
+	Workspaces []types.Workspace `json:"workspaces,omitempty"`
+	Session    *Session          `json:"-"`
+	Seance     *Seance           `json:"-"`
 }
 
-// Register creates a new user account.
-func (s *Service) Register(ctx context.Context, input RegisterInput) (*AuthResult, error) {
+// Register creates a new user account with a session.
+func (s *Service) Register(ctx context.Context, input RegisterInput) (*LoginResult, error) {
 	if input.Email == "" || input.Password == "" {
 		return nil, errs.NewBadRequest("email and password are required")
 	}
@@ -90,26 +80,25 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (*AuthResul
 		return nil, err
 	}
 
-	// Generate tokens (no workspace yet)
-	accessToken, err := s.issueAccessToken(user, nil, "")
+	phoneID := input.PhoneID
+	if phoneID == uuid.Nil {
+		phoneID = uuid.New()
+	}
+
+	sess, seance, err := s.createSessionAndSeance(ctx, user, phoneID, uuid.Nil, "")
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := s.issueRefreshToken(ctx, user.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &AuthResult{
-		User:         user,
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
+	return &LoginResult{
+		User:    user,
+		Session: sess,
+		Seance:  seance,
 	}, nil
 }
 
 // Login authenticates a user with email and password.
-func (s *Service) Login(ctx context.Context, input LoginInput) (*AuthResult, error) {
+func (s *Service) Login(ctx context.Context, input LoginInput) (*LoginResult, error) {
 	user, err := s.repo.GetUserByEmail(ctx, input.Email)
 	if err != nil {
 		return nil, errs.NewUnauthorized("invalid credentials")
@@ -128,95 +117,95 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*AuthResult, err
 		return nil, err
 	}
 
-	// Issue token for first workspace if available
-	var wsID *uuid.UUID
+	var wsID uuid.UUID
 	var role string
 	if len(workspaces) > 0 {
-		wsID = &workspaces[0].ID
+		wsID = workspaces[0].ID
 		member, err := s.repo.GetMember(ctx, workspaces[0].ID, user.ID)
 		if err == nil {
 			role = member.Role
 		}
 	}
 
-	accessToken, err := s.issueAccessToken(user, wsID, role)
+	phoneID := input.PhoneID
+	if phoneID == uuid.Nil {
+		phoneID = uuid.New()
+	}
+
+	sess, seance, err := s.createSessionAndSeance(ctx, user, phoneID, wsID, role)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := s.issueRefreshToken(ctx, user.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &AuthResult{
-		User:         user,
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		Workspaces:   workspaces,
+	return &LoginResult{
+		User:       user,
+		Workspaces: workspaces,
+		Session:    sess,
+		Seance:     seance,
 	}, nil
 }
 
-// Refresh generates a new access token from a refresh token.
-func (s *Service) Refresh(ctx context.Context, refreshTokenRaw string) (*AuthResult, error) {
-	hash := hashToken(refreshTokenRaw)
-	rt, err := s.repo.GetRefreshToken(ctx, hash)
-	if err != nil {
-		return nil, errs.NewUnauthorized("invalid refresh token")
+// Logout deletes a session and all its seances.
+func (s *Service) Logout(ctx context.Context, sessionID string) error {
+	if err := s.sessionStore.DeleteSessionSeances(ctx, sessionID); err != nil {
+		return err
 	}
-
-	if rt.RevokedAt != nil {
-		return nil, errs.NewUnauthorized("refresh token revoked")
-	}
-
-	if time.Now().After(rt.ExpiresAt) {
-		return nil, errs.NewUnauthorized("refresh token expired")
-	}
-
-	user, err := s.repo.GetUserByID(ctx, rt.UserID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Revoke old, issue new (rotation)
-	s.repo.RevokeRefreshToken(ctx, hash)
-
-	accessToken, err := s.issueAccessToken(user, nil, "")
-	if err != nil {
-		return nil, err
-	}
-
-	newRefreshToken, err := s.issueRefreshToken(ctx, user.ID)
-	if err != nil {
-		return nil, err
-	}
-
-	return &AuthResult{
-		User:         user,
-		AccessToken:  accessToken,
-		RefreshToken: newRefreshToken,
-	}, nil
+	return s.sessionStore.DeleteSession(ctx, sessionID)
 }
 
-// Logout revokes a refresh token.
-func (s *Service) Logout(ctx context.Context, refreshTokenRaw string) error {
-	hash := hashToken(refreshTokenRaw)
-	return s.repo.RevokeRefreshToken(ctx, hash)
+// Unlock creates a new seance after password verification.
+func (s *Service) Unlock(ctx context.Context, sessionID, password string) (*Seance, error) {
+	sess, err := s.sessionStore.GetSession(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := s.repo.GetUserByID(ctx, sess.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+		return nil, errs.NewUnauthorized("invalid password")
+	}
+
+	seance := &Seance{
+		ID:        uuid.New().String(),
+		SessionID: sessionID,
+		CreatedAt: time.Now(),
+	}
+	if err := s.sessionStore.CreateSeance(ctx, seance, s.seanceTTL); err != nil {
+		return nil, err
+	}
+
+	return seance, nil
 }
 
-// SwitchWorkspace issues a new access token for a different workspace.
-func (s *Service) SwitchWorkspace(ctx context.Context, userID, wsID uuid.UUID) (string, error) {
-	user, err := s.repo.GetUserByID(ctx, userID)
+// SwitchWorkspace updates the session's workspace and role.
+func (s *Service) SwitchWorkspace(ctx context.Context, sessionID string, wsID uuid.UUID) (*Session, error) {
+	sess, err := s.sessionStore.GetSession(ctx, sessionID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	member, err := s.repo.GetMember(ctx, wsID, userID)
+	member, err := s.repo.GetMember(ctx, wsID, sess.UserID)
 	if err != nil {
-		return "", errs.NewForbidden("not a member of this workspace")
+		return nil, errs.NewForbidden("not a member of this workspace")
 	}
 
-	return s.issueAccessToken(user, &wsID, member.Role)
+	sess.WorkspaceID = wsID
+	sess.Role = member.Role
+
+	if err := s.sessionStore.UpdateSession(ctx, sess, s.sessionTTL); err != nil {
+		return nil, err
+	}
+
+	return sess, nil
+}
+
+// GetSessionInfo returns session data for the /check endpoint.
+func (s *Service) GetSessionInfo(ctx context.Context, sessionID string) (*Session, error) {
+	return s.sessionStore.GetSession(ctx, sessionID)
 }
 
 // CreateWorkspace creates a new workspace and adds the owner as a member.
@@ -251,58 +240,44 @@ func (s *Service) CreateWorkspace(ctx context.Context, userID uuid.UUID, name, s
 	return ws, nil
 }
 
-// VerifyToken parses and validates a JWT access token.
-func (s *Service) VerifyToken(tokenString string) (*Claims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, errs.NewUnauthorized("unexpected signing method")
-		}
-		return s.jwtSecret, nil
-	})
-	if err != nil {
-		return nil, errs.NewUnauthorized("invalid token")
-	}
-
-	claims, ok := token.Claims.(*Claims)
-	if !ok || !token.Valid {
-		return nil, errs.NewUnauthorized("invalid token claims")
-	}
-	return claims, nil
+// SessionTTL returns the configured session TTL.
+func (s *Service) SessionTTL() time.Duration {
+	return s.sessionTTL
 }
 
-func (s *Service) issueAccessToken(user *types.User, wsID *uuid.UUID, role string) (string, error) {
-	now := time.Now()
-	claims := &Claims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   user.ID.String(),
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(s.accessTTL)),
-		},
-		Email: user.Email,
-		Name:  user.FullName,
-		Role:  role,
-	}
-	if wsID != nil {
-		claims.WsID = wsID.String()
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString(s.jwtSecret)
+// SeanceTTL returns the configured seance TTL (used by middleware).
+func (s *Service) SeanceTTL() time.Duration {
+	return s.seanceTTL
 }
 
-func (s *Service) issueRefreshToken(ctx context.Context, userID uuid.UUID) (string, error) {
-	raw := uuid.New().String()
-	hash := hashToken(raw)
-	expiresAt := time.Now().Add(s.refreshTTL)
-
-	if _, err := s.repo.CreateRefreshToken(ctx, userID, hash, expiresAt); err != nil {
-		return "", err
-	}
-
-	return raw, nil
+// Store returns the session store (used by middleware).
+func (s *Service) Store() SessionStore {
+	return s.sessionStore
 }
 
-func hashToken(raw string) string {
-	h := sha256.Sum256([]byte(raw))
-	return hex.EncodeToString(h[:])
+func (s *Service) createSessionAndSeance(ctx context.Context, user *types.User, phoneID, wsID uuid.UUID, role string) (*Session, *Seance, error) {
+	sess := &Session{
+		ID:          uuid.New().String(),
+		UserID:      user.ID,
+		PhoneID:     phoneID,
+		WorkspaceID: wsID,
+		Role:        role,
+		Email:       user.Email,
+		FullName:    user.FullName,
+		CreatedAt:   time.Now(),
+	}
+	if err := s.sessionStore.CreateSession(ctx, sess, s.sessionTTL); err != nil {
+		return nil, nil, err
+	}
+
+	seance := &Seance{
+		ID:        uuid.New().String(),
+		SessionID: sess.ID,
+		CreatedAt: time.Now(),
+	}
+	if err := s.sessionStore.CreateSeance(ctx, seance, s.seanceTTL); err != nil {
+		return nil, nil, err
+	}
+
+	return sess, seance, nil
 }

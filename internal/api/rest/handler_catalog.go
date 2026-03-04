@@ -23,31 +23,31 @@ func NewCatalogHandler(catalogSvc *catalog.Service) *CatalogHandler {
 func (h *CatalogHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
 	var input catalog.CreateProductInput
 	if err := decodeJSON(r, &input); err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
 	p, err := h.catalogSvc.CreateProduct(r.Context(), wsID, input, &userID)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, p)
+	respondCreated(w,p)
 }
 
 // ListProducts handles GET /api/v1/workspaces/{wsID}/catalog/products.
 func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
@@ -61,115 +61,115 @@ func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.catalogSvc.ListProducts(r.Context(), wsID, filter)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, result)
+	respondOK(w, http.StatusOK,result)
 }
 
 // GetProduct handles GET /api/v1/workspaces/{wsID}/catalog/products/{id}.
 func (h *CatalogHandler) GetProduct(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	id, err := parseUUID(r, "id")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
 	p, err := h.catalogSvc.GetProduct(r.Context(), wsID, id)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, p)
+	respondOK(w, http.StatusOK,p)
 }
 
 // UpdateProduct handles PUT /api/v1/workspaces/{wsID}/catalog/products/{id}.
 func (h *CatalogHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	id, err := parseUUID(r, "id")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
 	var input catalog.UpdateProductInput
 	if err := decodeJSON(r, &input); err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
 	p, err := h.catalogSvc.UpdateProduct(r.Context(), wsID, id, input, &userID)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, p)
+	respondOK(w, http.StatusOK,p)
 }
 
 // ArchiveProduct handles POST /api/v1/workspaces/{wsID}/catalog/products/{id}/archive.
 func (h *CatalogHandler) ArchiveProduct(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	id, err := parseUUID(r, "id")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
 	if err := h.catalogSvc.ArchiveProduct(r.Context(), wsID, id, &userID); err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	respondOK(w, http.StatusOK, nil)
 }
 
 // CreateCategory handles POST /api/v1/workspaces/{wsID}/catalog/categories.
 func (h *CatalogHandler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
 	var input catalog.CreateCategoryInput
 	if err := decodeJSON(r, &input); err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
 	c, err := h.catalogSvc.CreateCategory(r.Context(), wsID, input, &userID)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, c)
+	respondCreated(w,c)
 }
 
 // ListCategories handles GET /api/v1/workspaces/{wsID}/catalog/categories.
 func (h *CatalogHandler) ListCategories(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
@@ -177,23 +177,23 @@ func (h *CatalogHandler) ListCategories(w http.ResponseWriter, r *http.Request) 
 
 	categories, err := h.catalogSvc.ListCategories(r.Context(), wsID, parentID)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, categories)
+	respondOK(w, http.StatusOK,categories)
 }
 
 // UpdateCategory handles PUT /api/v1/workspaces/{wsID}/catalog/categories/{id}.
 func (h *CatalogHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	id, err := parseUUID(r, "id")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
@@ -203,7 +203,7 @@ func (h *CatalogHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) 
 		ParentID *string `json:"parent_id,omitempty"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
@@ -211,7 +211,7 @@ func (h *CatalogHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) 
 	if input.ParentID != nil {
 		pid, err := parseUUIDString(*input.ParentID)
 		if err != nil {
-			writeError(w, err)
+			respondError(w, err)
 			return
 		}
 		parentID = &pid
@@ -219,31 +219,31 @@ func (h *CatalogHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) 
 
 	c, err := h.catalogSvc.UpdateCategory(r.Context(), wsID, id, input.Name, parentID, &userID)
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, c)
+	respondOK(w, http.StatusOK,c)
 }
 
 // DeleteCategory handles DELETE /api/v1/workspaces/{wsID}/catalog/categories/{id}.
 func (h *CatalogHandler) DeleteCategory(w http.ResponseWriter, r *http.Request) {
 	wsID, err := parseUUID(r, "wsID")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	id, err := parseUUID(r, "id")
 	if err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
 	if err := h.catalogSvc.DeleteCategory(r.Context(), wsID, id, &userID); err != nil {
-		writeError(w, err)
+		respondError(w, err)
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	respondOK(w, http.StatusOK, nil)
 }

@@ -11,12 +11,17 @@ import (
 type Code string
 
 const (
-	CodeBadRequest   Code = "BAD_REQUEST"
-	CodeUnauthorized Code = "UNAUTHORIZED"
-	CodeForbidden    Code = "FORBIDDEN"
-	CodeNotFound     Code = "NOT_FOUND"
-	CodeConflict     Code = "CONFLICT"
-	CodeInternal     Code = "INTERNAL_ERROR"
+	CodeBadRequest     Code = "BAD_REQUEST"
+	CodeUnauthorized   Code = "UNAUTHORIZED"
+	CodeForbidden      Code = "FORBIDDEN"
+	CodeNotFound       Code = "NOT_FOUND"
+	CodeConflict       Code = "CONFLICT"
+	CodeUnprocessable  Code = "UNPROCESSABLE"
+	CodeLocked         Code = "LOCKED"
+	CodeRateLimited    Code = "RATE_LIMITED"
+	CodeInternal       Code = "INTERNAL_ERROR"
+	CodeMaintenance    Code = "MAINTENANCE"
+	CodeGatewayTimeout Code = "GATEWAY_TIMEOUT"
 )
 
 // Error is a typed application error.
@@ -69,6 +74,26 @@ func NewInternal(message string) *Error {
 	return &Error{code: CodeInternal, message: message}
 }
 
+// NewUnprocessable creates an UNPROCESSABLE error.
+func NewUnprocessable(message string) *Error {
+	return &Error{code: CodeUnprocessable, message: message}
+}
+
+// NewLocked creates a LOCKED error.
+func NewLocked(message string) *Error {
+	return &Error{code: CodeLocked, message: message}
+}
+
+// NewRateLimited creates a RATE_LIMITED error.
+func NewRateLimited(message string) *Error {
+	return &Error{code: CodeRateLimited, message: message}
+}
+
+// NewGatewayTimeout creates a GATEWAY_TIMEOUT error.
+func NewGatewayTimeout(message string) *Error {
+	return &Error{code: CodeGatewayTimeout, message: message}
+}
+
 // Wrap wraps an existing error with a typed application error.
 func Wrap(err error, code Code, message string) *Error {
 	return &Error{code: code, message: message, cause: err}
@@ -105,6 +130,16 @@ func HTTPStatus(err error) int {
 		return http.StatusNotFound
 	case CodeConflict:
 		return http.StatusConflict
+	case CodeUnprocessable:
+		return http.StatusUnprocessableEntity
+	case CodeLocked:
+		return http.StatusLocked
+	case CodeRateLimited:
+		return http.StatusTooManyRequests
+	case CodeMaintenance:
+		return http.StatusServiceUnavailable
+	case CodeGatewayTimeout:
+		return http.StatusGatewayTimeout
 	default:
 		return http.StatusInternalServerError
 	}
