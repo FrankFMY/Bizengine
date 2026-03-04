@@ -1,0 +1,137 @@
+PROPRIETARY SOFTWARE LICENSE AGREEMENT
+
+Copyright (c) 2024-2026 Pryanishnikov Artem Alekseevich (Прянишников Артём Алексеевич).
+All rights reserved.
+
+Contact: Pryanishnikovartem@gmail.com
+Telegram: @FrankFMY
+
+NOTICE: This software and all associated documentation, source code, object code,
+compiled binaries, configuration files, process definitions, database schemas,
+API specifications, and any other materials contained in this repository
+(collectively, the "Software") are the exclusive intellectual property of
+Pryanishnikov Artem Alekseevich (the "Owner").
+
+1. GRANT OF LICENSE
+
+   No license, right, or interest in the Software is granted to any person or
+   entity under this agreement. The Software is provided for viewing purposes
+   only within the context of the Owner's public repository. No other rights
+   are granted, either express or implied.
+
+2. RESTRICTIONS
+
+   Without the prior written consent of the Owner, you may NOT:
+
+   a) Use the Software, in whole or in part, for any purpose whatsoever,
+      including but not limited to commercial, non-commercial, educational,
+      research, personal, or internal business purposes.
+
+   b) Copy, reproduce, duplicate, distribute, publish, display, transmit,
+      broadcast, or disseminate the Software or any portion thereof in any
+      form or by any means.
+
+   c) Modify, adapt, translate, reverse engineer, decompile, disassemble,
+      or create derivative works based on the Software or any portion thereof.
+
+   d) Sublicense, lease, rent, loan, sell, resell, assign, transfer, or
+      otherwise make the Software available to any third party.
+
+   e) Incorporate the Software, in whole or in part, into any other software,
+      product, service, system, or platform.
+
+   f) Use the Software as a basis for training machine learning models,
+      artificial intelligence systems, or any automated code generation tools.
+
+   g) Remove, alter, or obscure any proprietary notices, labels, marks,
+      copyright notices, or branding contained in or on the Software.
+
+   h) Use any trade names, trademarks, service marks, or product names of
+      the Owner, including "BizEngine", except as required for reasonable
+      and customary attribution.
+
+   i) Host, deploy, or operate any instance of the Software on any server,
+      cloud platform, container, virtual machine, or any other computing
+      environment, whether publicly accessible or not.
+
+   j) Benchmark, test, analyze, or evaluate the Software for the purpose of
+      building a competing product or service.
+
+3. INTELLECTUAL PROPERTY
+
+   The Software, including all intellectual property rights therein, is and
+   shall remain the sole and exclusive property of the Owner. Nothing in this
+   agreement shall be construed as transferring any intellectual property
+   rights to any person or entity.
+
+   All inventions, designs, algorithms, data structures, database schemas,
+   API designs, business process definitions, and architectural decisions
+   embodied in the Software are proprietary trade secrets of the Owner.
+
+4. CONFIDENTIALITY
+
+   The Software contains proprietary and confidential information. Any person
+   who obtains access to the Software agrees to maintain its confidentiality
+   and not to disclose any portion thereof to any third party without the
+   prior written consent of the Owner.
+
+5. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. THE OWNER
+   MAKES NO WARRANTY THAT THE SOFTWARE WILL MEET ANY REQUIREMENTS OR THAT
+   THE OPERATION OF THE SOFTWARE WILL BE UNINTERRUPTED OR ERROR-FREE.
+
+6. LIMITATION OF LIABILITY
+
+   IN NO EVENT SHALL THE OWNER BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+   SPECIAL, EXEMPLARY, CONSEQUENTIAL, OR PUNITIVE DAMAGES (INCLUDING, BUT NOT
+   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES, LOSS OF USE, DATA,
+   OR PROFITS, OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+   LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+   NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF OR INABILITY
+   TO USE THE SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
+
+7. TERMINATION
+
+   Any unauthorized use of the Software automatically terminates any implied
+   permissions and may subject the violator to legal action under applicable
+   copyright, trade secret, and intellectual property laws, including but not
+   limited to the Civil Code of the Russian Federation, the Berne Convention
+   for the Protection of Literary and Artistic Works, and the WIPO Copyright
+   Treaty.
+
+8. ENFORCEMENT
+
+   The Owner reserves the right to enforce this agreement through all available
+   legal remedies, including injunctive relief, actual damages, statutory
+   damages, and attorney's fees. The Owner may pursue legal action in any
+   jurisdiction where unauthorized use of the Software occurs.
+
+9. GOVERNING LAW
+
+   This agreement shall be governed by and construed in accordance with the
+   laws of the Russian Federation, without regard to its conflict of laws
+   principles. Any disputes arising under this agreement shall be subject to
+   the exclusive jurisdiction of the courts of the Russian Federation.
+
+10. SEVERABILITY
+
+    If any provision of this agreement is held to be invalid or unenforceable,
+    the remaining provisions shall continue in full force and effect.
+
+11. ENTIRE AGREEMENT
+
+    This agreement constitutes the entire agreement between the parties with
+    respect to the Software and supersedes all prior or contemporaneous
+    communications, representations, or agreements, whether oral or written.
+
+12. CONTACT FOR LICENSING INQUIRIES
+
+    For licensing inquiries, partnership proposals, or written permission
+    requests, contact the Owner at:
+
+    Pryanishnikov Artem Alekseevich
+    Email: Pryanishnikovartem@gmail.com
+    Telegram: @FrankFMY
