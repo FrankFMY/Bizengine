@@ -1,0 +1,96 @@
+id: order_fulfillment
+name: Order Fulfillment
+description: Full order lifecycle from creation to delivery or cancellation
+trigger_on: order.created
+entity_kind: order
+init_state: new
+
+states:
+  new:
+    name: New Order
+    transitions:
+      - to: confirmed
+        event: order.confirmed
+        actions:
+          - type: emit_event
+            params:
+              event_type: notification.created
+              data:
+                title: "Order confirmed"
+                severity: info
+      - to: cancelled
+        event: order.cancelled
+
+  confirmed:
+    name: Confirmed
+    on_enter:
+      - type: update_status
+        params:
+          status: confirmed
+    transitions:
+      - to: paid
+        event: order.paid
+      - to: cancelled
+        event: order.cancelled
+
+  paid:
+    name: Paid
+    on_enter:
+      - type: update_status
+        params:
+          status: paid
+      - type: emit_event
+        params:
+          event_type: notification.created
+          data:
+            title: "Order paid"
+            severity: success
+    transitions:
+      - to: assembling
+        event: order.assembling
+
+  assembling:
+    name: Assembling
+    on_enter:
+      - type: update_status
+        params:
+          status: assembling
+    transitions:
+      - to: shipped
+        event: order.shipped
+
+  shipped:
+    name: Shipped
+    on_enter:
+      - type: update_status
+        params:
+          status: shipped
+    transitions:
+      - to: delivered
+        event: order.delivered
+      - to: returned
+        event: order.returned
+
+  delivered:
+    name: Delivered
+    terminal: true
+    on_enter:
+      - type: update_status
+        params:
+          status: delivered
+
+  returned:
+    name: Returned
+    terminal: true
+    on_enter:
+      - type: update_status
+        params:
+          status: returned
+
+  cancelled:
+    name: Cancelled
+    terminal: true
+    on_enter:
+      - type: update_status
+        params:
+          status: cancelled

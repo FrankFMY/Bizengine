@@ -1,0 +1,1 @@
+-- 002_catalog: nothing to drop (no new tables)

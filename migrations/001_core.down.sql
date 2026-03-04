@@ -1,0 +1,12 @@
+DROP TABLE IF EXISTS refresh_tokens;
+DROP TABLE IF EXISTS process_instances;
+DROP TABLE IF EXISTS process_definitions;
+DROP TABLE IF EXISTS events_default;
+DROP TABLE IF EXISTS events;
+DROP TABLE IF EXISTS components;
+DROP TABLE IF EXISTS entities;
+DROP TABLE IF EXISTS workspace_members;
+DROP TABLE IF EXISTS workspaces;
+DROP TABLE IF EXISTS users;
+DROP EXTENSION IF EXISTS "pg_trgm";
+DROP EXTENSION IF EXISTS "uuid-ossp";

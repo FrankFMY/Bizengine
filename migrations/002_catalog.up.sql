@@ -1,0 +1,4 @@
+-- 002_catalog: Catalog module
+-- No new tables. Catalog uses core entities (kind=product, kind=category)
+-- with components: price, barcode, media, attributes.
+-- This migration exists as a placeholder for the catalog module boundary.

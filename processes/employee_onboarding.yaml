@@ -1,0 +1,54 @@
+id: employee_onboarding
+name: Employee Onboarding
+description: New employee onboarding process from documents to active status
+trigger_on: hr.employee.created
+entity_kind: employee
+init_state: documents
+
+states:
+  documents:
+    name: Document Collection
+    on_enter:
+      - type: notify
+        params:
+          channel: role
+          target: manager
+          title: "New employee onboarding started"
+          body: "Please collect required documents"
+          severity: info
+    transitions:
+      - to: access_setup
+        event: hr.employee.documents_verified
+
+  access_setup:
+    name: Access Setup
+    on_enter:
+      - type: update_status
+        params:
+          status: access_setup
+    transitions:
+      - to: training
+        event: hr.employee.access_granted
+
+  training:
+    name: Training
+    on_enter:
+      - type: update_status
+        params:
+          status: training
+    transitions:
+      - to: active
+        event: hr.employee.training_completed
+
+  active:
+    name: Active
+    terminal: true
+    on_enter:
+      - type: update_status
+        params:
+          status: active
+      - type: notify
+        params:
+          channel: workspace
+          title: "Employee onboarding complete"
+          severity: success

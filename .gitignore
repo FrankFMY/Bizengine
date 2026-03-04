@@ -1,0 +1,43 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/bin/
+/tmp/
+
+# Test
+*.test
+*.out
+coverage.html
+
+# Dependency
+/vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+
+# Air
+tmp/
+
+# Build output
+/engine
+
+# Documentation (specs, not part of source)
+/docs/
+
+# Claude Code
+.claude/
+CLAUDE.md

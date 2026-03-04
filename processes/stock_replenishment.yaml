@@ -1,0 +1,25 @@
+id: stock_replenishment
+name: Stock Replenishment Alert
+description: Monitors stock levels and creates alerts when below minimum
+trigger_on: warehouse.stock.low
+entity_kind: product
+init_state: alert_created
+
+states:
+  alert_created:
+    name: Low Stock Alert
+    on_enter:
+      - type: notify
+        params:
+          channel: role
+          target: manager
+          title: "Low stock alert"
+          body: "Product stock is below minimum threshold"
+          severity: warning
+    transitions:
+      - to: resolved
+        event: warehouse.stock.received
+
+  resolved:
+    name: Resolved
+    terminal: true

@@ -1,0 +1,64 @@
+id: delivery_tracking
+name: Delivery Tracking
+description: Tracks delivery lifecycle from assignment to completion
+trigger_on: logistics.delivery.created
+entity_kind: delivery
+init_state: assigned
+
+states:
+  assigned:
+    name: Assigned
+    on_enter:
+      - type: notify
+        params:
+          channel: user
+          target: driver
+          title: "New delivery assigned"
+          severity: info
+    transitions:
+      - to: in_transit
+        event: logistics.delivery.started
+
+  in_transit:
+    name: In Transit
+    on_enter:
+      - type: update_status
+        params:
+          status: in_transit
+    transitions:
+      - to: arrived
+        event: logistics.delivery.arrived
+
+  arrived:
+    name: Arrived
+    on_enter:
+      - type: update_status
+        params:
+          status: arrived
+    transitions:
+      - to: completed
+        event: logistics.delivery.completed
+      - to: failed
+        event: logistics.delivery.failed
+
+  completed:
+    name: Completed
+    terminal: true
+    on_enter:
+      - type: update_status
+        params:
+          status: completed
+
+  failed:
+    name: Failed
+    terminal: true
+    on_enter:
+      - type: update_status
+        params:
+          status: failed
+      - type: notify
+        params:
+          channel: role
+          target: manager
+          title: "Delivery failed"
+          severity: error
