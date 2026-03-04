@@ -1,5 +1,5 @@
 // BizEngine View Client SDK — minimal skeleton for CTO to integrate with Svelte 5
-import type { Views, DataRef, ViewSnapshotMsg, TableDiffMsg, ViewDiffMsg } from "./views";
+import type { DataRef, TableDiffMsg, ViewDiffMsg, ViewSnapshotMsg, Views } from "./views";
 
 type ViewKey = keyof Views;
 
@@ -26,9 +26,9 @@ interface ViewSubscription<K extends ViewKey> {
  *   // Centrifugo delivers table_diff / view_diff — wire handleSnapshot/handleTableDiff/handleViewDiff
  */
 export class ArcanaClient {
-  private baseURL: string;
+  private readonly baseURL: string;
   private wsID: string = "";
-  private subscriptions = new Map<string, ViewSubscription<ViewKey>>();
+  private readonly subscriptions = new Map<string, ViewSubscription<ViewKey>>();
 
   constructor(baseURL: string) {
     this.baseURL = baseURL;
@@ -117,13 +117,12 @@ export class ArcanaClient {
     if (!sub) return;
     sub.refs = msg.refs;
     sub.version = msg.version;
-    // TODO: CTO — merge msg.tables into Svelte tableStore (replace, not merge)
+    // TODO: merge msg.tables into Svelte tableStore (replace, not merge)
   }
 
-  handleTableDiff(msg: TableDiffMsg): void {
-    // TODO: CTO — apply msg.patch to tableStore[msg.table][msg.id]
+  handleTableDiff(_msg: TableDiffMsg): void {
+    // TODO: apply _msg.patch to tableStore[_msg.table][_msg.id]
     // Svelte 5 proxies will auto-update all views referencing this row
-    void msg;
   }
 
   handleViewDiff(msg: ViewDiffMsg): void {
@@ -135,12 +134,12 @@ export class ArcanaClient {
       if (op.op === "add" && op.value) {
         sub.refs.push(op.value as DataRef);
       } else if (op.op === "replace" && op.value === null) {
-        const idx = parseInt(op.path.replace("/", ""), 10);
-        if (!isNaN(idx) && idx < sub.refs.length) {
+        const idx = Number.parseInt(op.path.replace("/", ""), 10);
+        if (!Number.isNaN(idx) && idx < sub.refs.length) {
           sub.refs.splice(idx, 1);
         }
       }
     }
-    // TODO: CTO — merge msg.tables into Svelte tableStore for new records
+    // TODO: merge msg.tables into Svelte tableStore for new records
   }
 }

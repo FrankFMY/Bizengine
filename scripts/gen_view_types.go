@@ -29,16 +29,18 @@ func main() {
 	for _, def := range all {
 		iface := toPascal(def.Key)
 
-		// Params interface
-		fmt.Fprintf(os.Stdout, "export interface %sParams {\n", iface)
-		if len(def.ParamSchema) > 0 {
+		// Params type
+		if len(def.ParamSchema) == 0 {
+			fmt.Fprintf(os.Stdout, "export type %sParams = Record<string, never>;\n", iface)
+		} else {
+			fmt.Fprintf(os.Stdout, "export interface %sParams {\n", iface)
 			keys := sortedKeys(def.ParamSchema)
 			for _, k := range keys {
 				tsType := goTypeToTS(def.ParamSchema[k])
 				fmt.Fprintf(os.Stdout, "  %s?: %s;\n", k, tsType)
 			}
+			fmt.Fprintln(os.Stdout, "}")
 		}
-		fmt.Fprintln(os.Stdout, "}")
 		fmt.Fprintln(os.Stdout)
 
 		// Result: generic — tables map with refs
