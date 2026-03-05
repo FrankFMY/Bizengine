@@ -168,6 +168,54 @@ var orderDetail = arcana.GraphDef{
 	},
 }
 
+var orderRefundsList = arcana.GraphDef{
+	Key: "order_refunds_list",
+	Deps: []arcana.TableDep{
+		{Table: "orders", Columns: []string{"status", "total", "refunded_at"}},
+	},
+	Params: arcana.ParamSchema{
+		"limit":  arcana.ParamInt().Default(50),
+		"offset": arcana.ParamInt().Default(0),
+	},
+	Factory: func(ctx context.Context, q arcana.Querier, p arcana.Params) (*arcana.Result, error) {
+		orgID := arcana.WorkspaceID(ctx)
+		limit := p.Int("limit")
+		offset := p.Int("offset")
+
+		rows, err := q.Query(ctx, `
+			SELECT o.id, o.number, COALESCE(c.name,'') AS customer_name,
+			       o.total, o.refunded_at, COUNT(*) OVER() AS total_count
+			FROM orders o
+			LEFT JOIN entities c ON c.id = o.customer_id AND c.organization_id = $1
+			WHERE o.organization_id = $1 AND o.status = 'refunded'
+			ORDER BY o.refunded_at DESC
+			LIMIT $2 OFFSET $3
+		`, orgID, limit, offset)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		result := arcana.NewResult()
+		for rows.Next() {
+			var id, number, customerName string
+			var total int64
+			var refundedAt any
+			var cnt int
+			if err := rows.Scan(&id, &number, &customerName, &total, &refundedAt, &cnt); err != nil {
+				return nil, err
+			}
+			result.SetTotal(cnt)
+			result.AddRef(arcana.Ref{Table: "orders", ID: id, Fields: []string{"number", "customer_name", "total", "refunded_at"}})
+			result.AddRow("orders", id, map[string]any{
+				"id": id, "number": number, "customer_name": customerName,
+				"total": total, "refunded_at": refundedAt,
+			})
+		}
+		return result, rows.Err()
+	},
+}
+
 var ordersDashboard = arcana.GraphDef{
 	Key: "orders_dashboard",
 	Deps: []arcana.TableDep{

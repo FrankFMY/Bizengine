@@ -43,7 +43,7 @@ func EventToChanges(eventType string, data map[string]any) []arcana.Change {
 			return nil
 		}
 		changes := []arcana.Change{
-			{Table: "orders", RowID: rowID, Columns: []string{"status", "total", "updated_at"}},
+			{Table: "orders", RowID: rowID, Columns: []string{"status", "total", "updated_at", "refunded_at"}},
 		}
 		if len(parts) >= 2 && parts[1] == "item" {
 			itemID := extractID(data, "item_id")
@@ -103,6 +103,22 @@ func EventToChanges(eventType string, data map[string]any) []arcana.Change {
 			return []arcana.Change{
 				{Table: "timesheets", RowID: entityID, Columns: []string{"clock_in", "clock_out", "status"}},
 			}
+		case len(parts) >= 2 && parts[1] == "payroll":
+			rowID := extractID(data, "payroll_id")
+			if rowID == "" {
+				rowID = entityID
+			}
+			return []arcana.Change{
+				{Table: "payrolls", RowID: rowID, Columns: []string{"status", "net_salary", "gross_salary"}},
+			}
+		case len(parts) >= 2 && parts[1] == "absence":
+			rowID := extractID(data, "absence_id")
+			if rowID == "" {
+				rowID = entityID
+			}
+			return []arcana.Change{
+				{Table: "absences", RowID: rowID, Columns: []string{"type", "status", "start_date", "end_date"}},
+			}
 		default:
 			return []arcana.Change{
 				{Table: "entities", RowID: entityID, Columns: []string{"name", "status"}},
@@ -122,6 +138,22 @@ func EventToChanges(eventType string, data map[string]any) []arcana.Change {
 		case len(parts) >= 2 && parts[1] == "account":
 			return []arcana.Change{
 				{Table: "accounts", RowID: entityID, Columns: []string{"code", "name", "type"}},
+			}
+		case len(parts) >= 2 && parts[1] == "period":
+			rowID := extractID(data, "period_id")
+			if rowID == "" {
+				rowID = entityID
+			}
+			return []arcana.Change{
+				{Table: "finance_periods", RowID: rowID, Columns: []string{"status", "closed_at"}},
+			}
+		case len(parts) >= 2 && parts[1] == "cash":
+			rowID := extractID(data, "operation_id")
+			if rowID == "" {
+				rowID = entityID
+			}
+			return []arcana.Change{
+				{Table: "cash_operations", RowID: rowID, Columns: []string{"type", "amount", "created_at"}},
 			}
 		default:
 			return []arcana.Change{
@@ -155,6 +187,24 @@ func EventToChanges(eventType string, data map[string]any) []arcana.Change {
 			return []arcana.Change{
 				{Table: "routes", RowID: entityID, Columns: []string{"status", "updated_at"}},
 			}
+		}
+
+	case "crm":
+		if entityID == "" {
+			return nil
+		}
+		return []arcana.Change{
+			{Table: "entities", RowID: entityID, Columns: []string{"name", "status"}},
+			{Table: "components", RowID: entityID, Columns: []string{"data"}},
+		}
+
+	case "settings":
+		orgSettingsID := extractID(data, "organization_id")
+		if orgSettingsID == "" {
+			return nil
+		}
+		return []arcana.Change{
+			{Table: "organization_settings", RowID: orgSettingsID, Columns: []string{"currency", "timezone", "features", "requisites"}},
 		}
 
 	case "notification":

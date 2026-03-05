@@ -3,7 +3,7 @@ module github.com/bizengine/engine
 go 1.24.0
 
 require (
-	github.com/FrankFMY/arcana v0.1.2
+	github.com/FrankFMY/arcana v0.1.3
 	github.com/alicebob/miniredis/v2 v2.37.0
 	github.com/aws/aws-sdk-go-v2 v1.41.3
 	github.com/aws/aws-sdk-go-v2/config v1.32.11

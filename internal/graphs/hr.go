@@ -185,6 +185,119 @@ var hrShiftsSchedule = arcana.GraphDef{
 	},
 }
 
+var hrPayrollList = arcana.GraphDef{
+	Key: "hr_payroll_list",
+	Deps: []arcana.TableDep{
+		{Table: "payrolls", Columns: []string{"status", "net_salary", "gross_salary"}},
+		{Table: "entities", Columns: []string{"name"}},
+	},
+	Params: arcana.ParamSchema{
+		"year":  arcana.ParamInt().Required(),
+		"month": arcana.ParamInt().Required(),
+	},
+	Factory: func(ctx context.Context, q arcana.Querier, p arcana.Params) (*arcana.Result, error) {
+		orgID := arcana.WorkspaceID(ctx)
+		year := p.Int("year")
+		month := p.Int("month")
+
+		rows, err := q.Query(ctx, `
+			SELECT p.id, e.name AS employee_name, p.gross_salary, p.ndfl,
+			       p.deductions, p.net_salary, p.status
+			FROM payrolls p
+			JOIN entities e ON e.id = p.employee_id AND e.organization_id = $1
+			WHERE p.organization_id = $1 AND p.year = $2 AND p.month = $3
+			ORDER BY e.name
+		`, orgID, year, month)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		result := arcana.NewResult()
+		for rows.Next() {
+			var id, empName, status string
+			var gross, ndfl, deductions, net int64
+			if err := rows.Scan(&id, &empName, &gross, &ndfl, &deductions, &net, &status); err != nil {
+				return nil, err
+			}
+			result.AddRef(arcana.Ref{Table: "payrolls", ID: id, Fields: []string{"employee_name", "gross_salary", "net_salary", "status"}})
+			result.AddRow("payrolls", id, map[string]any{
+				"id": id, "employee_name": empName, "gross_salary": gross,
+				"ndfl": ndfl, "deductions": deductions, "net_salary": net, "status": status,
+			})
+		}
+		return result, rows.Err()
+	},
+}
+
+var hrAbsencesList = arcana.GraphDef{
+	Key: "hr_absences_list",
+	Deps: []arcana.TableDep{
+		{Table: "absences", Columns: []string{"type", "status", "start_date", "end_date"}},
+		{Table: "entities", Columns: []string{"name"}},
+	},
+	Params: arcana.ParamSchema{
+		"employee_id": arcana.ParamUUID().Build(),
+		"status":      arcana.ParamString().Build(),
+		"limit":       arcana.ParamInt().Default(50),
+		"offset":      arcana.ParamInt().Default(0),
+	},
+	Factory: func(ctx context.Context, q arcana.Querier, p arcana.Params) (*arcana.Result, error) {
+		orgID := arcana.WorkspaceID(ctx)
+		limit := p.Int("limit")
+		offset := p.Int("offset")
+		employeeID := p.UUID("employee_id")
+		status := p.String("status")
+
+		query := `
+			SELECT a.id, e.name AS employee_name, a.type, a.start_date, a.end_date,
+			       a.status, a.reason, COUNT(*) OVER() AS total_count
+			FROM absences a
+			JOIN entities e ON e.id = a.employee_id AND e.organization_id = $1
+			WHERE a.organization_id = $1
+		`
+		args := []any{orgID}
+		argIdx := 2
+
+		if employeeID != "" {
+			query += fmt.Sprintf(` AND a.employee_id = $%d`, argIdx)
+			args = append(args, employeeID)
+			argIdx++
+		}
+		if status != "" {
+			query += fmt.Sprintf(` AND a.status = $%d`, argIdx)
+			args = append(args, status)
+			argIdx++
+		}
+
+		query += fmt.Sprintf(` ORDER BY a.start_date DESC LIMIT $%d OFFSET $%d`, argIdx, argIdx+1)
+		args = append(args, limit, offset)
+
+		rows, err := q.Query(ctx, query, args...)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		result := arcana.NewResult()
+		for rows.Next() {
+			var id, empName, aType, aStatus, reason string
+			var startDate, endDate any
+			var cnt int
+			if err := rows.Scan(&id, &empName, &aType, &startDate, &endDate, &aStatus, &reason, &cnt); err != nil {
+				return nil, err
+			}
+			result.SetTotal(cnt)
+			result.AddRef(arcana.Ref{Table: "absences", ID: id, Fields: []string{"employee_name", "type", "start_date", "end_date", "status"}})
+			result.AddRow("absences", id, map[string]any{
+				"id": id, "employee_name": empName, "type": aType,
+				"start_date": startDate, "end_date": endDate, "status": aStatus, "reason": reason,
+			})
+		}
+		return result, rows.Err()
+	},
+}
+
 var hrTimesheetsList = arcana.GraphDef{
 	Key: "hr_timesheets_list",
 	Deps: []arcana.TableDep{

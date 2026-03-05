@@ -171,6 +171,59 @@ var warehouseStockDetail = arcana.GraphDef{
 	},
 }
 
+var warehouseInventoryDetail = arcana.GraphDef{
+	Key: "warehouse_inventory_detail",
+	Deps: []arcana.TableDep{
+		{Table: "stock_levels", Columns: []string{"quantity", "reserved"}},
+		{Table: "entities", Columns: []string{"name"}},
+	},
+	Params: arcana.ParamSchema{
+		"product_id": arcana.ParamUUID().Required(),
+	},
+	Factory: func(ctx context.Context, q arcana.Querier, p arcana.Params) (*arcana.Result, error) {
+		orgID := arcana.WorkspaceID(ctx)
+		productID := p.UUID("product_id")
+
+		rows, err := q.Query(ctx, `
+			SELECT w.id, w.name, sl.quantity, sl.reserved,
+			       sl.quantity - sl.reserved AS available,
+			       sl.min_quantity, sl.max_quantity
+			FROM stock_levels sl
+			JOIN entities w ON w.id = sl.warehouse_id AND w.organization_id = $1
+			WHERE sl.organization_id = $1 AND sl.product_id = $2
+			ORDER BY w.name
+		`, orgID, productID)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		result := arcana.NewResult()
+		for rows.Next() {
+			var whID, whName string
+			var quantity, reserved, available, minQty float64
+			var maxQty *float64
+			if err := rows.Scan(&whID, &whName, &quantity, &reserved, &available, &minQty, &maxQty); err != nil {
+				return nil, err
+			}
+			row := map[string]any{
+				"warehouse_id":   whID,
+				"warehouse_name": whName,
+				"quantity":       quantity,
+				"reserved":       reserved,
+				"available":      available,
+				"min_quantity":   minQty,
+			}
+			if maxQty != nil {
+				row["max_quantity"] = *maxQty
+			}
+			result.AddRef(arcana.Ref{Table: "stock_levels", ID: whID, Fields: []string{"warehouse_name", "quantity", "available"}})
+			result.AddRow("stock_levels", whID, row)
+		}
+		return result, rows.Err()
+	},
+}
+
 var warehouseLowStock = arcana.GraphDef{
 	Key: "warehouse_low_stock",
 	Deps: []arcana.TableDep{

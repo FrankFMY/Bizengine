@@ -13,11 +13,13 @@ func RegisterAll(engine *arcana.Engine) {
 		// Warehouse
 		warehouseStockList,
 		warehouseStockDetail,
+		warehouseInventoryDetail,
 		warehouseLowStock,
 
 		// Orders
 		ordersList,
 		orderDetail,
+		orderRefundsList,
 		ordersDashboard,
 
 		// HR
@@ -25,11 +27,24 @@ func RegisterAll(engine *arcana.Engine) {
 		hrEmployeeDetail,
 		hrShiftsSchedule,
 		hrTimesheetsList,
+		hrPayrollList,
+		hrAbsencesList,
 
 		// Finance
 		financeTrialBalance,
 		financeTransactionsList,
 		financeAccountBalance,
+		financePnL,
+		financePeriodsList,
+		financeCashOperations,
+
+		// CRM
+		crmCustomersList,
+		crmCustomerDetail,
+		crmSuppliersList,
+
+		// Settings
+		organizationSettings,
 
 		// Logistics
 		logisticsRoutesList,
@@ -38,6 +53,7 @@ func RegisterAll(engine *arcana.Engine) {
 
 		// Notifications
 		notificationsUnread,
+		notificationsList,
 
 		// Dashboard
 		dashboardSummary,
