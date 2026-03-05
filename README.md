@@ -117,7 +117,7 @@ bizengine/
 |   +-- api/
 |   |   +-- rest/                # Chi router, all HTTP handlers
 |   |   +-- centrifugo/          # Connect/subscribe proxy, publisher
-|   +-- graphs/                  # Arcana graph definitions (32 graphs)
+|   +-- graphs/                  # Arcana graph definitions (33 graphs)
 |   +-- notification/            # Notification inbox service
 |   +-- webhook/                 # Webhook dispatch service
 |   +-- dataimport/              # Mass CSV/XLSX data import
@@ -532,7 +532,7 @@ make run          # Build and run
 ### Testing
 
 ```bash
-make test                 # Unit tests (~300 tests, ~5s)
+make test                 # Unit tests (~320 tests, ~5s)
 make test-integration     # Integration tests (requires Docker)
 make test-coverage        # Coverage report -> coverage.html
 ```
@@ -609,10 +609,10 @@ Request processing order:
 ## Codebase stats
 
 - **~35,000 lines** of Go code
-- **240+ unit tests** across 26 test suites
+- **318 unit tests** across 26 test suites
 - **19 database migrations** (38 files with up/down)
 - **4 YAML process definitions** + custom definitions via API
-- **32 Arcana graph definitions** for reactive data sync
+- **33 Arcana graph definitions** for reactive data sync
 - **180+ REST API endpoints** + 6 Arcana endpoints
 - **40+ event types** with async subscriber fan-out
 
