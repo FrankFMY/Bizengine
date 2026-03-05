@@ -34,6 +34,7 @@ import (
 	"github.com/bizengine/engine/internal/module/catalog"
 	"github.com/bizengine/engine/internal/module/file"
 	"github.com/bizengine/engine/internal/module/finance"
+	"github.com/bizengine/engine/internal/dataimport"
 	"github.com/bizengine/engine/internal/documents"
 	"github.com/bizengine/engine/internal/module/crm"
 	"github.com/bizengine/engine/internal/module/hr"
@@ -128,6 +129,9 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to init documents service")
 	}
+
+	// Import
+	importSvc := dataimport.NewService(entitySvc, eventBus)
 
 	// Modules: Finance
 	financeRepo := postgres.NewFinanceRepo(pool)
@@ -304,6 +308,7 @@ func main() {
 		CRMH:          rest.NewCRMHandler(crmSvc),
 		SettingsH:     rest.NewSettingsHandler(settingsSvc),
 		DocumentsH:    rest.NewDocumentsHandler(docSvc),
+		ImportH:       rest.NewImportHandler(importSvc),
 		FinanceH:      rest.NewFinanceHandler(financeSvc),
 		LogisticsH:    rest.NewLogisticsHandler(logisticsSvc),
 		FileH:         rest.NewFileHandler(fileSvc),

@@ -48,6 +48,7 @@ type RouterDeps struct {
 	CRMH           *CRMHandler
 	SettingsH      *SettingsHandler
 	DocumentsH     *DocumentsHandler
+	ImportH        *ImportHandler
 	HealthH        *HealthHandler
 }
 
@@ -319,6 +320,14 @@ func NewRouter(deps RouterDeps) http.Handler {
 					r.Get("/act/{orderID}", deps.DocumentsH.Act)
 					r.Get("/receipt/{orderID}", deps.DocumentsH.Receipt)
 					r.Get("/price-tags", deps.DocumentsH.PriceTags)
+				})
+
+				// Import
+				r.Route("/import", func(r chi.Router) {
+					r.Use(auth.RequirePermission("import.manage"))
+					r.Post("/products", deps.ImportH.ImportProducts)
+					r.Post("/customers", deps.ImportH.ImportCustomers)
+					r.Post("/suppliers", deps.ImportH.ImportSuppliers)
 				})
 
 				// Logistics
