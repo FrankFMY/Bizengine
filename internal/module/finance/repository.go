@@ -40,6 +40,18 @@ type Repository interface {
 	// Has lines check for delete protection
 	HasTransactionLines(ctx context.Context, orgID, accountID uuid.UUID) (bool, error)
 
+	// Periods
+	GetPeriod(ctx context.Context, orgID uuid.UUID, year, month int) (*FinancePeriod, error)
+	UpsertPeriod(ctx context.Context, tx pgx.Tx, p *FinancePeriod) error
+	ListPeriods(ctx context.Context, orgID uuid.UUID) ([]FinancePeriod, error)
+
+	// P&L
+	GetProfitAndLoss(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]PnLRow, error)
+
+	// Cash operations
+	CreateCashOperation(ctx context.Context, tx pgx.Tx, op *CashOperation) error
+	ListCashOperations(ctx context.Context, orgID uuid.UUID, filter CashOperationFilter) ([]CashOperation, int, error)
+
 	WithTx(ctx context.Context, fn func(tx pgx.Tx) error) error
 }
 
@@ -173,6 +185,63 @@ type CreateInvoiceInput struct {
 	Currency       string     `json:"currency"`
 	IssuedAt       *time.Time `json:"issued_at"`
 	DueAt          *time.Time `json:"due_at"`
+}
+
+// FinancePeriod represents a monthly accounting period.
+type FinancePeriod struct {
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	Year           int        `json:"year"`
+	Month          int        `json:"month"`
+	Status         string     `json:"status"` // open, closed
+	ClosedAt       *time.Time `json:"closed_at,omitempty"`
+	ClosedBy       *uuid.UUID `json:"closed_by,omitempty"`
+}
+
+// PnLRow represents a line in the profit & loss report.
+type PnLRow struct {
+	AccountID uuid.UUID `json:"account_id"`
+	Code      string    `json:"code"`
+	Name      string    `json:"name"`
+	Type      string    `json:"type"` // revenue or expense
+	Amount    int64     `json:"amount"`
+}
+
+// PnLReport represents a complete profit & loss report.
+type PnLReport struct {
+	From         time.Time `json:"from"`
+	To           time.Time `json:"to"`
+	Rows         []PnLRow  `json:"rows"`
+	TotalRevenue int64     `json:"total_revenue"`
+	TotalExpense int64     `json:"total_expense"`
+	NetProfit    int64     `json:"net_profit"`
+}
+
+// CashOperation represents a cash register operation.
+type CashOperation struct {
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	Type           string     `json:"type"` // deposit, withdrawal
+	Amount         int64      `json:"amount"`
+	Description    string     `json:"description"`
+	AccountCode    string     `json:"account_code"`
+	ActorID        *uuid.UUID `json:"actor_id,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
+// CashOperationFilter holds query params for cash operations.
+type CashOperationFilter struct {
+	Type *string
+	From *time.Time
+	To   *time.Time
+	Page types.PageRequest
+}
+
+// CreateCashOperationInput is the input for a cash operation.
+type CreateCashOperationInput struct {
+	Type        string `json:"type"` // deposit, withdrawal
+	Amount      int64  `json:"amount"`
+	Description string `json:"description"`
+	AccountCode string `json:"account_code"`
 }
 
 // DefaultAccounts returns the default chart of accounts for a new organization.

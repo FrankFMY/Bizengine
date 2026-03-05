@@ -11,6 +11,7 @@ import (
 
 	"github.com/bizengine/engine/internal/module/order"
 	"github.com/bizengine/engine/pkg/errs"
+	"github.com/bizengine/engine/pkg/types"
 )
 
 // OrderRepo implements order.Repository using PostgreSQL.
@@ -209,6 +210,119 @@ func (r *OrderRepo) NextOrderNumber(ctx context.Context, tx pgx.Tx, orgID uuid.U
 		orgID,
 	).Scan(&num)
 	return num, err
+}
+
+// CreateRefund inserts a refund record.
+func (r *OrderRepo) CreateRefund(ctx context.Context, tx pgx.Tx, ref *order.Refund) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO refunds (id, organization_id, order_id, status, total, reason, refund_method, ver, upd, iat)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		ref.ID, ref.OrganizationID, ref.OrderID, ref.Status, ref.Total, ref.Reason, ref.RefundMethod, ref.Ver, ref.Upd, ref.Iat,
+	)
+	return err
+}
+
+// CreateRefundItems inserts refund item records.
+func (r *OrderRepo) CreateRefundItems(ctx context.Context, tx pgx.Tx, items []order.RefundItem) error {
+	for _, item := range items {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO refund_items (id, refund_id, order_item_id, quantity, unit_price, total, reason)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+			item.ID, item.RefundID, item.OrderItemID, item.Quantity, item.UnitPrice, item.Total, item.Reason,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetRefund returns a refund by ID.
+func (r *OrderRepo) GetRefund(ctx context.Context, orgID, refundID uuid.UUID) (*order.Refund, error) {
+	var ref order.Refund
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, organization_id, order_id, status, total, reason, refund_method, ver, upd, iat
+		 FROM refunds WHERE organization_id = $1 AND id = $2`,
+		orgID, refundID,
+	).Scan(&ref.ID, &ref.OrganizationID, &ref.OrderID, &ref.Status, &ref.Total, &ref.Reason, &ref.RefundMethod, &ref.Ver, &ref.Upd, &ref.Iat)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, errs.NewNotFound("refund not found")
+		}
+		return nil, err
+	}
+	return &ref, nil
+}
+
+// GetRefundItems returns items for a refund.
+func (r *OrderRepo) GetRefundItems(ctx context.Context, refundID uuid.UUID) ([]order.RefundItem, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, refund_id, order_item_id, quantity, unit_price, total, reason
+		 FROM refund_items WHERE refund_id = $1`,
+		refundID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []order.RefundItem
+	for rows.Next() {
+		var item order.RefundItem
+		if err := rows.Scan(&item.ID, &item.RefundID, &item.OrderItemID, &item.Quantity, &item.UnitPrice, &item.Total, &item.Reason); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+// ListRefunds returns refunds for an organization.
+func (r *OrderRepo) ListRefunds(ctx context.Context, orgID uuid.UUID, orderID *uuid.UUID, page types.PageRequest) ([]order.Refund, int, error) {
+	page.Normalize()
+
+	var conditions []string
+	var args []any
+	argIdx := 1
+
+	conditions = append(conditions, fmt.Sprintf("organization_id = $%d", argIdx))
+	args = append(args, orgID)
+	argIdx++
+
+	if orderID != nil {
+		conditions = append(conditions, fmt.Sprintf("order_id = $%d", argIdx))
+		args = append(args, *orderID)
+		argIdx++
+	}
+
+	where := strings.Join(conditions, " AND ")
+
+	var total int
+	if err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM refunds WHERE "+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := fmt.Sprintf(
+		`SELECT id, organization_id, order_id, status, total, reason, refund_method, ver, upd, iat
+		 FROM refunds WHERE %s ORDER BY iat DESC LIMIT $%d OFFSET $%d`,
+		where, argIdx, argIdx+1,
+	)
+	args = append(args, page.Limit, page.Offset)
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var refunds []order.Refund
+	for rows.Next() {
+		var ref order.Refund
+		if err := rows.Scan(&ref.ID, &ref.OrganizationID, &ref.OrderID, &ref.Status, &ref.Total, &ref.Reason, &ref.RefundMethod, &ref.Ver, &ref.Upd, &ref.Iat); err != nil {
+			return nil, 0, err
+		}
+		refunds = append(refunds, ref)
+	}
+	return refunds, total, rows.Err()
 }
 
 // WithTx executes fn within a transaction.

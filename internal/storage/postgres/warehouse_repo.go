@@ -11,6 +11,7 @@ import (
 
 	"github.com/bizengine/engine/internal/module/warehouse"
 	"github.com/bizengine/engine/pkg/errs"
+	"github.com/bizengine/engine/pkg/types"
 )
 
 // WarehouseRepo implements warehouse.Repository using PostgreSQL.
@@ -217,6 +218,162 @@ func (r *WarehouseRepo) ListMovements(ctx context.Context, orgID uuid.UUID, filt
 		items = append(items, m)
 	}
 	return items, total, rows.Err()
+}
+
+// CreateInventory inserts an inventory record.
+func (r *WarehouseRepo) CreateInventory(ctx context.Context, tx pgx.Tx, inv *warehouse.Inventory) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO inventories (id, organization_id, warehouse_id, status, notes, actor_id, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		inv.ID, inv.OrganizationID, inv.WarehouseID, inv.Status, inv.Notes, inv.ActorID, inv.CreatedAt,
+	)
+	return err
+}
+
+// GetInventory returns an inventory by ID.
+func (r *WarehouseRepo) GetInventory(ctx context.Context, orgID, invID uuid.UUID) (*warehouse.Inventory, error) {
+	var inv warehouse.Inventory
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, organization_id, warehouse_id, status, notes, actor_id, created_at, applied_at
+		 FROM inventories WHERE organization_id = $1 AND id = $2`,
+		orgID, invID,
+	).Scan(&inv.ID, &inv.OrganizationID, &inv.WarehouseID, &inv.Status, &inv.Notes, &inv.ActorID, &inv.CreatedAt, &inv.AppliedAt)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, errs.NewNotFound("inventory not found")
+		}
+		return nil, err
+	}
+	return &inv, nil
+}
+
+// ListInventories returns inventories for an organization.
+func (r *WarehouseRepo) ListInventories(ctx context.Context, orgID uuid.UUID, warehouseID *uuid.UUID, page types.PageRequest) ([]warehouse.Inventory, int, error) {
+	page.Normalize()
+
+	var conditions []string
+	var args []any
+	argIdx := 1
+
+	conditions = append(conditions, fmt.Sprintf("organization_id = $%d", argIdx))
+	args = append(args, orgID)
+	argIdx++
+
+	if warehouseID != nil {
+		conditions = append(conditions, fmt.Sprintf("warehouse_id = $%d", argIdx))
+		args = append(args, *warehouseID)
+		argIdx++
+	}
+
+	where := strings.Join(conditions, " AND ")
+
+	var total int
+	if err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM inventories WHERE "+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := fmt.Sprintf(
+		`SELECT id, organization_id, warehouse_id, status, notes, actor_id, created_at, applied_at
+		 FROM inventories WHERE %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d`,
+		where, argIdx, argIdx+1,
+	)
+	args = append(args, page.Limit, page.Offset)
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var invs []warehouse.Inventory
+	for rows.Next() {
+		var inv warehouse.Inventory
+		if err := rows.Scan(&inv.ID, &inv.OrganizationID, &inv.WarehouseID, &inv.Status, &inv.Notes, &inv.ActorID, &inv.CreatedAt, &inv.AppliedAt); err != nil {
+			return nil, 0, err
+		}
+		invs = append(invs, inv)
+	}
+	return invs, total, rows.Err()
+}
+
+// UpdateInventory updates an inventory record.
+func (r *WarehouseRepo) UpdateInventory(ctx context.Context, tx pgx.Tx, inv *warehouse.Inventory) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE inventories SET status = $2, applied_at = $3 WHERE id = $1`,
+		inv.ID, inv.Status, inv.AppliedAt,
+	)
+	return err
+}
+
+// CreateInventoryItems inserts inventory item records.
+func (r *WarehouseRepo) CreateInventoryItems(ctx context.Context, tx pgx.Tx, items []warehouse.InventoryItem) error {
+	for _, item := range items {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO inventory_items (id, inventory_id, organization_id, product_id, expected, actual, discrepancy, counted_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			item.ID, item.InventoryID, item.OrganizationID, item.ProductID, item.Expected, item.Actual, item.Discrepancy, item.CountedAt,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// GetInventoryItems returns items for an inventory session.
+func (r *WarehouseRepo) GetInventoryItems(ctx context.Context, inventoryID uuid.UUID) ([]warehouse.InventoryItem, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, inventory_id, organization_id, product_id, expected, actual, discrepancy, counted_at
+		 FROM inventory_items WHERE inventory_id = $1 ORDER BY product_id`,
+		inventoryID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []warehouse.InventoryItem
+	for rows.Next() {
+		var item warehouse.InventoryItem
+		if err := rows.Scan(&item.ID, &item.InventoryID, &item.OrganizationID, &item.ProductID, &item.Expected, &item.Actual, &item.Discrepancy, &item.CountedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+// UpdateInventoryItem updates an inventory item (actual count).
+func (r *WarehouseRepo) UpdateInventoryItem(ctx context.Context, tx pgx.Tx, item *warehouse.InventoryItem) error {
+	_, err := tx.Exec(ctx,
+		`UPDATE inventory_items SET actual = $2, discrepancy = $3, counted_at = $4 WHERE id = $1`,
+		item.ID, item.Actual, item.Discrepancy, item.CountedAt,
+	)
+	return err
+}
+
+// ListStockForWarehouse returns all stock levels for a warehouse (no pagination).
+func (r *WarehouseRepo) ListStockForWarehouse(ctx context.Context, orgID, warehouseID uuid.UUID) ([]warehouse.StockLevel, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT organization_id, product_id, warehouse_id, quantity, reserved, unit, min_quantity, max_quantity, cost_per_unit, updated_at
+		 FROM stock_levels WHERE organization_id = $1 AND warehouse_id = $2`,
+		orgID, warehouseID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []warehouse.StockLevel
+	for rows.Next() {
+		var sl warehouse.StockLevel
+		if err := rows.Scan(&sl.OrganizationID, &sl.ProductID, &sl.WarehouseID, &sl.Quantity, &sl.Reserved,
+			&sl.Unit, &sl.MinQuantity, &sl.MaxQuantity, &sl.CostPerUnit, &sl.UpdatedAt); err != nil {
+			return nil, err
+		}
+		sl.Available = sl.Quantity - sl.Reserved
+		items = append(items, sl)
+	}
+	return items, rows.Err()
 }
 
 // WithTx executes fn within a transaction.

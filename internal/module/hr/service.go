@@ -412,6 +412,223 @@ func (s *Service) ApproveTimesheet(ctx context.Context, orgID, tsID uuid.UUID, a
 	return nil
 }
 
+// CalculatePayroll calculates and creates a payroll record for an employee.
+func (s *Service) CalculatePayroll(ctx context.Context, orgID uuid.UUID, input CreatePayrollInput, actorID *uuid.UUID) (*Payroll, error) {
+	if input.Month < 1 || input.Month > 12 {
+		return nil, errs.NewBadRequest("month must be between 1 and 12")
+	}
+
+	emp, err := s.GetEmployee(ctx, orgID, input.EmployeeID)
+	if err != nil {
+		return nil, errs.NewBadRequest("employee not found")
+	}
+
+	var grossSalary int64
+	if emp.Salary != nil {
+		if base, ok := emp.Salary["base_salary"].(float64); ok {
+			grossSalary = int64(base)
+		}
+	}
+	if grossSalary == 0 {
+		return nil, errs.NewBadRequest("employee has no base_salary set")
+	}
+
+	// NDFL 13%
+	ndfl := int64(math.Round(float64(grossSalary) * 0.13))
+	netSalary := grossSalary - ndfl - input.Deductions
+	if netSalary < 0 {
+		netSalary = 0
+	}
+
+	p := &Payroll{
+		ID:             uuid.New(),
+		OrganizationID: orgID,
+		EmployeeID:     input.EmployeeID,
+		Year:           input.Year,
+		Month:          input.Month,
+		GrossSalary:    grossSalary,
+		NDFL:           ndfl,
+		Deductions:     input.Deductions,
+		NetSalary:      netSalary,
+		Status:         "draft",
+		CreatedAt:      time.Now(),
+	}
+
+	if err := s.repo.CreatePayroll(ctx, p); err != nil {
+		return nil, err
+	}
+
+	s.publishEvent(ctx, orgID, input.EmployeeID, "hr.payroll.calculated", map[string]any{
+		"payroll_id":   p.ID,
+		"employee_id":  input.EmployeeID,
+		"gross_salary": grossSalary,
+		"ndfl":         ndfl,
+		"net_salary":   netSalary,
+		"year":         input.Year,
+		"month":        input.Month,
+	}, actorID)
+
+	return p, nil
+}
+
+// ApprovePayroll approves a draft payroll.
+func (s *Service) ApprovePayroll(ctx context.Context, orgID, payrollID uuid.UUID, actorID *uuid.UUID) (*Payroll, error) {
+	p, err := s.repo.GetPayroll(ctx, orgID, payrollID)
+	if err != nil {
+		return nil, err
+	}
+	if p.Status != "draft" {
+		return nil, errs.NewConflict("only draft payrolls can be approved")
+	}
+
+	now := time.Now()
+	p.Status = "approved"
+	p.ApprovedAt = &now
+	p.ApprovedBy = actorID
+
+	if err := s.repo.UpdatePayroll(ctx, p); err != nil {
+		return nil, err
+	}
+
+	s.publishEvent(ctx, orgID, p.EmployeeID, "hr.payroll.approved", map[string]any{
+		"payroll_id":  p.ID,
+		"employee_id": p.EmployeeID,
+		"net_salary":  p.NetSalary,
+	}, actorID)
+
+	return p, nil
+}
+
+// ListPayrolls returns payrolls matching filters.
+func (s *Service) ListPayrolls(ctx context.Context, orgID uuid.UUID, employeeID *uuid.UUID, year, month *int, page types.PageRequest) (*types.PageResponse[Payroll], error) {
+	page.Normalize()
+	payrolls, total, err := s.repo.ListPayrolls(ctx, orgID, employeeID, year, month, page)
+	if err != nil {
+		return nil, err
+	}
+	if payrolls == nil {
+		payrolls = []Payroll{}
+	}
+	return &types.PageResponse[Payroll]{
+		Items:  payrolls,
+		Total:  total,
+		Limit:  page.Limit,
+		Offset: page.Offset,
+	}, nil
+}
+
+// RequestAbsence creates a new absence request.
+func (s *Service) RequestAbsence(ctx context.Context, orgID uuid.UUID, input CreateAbsenceInput, actorID *uuid.UUID) (*Absence, error) {
+	validTypes := map[string]bool{"vacation": true, "sick_leave": true, "personal": true, "unpaid": true}
+	if !validTypes[input.Type] {
+		return nil, errs.NewBadRequest("type must be vacation, sick_leave, personal, or unpaid")
+	}
+
+	startDate, err := time.Parse("2006-01-02", input.StartDate)
+	if err != nil {
+		return nil, errs.NewBadRequest("invalid start_date format")
+	}
+	endDate, err := time.Parse("2006-01-02", input.EndDate)
+	if err != nil {
+		return nil, errs.NewBadRequest("invalid end_date format")
+	}
+	if !endDate.After(startDate) && endDate != startDate {
+		return nil, errs.NewBadRequest("end_date must be >= start_date")
+	}
+
+	days := int(endDate.Sub(startDate).Hours()/24) + 1
+
+	a := &Absence{
+		ID:             uuid.New(),
+		OrganizationID: orgID,
+		EmployeeID:     input.EmployeeID,
+		Type:           input.Type,
+		StartDate:      startDate,
+		EndDate:        endDate,
+		Days:           days,
+		Status:         "pending",
+		Notes:          input.Notes,
+		CreatedAt:      time.Now(),
+	}
+
+	if err := s.repo.CreateAbsence(ctx, a); err != nil {
+		return nil, err
+	}
+
+	s.publishEvent(ctx, orgID, input.EmployeeID, "hr.absence.requested", map[string]any{
+		"absence_id":  a.ID,
+		"employee_id": input.EmployeeID,
+		"type":        input.Type,
+		"start_date":  input.StartDate,
+		"end_date":    input.EndDate,
+		"days":        days,
+	}, actorID)
+
+	return a, nil
+}
+
+// ApproveAbsence approves a pending absence.
+func (s *Service) ApproveAbsence(ctx context.Context, orgID, absenceID uuid.UUID, actorID *uuid.UUID) (*Absence, error) {
+	a, err := s.repo.GetAbsence(ctx, orgID, absenceID)
+	if err != nil {
+		return nil, err
+	}
+	if a.Status != "pending" {
+		return nil, errs.NewConflict("only pending absences can be approved")
+	}
+
+	a.Status = "approved"
+	a.ApprovedBy = actorID
+	if err := s.repo.UpdateAbsence(ctx, a); err != nil {
+		return nil, err
+	}
+
+	s.publishEvent(ctx, orgID, a.EmployeeID, "hr.absence.approved", map[string]any{
+		"absence_id":  a.ID,
+		"employee_id": a.EmployeeID,
+		"type":        a.Type,
+		"days":        a.Days,
+	}, actorID)
+
+	return a, nil
+}
+
+// RejectAbsence rejects a pending absence.
+func (s *Service) RejectAbsence(ctx context.Context, orgID, absenceID uuid.UUID, actorID *uuid.UUID) (*Absence, error) {
+	a, err := s.repo.GetAbsence(ctx, orgID, absenceID)
+	if err != nil {
+		return nil, err
+	}
+	if a.Status != "pending" {
+		return nil, errs.NewConflict("only pending absences can be rejected")
+	}
+
+	a.Status = "rejected"
+	if err := s.repo.UpdateAbsence(ctx, a); err != nil {
+		return nil, err
+	}
+
+	return a, nil
+}
+
+// ListAbsences returns absences matching the filter.
+func (s *Service) ListAbsences(ctx context.Context, orgID uuid.UUID, filter AbsenceFilter) (*types.PageResponse[Absence], error) {
+	filter.Page.Normalize()
+	absences, total, err := s.repo.ListAbsences(ctx, orgID, filter)
+	if err != nil {
+		return nil, err
+	}
+	if absences == nil {
+		absences = []Absence{}
+	}
+	return &types.PageResponse[Absence]{
+		Items:  absences,
+		Total:  total,
+		Limit:  filter.Page.Limit,
+		Offset: filter.Page.Offset,
+	}, nil
+}
+
 func (s *Service) publishEvent(ctx context.Context, orgID uuid.UUID, entityID uuid.UUID, eventType string, data map[string]any, actorID *uuid.UUID) {
 	payload, _ := json.Marshal(data)
 	ev := types.Event{

@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/bizengine/engine/internal/core/auth"
 	"github.com/bizengine/engine/internal/module/warehouse"
 	"github.com/bizengine/engine/pkg/errs"
@@ -225,4 +227,145 @@ func (h *WarehouseHandler) ListMovements(w http.ResponseWriter, r *http.Request)
 	}
 
 	respondOK(w, http.StatusOK, result)
+}
+
+// StartInventory handles POST /api/v1/organizations/{orgID}/warehouse/inventory.
+func (h *WarehouseHandler) StartInventory(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	userID, _ := auth.UserIDFromCtx(r.Context())
+
+	var input warehouse.StartInventoryInput
+	if err := decodeJSON(r, &input); err != nil {
+		respondError(w, err)
+		return
+	}
+
+	inv, err := h.warehouseSvc.StartInventory(r.Context(), orgID, input, &userID)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondCreated(w, inv)
+}
+
+// GetInventory handles GET /api/v1/organizations/{orgID}/warehouse/inventory/{id}.
+func (h *WarehouseHandler) GetInventory(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	id, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	inv, err := h.warehouseSvc.GetInventory(r.Context(), orgID, id)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondOK(w, http.StatusOK, inv)
+}
+
+// ListInventories handles GET /api/v1/organizations/{orgID}/warehouse/inventory.
+func (h *WarehouseHandler) ListInventories(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	result, err := h.warehouseSvc.ListInventories(r.Context(), orgID, queryUUID(r, "warehouse_id"), parsePage(r))
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondOK(w, http.StatusOK, result)
+}
+
+// CountItem handles POST /api/v1/organizations/{orgID}/warehouse/inventory/{id}/count.
+func (h *WarehouseHandler) CountItem(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	id, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	userID, _ := auth.UserIDFromCtx(r.Context())
+
+	var input struct {
+		ProductID uuid.UUID `json:"product_id"`
+		Actual    float64   `json:"actual"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		respondError(w, err)
+		return
+	}
+
+	item, err := h.warehouseSvc.CountItem(r.Context(), orgID, id, input.ProductID, input.Actual, &userID)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondOK(w, http.StatusOK, item)
+}
+
+// ApplyInventory handles POST /api/v1/organizations/{orgID}/warehouse/inventory/{id}/apply.
+func (h *WarehouseHandler) ApplyInventory(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	id, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	userID, _ := auth.UserIDFromCtx(r.Context())
+
+	inv, err := h.warehouseSvc.ApplyInventory(r.Context(), orgID, id, &userID)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondOK(w, http.StatusOK, inv)
+}
+
+// CancelInventory handles POST /api/v1/organizations/{orgID}/warehouse/inventory/{id}/cancel.
+func (h *WarehouseHandler) CancelInventory(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	id, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	userID, _ := auth.UserIDFromCtx(r.Context())
+
+	inv, err := h.warehouseSvc.CancelInventory(r.Context(), orgID, id, &userID)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondOK(w, http.StatusOK, inv)
 }

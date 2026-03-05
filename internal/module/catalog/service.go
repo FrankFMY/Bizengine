@@ -16,10 +16,11 @@ import (
 // Product represents a product entity with its components.
 type Product struct {
 	types.Entity
-	Price      json.RawMessage `json:"price,omitempty"`
-	Barcode    json.RawMessage `json:"barcode,omitempty"`
-	Media      json.RawMessage `json:"media,omitempty"`
-	Attributes json.RawMessage `json:"attributes,omitempty"`
+	Price        json.RawMessage `json:"price,omitempty"`
+	Barcode      json.RawMessage `json:"barcode,omitempty"`
+	Media        json.RawMessage `json:"media,omitempty"`
+	Attributes   json.RawMessage `json:"attributes,omitempty"`
+	PricingRules json.RawMessage `json:"pricing_rules,omitempty"`
 }
 
 // Category represents a category entity.
@@ -29,23 +30,25 @@ type Category struct {
 
 // CreateProductInput is the input for creating a product.
 type CreateProductInput struct {
-	Name       string          `json:"name"`
-	SKU        string          `json:"sku"`
-	CategoryID *uuid.UUID      `json:"category_id,omitempty"`
-	Price      json.RawMessage `json:"price"`
-	Barcode    json.RawMessage `json:"barcode,omitempty"`
-	Attributes json.RawMessage `json:"attributes,omitempty"`
-	Media      json.RawMessage `json:"media,omitempty"`
+	Name         string          `json:"name"`
+	SKU          string          `json:"sku"`
+	CategoryID   *uuid.UUID      `json:"category_id,omitempty"`
+	Price        json.RawMessage `json:"price"`
+	Barcode      json.RawMessage `json:"barcode,omitempty"`
+	Attributes   json.RawMessage `json:"attributes,omitempty"`
+	Media        json.RawMessage `json:"media,omitempty"`
+	PricingRules json.RawMessage `json:"pricing_rules,omitempty"`
 }
 
 // UpdateProductInput is the input for updating a product.
 type UpdateProductInput struct {
-	Name       *string         `json:"name,omitempty"`
-	CategoryID *uuid.UUID      `json:"category_id,omitempty"`
-	Price      json.RawMessage `json:"price,omitempty"`
-	Barcode    json.RawMessage `json:"barcode,omitempty"`
-	Attributes json.RawMessage `json:"attributes,omitempty"`
-	Media      json.RawMessage `json:"media,omitempty"`
+	Name         *string         `json:"name,omitempty"`
+	CategoryID   *uuid.UUID      `json:"category_id,omitempty"`
+	Price        json.RawMessage `json:"price,omitempty"`
+	Barcode      json.RawMessage `json:"barcode,omitempty"`
+	Attributes   json.RawMessage `json:"attributes,omitempty"`
+	Media        json.RawMessage `json:"media,omitempty"`
+	PricingRules json.RawMessage `json:"pricing_rules,omitempty"`
 }
 
 // ProductFilter defines product listing parameters.
@@ -113,6 +116,9 @@ func (s *Service) CreateProduct(ctx context.Context, orgID uuid.UUID, input Crea
 	}
 	if input.Media != nil {
 		components["media"] = input.Media
+	}
+	if input.PricingRules != nil {
+		components["pricing_rules"] = input.PricingRules
 	}
 
 	// Create entity + components in a single transaction
@@ -224,6 +230,11 @@ func (s *Service) UpdateProduct(ctx context.Context, orgID uuid.UUID, productID 
 			return nil, err
 		}
 	}
+	if input.PricingRules != nil {
+		if _, err := s.entitySvc.SetComponent(ctx, orgID, productID, "pricing_rules", input.PricingRules, actorID); err != nil {
+			return nil, err
+		}
+	}
 
 	// Publish event
 	ev := types.Event{
@@ -329,6 +340,186 @@ func (s *Service) DeleteCategory(ctx context.Context, orgID uuid.UUID, categoryI
 	return s.entitySvc.Delete(ctx, orgID, categoryID, actorID)
 }
 
+// PricingRule represents a single pricing rule for a product.
+type PricingRule struct {
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	Type          string         `json:"type"` // schedule_discount, quantity_bonus, customer_discount
+	DiscountType  string         `json:"discount_type,omitempty"`  // percent, fixed
+	DiscountValue int64          `json:"discount_value,omitempty"` // percent (whole number) or fixed (kopecks)
+	BuyQuantity   float64        `json:"buy_quantity,omitempty"`
+	BonusQuantity float64        `json:"bonus_quantity,omitempty"`
+	Conditions    RuleConditions `json:"conditions,omitempty"`
+	Active        bool           `json:"active"`
+}
+
+// RuleConditions holds optional conditions for a pricing rule.
+type RuleConditions struct {
+	DaysOfWeek   []int    `json:"days_of_week,omitempty"`
+	TimeFrom     string   `json:"time_from,omitempty"`
+	TimeTo       string   `json:"time_to,omitempty"`
+	ValidFrom    string   `json:"valid_from,omitempty"`
+	ValidTo      string   `json:"valid_to,omitempty"`
+	CustomerTags []string `json:"customer_tags,omitempty"`
+}
+
+// PriceInput holds context for calculating the effective price.
+type PriceInput struct {
+	Quantity     float64
+	CustomerTags []string
+	Now          time.Time
+}
+
+// PriceResult holds the calculated price details.
+type PriceResult struct {
+	BasePrice      int64   `json:"base_price"`
+	EffectivePrice int64   `json:"effective_price"`
+	TotalQuantity  float64 `json:"total_quantity"` // includes bonus items
+	AppliedRules   []string `json:"applied_rules,omitempty"`
+}
+
+// CalculatePrice applies all active pricing rules to determine the effective price.
+func (s *Service) CalculatePrice(ctx context.Context, orgID uuid.UUID, productID uuid.UUID, input PriceInput) (*PriceResult, error) {
+	e, err := s.entitySvc.Get(ctx, orgID, productID, true)
+	if err != nil {
+		return nil, err
+	}
+	if e.Kind != "product" {
+		return nil, errs.NewNotFound("product not found")
+	}
+
+	// Extract selling_price from price component
+	var basePrice int64
+	var rules []PricingRule
+	for _, c := range e.Components {
+		switch c.Type {
+		case "price":
+			var priceData map[string]any
+			if json.Unmarshal(c.Data, &priceData) == nil {
+				if sp, ok := priceData["selling_price"].(float64); ok {
+					basePrice = int64(sp)
+				}
+			}
+		case "pricing_rules":
+			var rulesData struct {
+				Rules []PricingRule `json:"rules"`
+			}
+			json.Unmarshal(c.Data, &rulesData)
+			rules = rulesData.Rules
+		}
+	}
+
+	if basePrice == 0 {
+		return nil, errs.NewBadRequest("product has no selling_price")
+	}
+
+	result := &PriceResult{
+		BasePrice:      basePrice,
+		EffectivePrice: basePrice,
+		TotalQuantity:  input.Quantity,
+	}
+
+	for _, rule := range rules {
+		if !rule.Active {
+			continue
+		}
+		switch rule.Type {
+		case "schedule_discount":
+			if matchesSchedule(rule.Conditions, input.Now) {
+				result.EffectivePrice = applyDiscount(result.EffectivePrice, rule.DiscountType, rule.DiscountValue)
+				result.AppliedRules = append(result.AppliedRules, rule.Name)
+			}
+		case "quantity_bonus":
+			if rule.BuyQuantity > 0 && input.Quantity >= rule.BuyQuantity {
+				sets := int(input.Quantity / rule.BuyQuantity)
+				result.TotalQuantity = input.Quantity + float64(sets)*rule.BonusQuantity
+				result.AppliedRules = append(result.AppliedRules, rule.Name)
+			}
+		case "customer_discount":
+			if matchesCustomerTags(rule.Conditions.CustomerTags, input.CustomerTags) {
+				result.EffectivePrice = applyDiscount(result.EffectivePrice, rule.DiscountType, rule.DiscountValue)
+				result.AppliedRules = append(result.AppliedRules, rule.Name)
+			}
+		}
+	}
+
+	return result, nil
+}
+
+func matchesSchedule(cond RuleConditions, now time.Time) bool {
+	if len(cond.DaysOfWeek) > 0 {
+		weekday := int(now.Weekday())
+		if weekday == 0 {
+			weekday = 7 // Sunday = 7 (ISO)
+		}
+		found := false
+		for _, d := range cond.DaysOfWeek {
+			if d == weekday {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+
+	if cond.ValidFrom != "" {
+		if vf, err := time.Parse("2006-01-02", cond.ValidFrom); err == nil {
+			if now.Before(vf) {
+				return false
+			}
+		}
+	}
+	if cond.ValidTo != "" {
+		if vt, err := time.Parse("2006-01-02", cond.ValidTo); err == nil {
+			if now.After(vt.Add(24 * time.Hour)) {
+				return false
+			}
+		}
+	}
+
+	if cond.TimeFrom != "" && cond.TimeTo != "" {
+		nowTime := now.Format("15:04")
+		if nowTime < cond.TimeFrom || nowTime > cond.TimeTo {
+			return false
+		}
+	}
+
+	return true
+}
+
+func matchesCustomerTags(requiredTags, customerTags []string) bool {
+	if len(requiredTags) == 0 {
+		return false
+	}
+	tagSet := make(map[string]bool, len(customerTags))
+	for _, t := range customerTags {
+		tagSet[t] = true
+	}
+	for _, req := range requiredTags {
+		if tagSet[req] {
+			return true
+		}
+	}
+	return false
+}
+
+func applyDiscount(price int64, discountType string, value int64) int64 {
+	switch discountType {
+	case "percent":
+		discount := price * value / 100
+		return price - discount
+	case "fixed":
+		result := price - value
+		if result < 0 {
+			return 0
+		}
+		return result
+	}
+	return price
+}
+
 func entityToProduct(e *types.Entity) *Product {
 	p := &Product{Entity: *e}
 	for _, c := range e.Components {
@@ -341,6 +532,8 @@ func entityToProduct(e *types.Entity) *Product {
 			p.Media = c.Data
 		case "attributes":
 			p.Attributes = c.Data
+		case "pricing_rules":
+			p.PricingRules = c.Data
 		}
 	}
 	return p

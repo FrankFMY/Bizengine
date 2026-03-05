@@ -284,3 +284,49 @@ func (h *OrderHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 
 	respondOK(w, http.StatusOK, o)
 }
+
+// Refund handles POST /api/v1/organizations/{orgID}/orders/{id}/refund.
+func (h *OrderHandler) Refund(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	id, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	userID, _ := auth.UserIDFromCtx(r.Context())
+
+	var input order.CreateRefundInput
+	if err := decodeJSON(r, &input); err != nil {
+		respondError(w, err)
+		return
+	}
+
+	ref, err := h.orderSvc.Refund(r.Context(), orgID, id, input, &userID)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondCreated(w, ref)
+}
+
+// ListRefunds handles GET /api/v1/organizations/{orgID}/orders/refunds.
+func (h *OrderHandler) ListRefunds(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	result, err := h.orderSvc.ListRefunds(r.Context(), orgID, queryUUID(r, "order_id"), parsePage(r))
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondOK(w, http.StatusOK, result)
+}

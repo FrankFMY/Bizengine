@@ -18,15 +18,19 @@ import (
 // --- mocks ---
 
 type mockOrderRepo struct {
-	orders map[uuid.UUID]*Order
-	items  map[uuid.UUID][]OrderItem
-	seq    int64
+	orders      map[uuid.UUID]*Order
+	items       map[uuid.UUID][]OrderItem
+	refunds     map[uuid.UUID]*Refund
+	refundItems map[uuid.UUID][]RefundItem
+	seq         int64
 }
 
 func newMockOrderRepo() *mockOrderRepo {
 	return &mockOrderRepo{
-		orders: make(map[uuid.UUID]*Order),
-		items:  make(map[uuid.UUID][]OrderItem),
+		orders:      make(map[uuid.UUID]*Order),
+		items:       make(map[uuid.UUID][]OrderItem),
+		refunds:     make(map[uuid.UUID]*Refund),
+		refundItems: make(map[uuid.UUID][]RefundItem),
 	}
 }
 
@@ -86,6 +90,48 @@ func (m *mockOrderRepo) NextOrderNumber(_ context.Context, _ pgx.Tx, _ uuid.UUID
 
 func (m *mockOrderRepo) WithTx(_ context.Context, fn func(tx pgx.Tx) error) error {
 	return fn(nil)
+}
+
+func (m *mockOrderRepo) CreateRefund(_ context.Context, _ pgx.Tx, r *Refund) error {
+	cp := *r
+	m.refunds[r.ID] = &cp
+	return nil
+}
+
+func (m *mockOrderRepo) CreateRefundItems(_ context.Context, _ pgx.Tx, items []RefundItem) error {
+	if len(items) == 0 {
+		return nil
+	}
+	refundID := items[0].RefundID
+	m.refundItems[refundID] = append(m.refundItems[refundID], items...)
+	return nil
+}
+
+func (m *mockOrderRepo) GetRefund(_ context.Context, orgID, refundID uuid.UUID) (*Refund, error) {
+	r, ok := m.refunds[refundID]
+	if !ok || r.OrganizationID != orgID {
+		return nil, pgx.ErrNoRows
+	}
+	cp := *r
+	return &cp, nil
+}
+
+func (m *mockOrderRepo) GetRefundItems(_ context.Context, refundID uuid.UUID) ([]RefundItem, error) {
+	return m.refundItems[refundID], nil
+}
+
+func (m *mockOrderRepo) ListRefunds(_ context.Context, orgID uuid.UUID, orderID *uuid.UUID, _ types.PageRequest) ([]Refund, int, error) {
+	var result []Refund
+	for _, r := range m.refunds {
+		if r.OrganizationID != orgID {
+			continue
+		}
+		if orderID != nil && r.OrderID != *orderID {
+			continue
+		}
+		result = append(result, *r)
+	}
+	return result, len(result), nil
 }
 
 type mockEntityRepo struct {

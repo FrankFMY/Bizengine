@@ -52,6 +52,17 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, input CreateOrder
 		return nil, errs.NewBadRequest("items are required")
 	}
 
+	// Validate customer exists if specified
+	if input.CustomerID != nil {
+		cust, err := s.entitySvc.Get(ctx, orgID, *input.CustomerID, false)
+		if err != nil {
+			return nil, errs.NewBadRequest("customer not found: " + input.CustomerID.String())
+		}
+		if cust.Kind != "customer" {
+			return nil, errs.NewBadRequest("entity is not a customer")
+		}
+	}
+
 	var order *Order
 	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
 		// Create entity
@@ -133,11 +144,15 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, input CreateOrder
 		return nil, err
 	}
 
-	s.publishEvent(ctx, orgID, order.EntityID, "order.created", actorID, map[string]any{
+	eventData := map[string]any{
 		"order_id": order.ID,
 		"number":   order.Number,
 		"total":    order.Total,
-	})
+	}
+	if order.CustomerID != nil {
+		eventData["customer_id"] = *order.CustomerID
+	}
+	s.publishEvent(ctx, orgID, order.EntityID, "order.created", actorID, eventData)
 
 	return order, nil
 }
@@ -400,6 +415,139 @@ func (s *Service) Cancel(ctx context.Context, orgID, orderID uuid.UUID, reason s
 	s.publishEvent(ctx, orgID, o.EntityID, "order.cancelled", actorID, eventData)
 
 	return o, nil
+}
+
+// Refund creates a refund for an order.
+func (s *Service) Refund(ctx context.Context, orgID, orderID uuid.UUID, input CreateRefundInput, actorID *uuid.UUID) (*Refund, error) {
+	o, err := s.repo.GetOrder(ctx, orgID, orderID)
+	if err != nil {
+		return nil, err
+	}
+	allowed := map[string]bool{"paid": true, "shipped": true, "delivered": true}
+	if !allowed[o.Status] {
+		return nil, errs.NewConflict("order must be in paid, shipped, or delivered status to refund")
+	}
+
+	if len(input.Items) == 0 {
+		return nil, errs.NewBadRequest("at least one item is required for refund")
+	}
+
+	items, err := s.repo.GetOrderItems(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+	itemMap := make(map[uuid.UUID]OrderItem, len(items))
+	for _, item := range items {
+		itemMap[item.ID] = item
+	}
+
+	var refund *Refund
+	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
+		now := time.Now()
+		refund = &Refund{
+			ID:             uuid.New(),
+			OrganizationID: orgID,
+			OrderID:        orderID,
+			Status:         "pending",
+			RefundMethod:   input.RefundMethod,
+			Ver:            1,
+			Upd:            now,
+			Iat:            now,
+		}
+
+		var refundItems []RefundItem
+		var total int64
+		for _, ri := range input.Items {
+			oi, ok := itemMap[ri.OrderItemID]
+			if !ok {
+				return errs.NewBadRequest("order item not found: " + ri.OrderItemID.String())
+			}
+			if ri.Quantity <= 0 || float64(ri.Quantity) > oi.Quantity {
+				return errs.NewBadRequest("invalid refund quantity for item " + ri.OrderItemID.String())
+			}
+
+			itemTotal := oi.UnitPrice * int64(ri.Quantity)
+			total += itemTotal
+			refundItems = append(refundItems, RefundItem{
+				ID:          uuid.New(),
+				RefundID:    refund.ID,
+				OrderItemID: ri.OrderItemID,
+				Quantity:    ri.Quantity,
+				UnitPrice:   oi.UnitPrice,
+				Total:       itemTotal,
+				Reason:      ri.Reason,
+			})
+		}
+		refund.Total = total
+		refund.Reason = input.Items[0].Reason
+
+		if err := s.repo.CreateRefund(ctx, tx, refund); err != nil {
+			return err
+		}
+		if err := s.repo.CreateRefundItems(ctx, tx, refundItems); err != nil {
+			return err
+		}
+		refund.Items = refundItems
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	// Build event data with item details for warehouse return
+	eventItems := make([]map[string]any, len(refund.Items))
+	for i, ri := range refund.Items {
+		oi := itemMap[ri.OrderItemID]
+		eventItems[i] = map[string]any{
+			"product_id": oi.ProductID,
+			"quantity":   ri.Quantity,
+			"unit_price": ri.UnitPrice,
+		}
+	}
+	eventData := map[string]any{
+		"refund_id":     refund.ID,
+		"order_id":      orderID,
+		"total":         refund.Total,
+		"refund_method": refund.RefundMethod,
+		"items":         eventItems,
+	}
+	if o.WarehouseID != nil {
+		eventData["warehouse_id"] = *o.WarehouseID
+	}
+	s.publishEvent(ctx, orgID, o.EntityID, "order.refunded", actorID, eventData)
+
+	return refund, nil
+}
+
+// GetRefund returns a refund with its items.
+func (s *Service) GetRefund(ctx context.Context, orgID, refundID uuid.UUID) (*Refund, error) {
+	r, err := s.repo.GetRefund(ctx, orgID, refundID)
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.repo.GetRefundItems(ctx, refundID)
+	if err != nil {
+		return nil, err
+	}
+	r.Items = items
+	return r, nil
+}
+
+// ListRefunds returns refunds for an organization, optionally filtered by order.
+func (s *Service) ListRefunds(ctx context.Context, orgID uuid.UUID, orderID *uuid.UUID, page types.PageRequest) (*types.PageResponse[Refund], error) {
+	page.Normalize()
+	refunds, total, err := s.repo.ListRefunds(ctx, orgID, orderID, page)
+	if err != nil {
+		return nil, err
+	}
+	if refunds == nil {
+		refunds = []Refund{}
+	}
+	return &types.PageResponse[Refund]{
+		Items:  refunds,
+		Total:  total,
+		Limit:  page.Limit,
+		Offset: page.Offset,
+	}, nil
 }
 
 // Update modifies a draft/new order.

@@ -31,6 +31,16 @@ type Repository interface {
 	// ListMovements returns stock movements with optional filters.
 	ListMovements(ctx context.Context, orgID uuid.UUID, filter MovementFilter) ([]StockMovement, int, error)
 
+	// Inventory
+	CreateInventory(ctx context.Context, tx pgx.Tx, inv *Inventory) error
+	GetInventory(ctx context.Context, orgID, invID uuid.UUID) (*Inventory, error)
+	ListInventories(ctx context.Context, orgID uuid.UUID, warehouseID *uuid.UUID, page types.PageRequest) ([]Inventory, int, error)
+	UpdateInventory(ctx context.Context, tx pgx.Tx, inv *Inventory) error
+	CreateInventoryItems(ctx context.Context, tx pgx.Tx, items []InventoryItem) error
+	GetInventoryItems(ctx context.Context, inventoryID uuid.UUID) ([]InventoryItem, error)
+	UpdateInventoryItem(ctx context.Context, tx pgx.Tx, item *InventoryItem) error
+	ListStockForWarehouse(ctx context.Context, orgID, warehouseID uuid.UUID) ([]StockLevel, error)
+
 	// WithTx executes fn within a transaction.
 	WithTx(ctx context.Context, fn func(tx pgx.Tx) error) error
 }
@@ -89,4 +99,35 @@ type MovementResult struct {
 	MovementID  uuid.UUID `json:"movement_id"`
 	NewQuantity float64   `json:"new_quantity"`
 	OldQuantity float64   `json:"old_quantity,omitempty"`
+}
+
+// Inventory represents a stocktaking session.
+type Inventory struct {
+	ID             uuid.UUID       `json:"id"`
+	OrganizationID uuid.UUID       `json:"organization_id"`
+	WarehouseID    uuid.UUID       `json:"warehouse_id"`
+	Status         string          `json:"status"` // draft, in_progress, applied, cancelled
+	Notes          string          `json:"notes"`
+	ActorID        *uuid.UUID      `json:"actor_id,omitempty"`
+	CreatedAt      time.Time       `json:"created_at"`
+	AppliedAt      *time.Time      `json:"applied_at,omitempty"`
+	Items          []InventoryItem `json:"items,omitempty"`
+}
+
+// InventoryItem represents a single product count in an inventory session.
+type InventoryItem struct {
+	ID             uuid.UUID  `json:"id"`
+	InventoryID    uuid.UUID  `json:"inventory_id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	ProductID      uuid.UUID  `json:"product_id"`
+	Expected       float64    `json:"expected"`
+	Actual         *float64   `json:"actual"`
+	Discrepancy    float64    `json:"discrepancy"`
+	CountedAt      *time.Time `json:"counted_at,omitempty"`
+}
+
+// StartInventoryInput is the input for starting a stocktaking session.
+type StartInventoryInput struct {
+	WarehouseID uuid.UUID `json:"warehouse_id"`
+	Notes       string    `json:"notes"`
 }

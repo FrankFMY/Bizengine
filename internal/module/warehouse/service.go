@@ -519,6 +519,241 @@ func (s *Service) CheckAvailability(ctx context.Context, orgID uuid.UUID, items 
 	return nil
 }
 
+// StartInventory creates a new stocktaking session and snapshots current stock levels.
+func (s *Service) StartInventory(ctx context.Context, orgID uuid.UUID, input StartInventoryInput, actorID *uuid.UUID) (*Inventory, error) {
+	stocks, err := s.repo.ListStockForWarehouse(ctx, orgID, input.WarehouseID)
+	if err != nil {
+		return nil, err
+	}
+
+	var inv *Inventory
+	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
+		now := time.Now()
+		inv = &Inventory{
+			ID:             uuid.New(),
+			OrganizationID: orgID,
+			WarehouseID:    input.WarehouseID,
+			Status:         "in_progress",
+			Notes:          input.Notes,
+			ActorID:        actorID,
+			CreatedAt:      now,
+		}
+		if err := s.repo.CreateInventory(ctx, tx, inv); err != nil {
+			return err
+		}
+
+		items := make([]InventoryItem, len(stocks))
+		for i, sl := range stocks {
+			items[i] = InventoryItem{
+				ID:             uuid.New(),
+				InventoryID:    inv.ID,
+				OrganizationID: orgID,
+				ProductID:      sl.ProductID,
+				Expected:       sl.Quantity,
+			}
+		}
+		if len(items) > 0 {
+			if err := s.repo.CreateInventoryItems(ctx, tx, items); err != nil {
+				return err
+			}
+		}
+		inv.Items = items
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	s.publishEvent(ctx, orgID, input.WarehouseID, "warehouse.inventory.started", actorID, map[string]any{
+		"inventory_id": inv.ID,
+		"warehouse_id": input.WarehouseID,
+		"item_count":   len(inv.Items),
+	})
+
+	return inv, nil
+}
+
+// CountItem records the actual counted quantity for a product in an inventory session.
+func (s *Service) CountItem(ctx context.Context, orgID, inventoryID, productID uuid.UUID, actual float64, actorID *uuid.UUID) (*InventoryItem, error) {
+	inv, err := s.repo.GetInventory(ctx, orgID, inventoryID)
+	if err != nil {
+		return nil, err
+	}
+	if inv.Status != "in_progress" {
+		return nil, errs.NewConflict("inventory must be in 'in_progress' status to count items")
+	}
+
+	items, err := s.repo.GetInventoryItems(ctx, inventoryID)
+	if err != nil {
+		return nil, err
+	}
+
+	var target *InventoryItem
+	for i := range items {
+		if items[i].ProductID == productID {
+			target = &items[i]
+			break
+		}
+	}
+	if target == nil {
+		return nil, errs.NewNotFound("product not found in inventory")
+	}
+
+	now := time.Now()
+	target.Actual = &actual
+	target.Discrepancy = actual - target.Expected
+	target.CountedAt = &now
+
+	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
+		return s.repo.UpdateInventoryItem(ctx, tx, target)
+	}); err != nil {
+		return nil, err
+	}
+
+	return target, nil
+}
+
+// GetInventory returns an inventory session with its items.
+func (s *Service) GetInventory(ctx context.Context, orgID, inventoryID uuid.UUID) (*Inventory, error) {
+	inv, err := s.repo.GetInventory(ctx, orgID, inventoryID)
+	if err != nil {
+		return nil, err
+	}
+	items, err := s.repo.GetInventoryItems(ctx, inventoryID)
+	if err != nil {
+		return nil, err
+	}
+	inv.Items = items
+	return inv, nil
+}
+
+// ListInventories returns inventory sessions for an organization.
+func (s *Service) ListInventories(ctx context.Context, orgID uuid.UUID, warehouseID *uuid.UUID, page types.PageRequest) (*types.PageResponse[Inventory], error) {
+	page.Normalize()
+	invs, total, err := s.repo.ListInventories(ctx, orgID, warehouseID, page)
+	if err != nil {
+		return nil, err
+	}
+	if invs == nil {
+		invs = []Inventory{}
+	}
+	return &types.PageResponse[Inventory]{
+		Items:  invs,
+		Total:  total,
+		Limit:  page.Limit,
+		Offset: page.Offset,
+	}, nil
+}
+
+// ApplyInventory finalizes the inventory session, creating stock adjustments for all discrepancies.
+func (s *Service) ApplyInventory(ctx context.Context, orgID, inventoryID uuid.UUID, actorID *uuid.UUID) (*Inventory, error) {
+	inv, err := s.repo.GetInventory(ctx, orgID, inventoryID)
+	if err != nil {
+		return nil, err
+	}
+	if inv.Status != "in_progress" {
+		return nil, errs.NewConflict("inventory must be in 'in_progress' status to apply")
+	}
+
+	items, err := s.repo.GetInventoryItems(ctx, inventoryID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Validate all items are counted
+	for _, item := range items {
+		if item.Actual == nil {
+			return nil, errs.NewBadRequest("all items must be counted before applying inventory")
+		}
+	}
+
+	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
+		now := time.Now()
+		for _, item := range items {
+			if item.Discrepancy == 0 {
+				continue
+			}
+			// Get current stock and set to actual
+			sl, err := s.getOrCreateStockLevel(ctx, tx, orgID, item.ProductID, inv.WarehouseID, "шт")
+			if err != nil {
+				return err
+			}
+			oldQty := sl.Quantity
+			sl.Quantity = *item.Actual
+			sl.UpdatedAt = now
+			if err := s.repo.UpsertStockLevel(ctx, tx, sl); err != nil {
+				return err
+			}
+
+			refType := "inventory"
+			m := &StockMovement{
+				ID:             uuid.New(),
+				OrganizationID: orgID,
+				ProductID:      item.ProductID,
+				WarehouseID:    inv.WarehouseID,
+				Type:           "adjust",
+				Quantity:       item.Discrepancy,
+				Unit:           sl.Unit,
+				Reason:         "inventory count",
+				ReferenceType:  &refType,
+				ReferenceID:    &inventoryID,
+				ActorID:        actorID,
+				CreatedAt:      now,
+			}
+			if err := s.repo.InsertMovement(ctx, tx, m); err != nil {
+				return err
+			}
+
+			s.publishEvent(ctx, orgID, item.ProductID, "warehouse.stock.adjusted", actorID, map[string]any{
+				"product_id":   item.ProductID,
+				"warehouse_id": inv.WarehouseID,
+				"old_quantity": oldQty,
+				"new_quantity": *item.Actual,
+				"inventory_id": inventoryID,
+			})
+		}
+
+		inv.Status = "applied"
+		inv.AppliedAt = &now
+		return s.repo.UpdateInventory(ctx, tx, inv)
+	}); err != nil {
+		return nil, err
+	}
+
+	inv.Items = items
+
+	s.publishEvent(ctx, orgID, inv.WarehouseID, "warehouse.inventory.applied", actorID, map[string]any{
+		"inventory_id": inv.ID,
+		"warehouse_id": inv.WarehouseID,
+	})
+
+	return inv, nil
+}
+
+// CancelInventory cancels an in-progress inventory session.
+func (s *Service) CancelInventory(ctx context.Context, orgID, inventoryID uuid.UUID, actorID *uuid.UUID) (*Inventory, error) {
+	inv, err := s.repo.GetInventory(ctx, orgID, inventoryID)
+	if err != nil {
+		return nil, err
+	}
+	if inv.Status != "in_progress" {
+		return nil, errs.NewConflict("inventory must be in 'in_progress' status to cancel")
+	}
+
+	inv.Status = "cancelled"
+	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
+		return s.repo.UpdateInventory(ctx, tx, inv)
+	}); err != nil {
+		return nil, err
+	}
+
+	s.publishEvent(ctx, orgID, inv.WarehouseID, "warehouse.inventory.cancelled", actorID, map[string]any{
+		"inventory_id": inv.ID,
+		"warehouse_id": inv.WarehouseID,
+	})
+
+	return inv, nil
+}
+
 // --- helpers ---
 
 func (s *Service) getOrCreateStockLevel(ctx context.Context, tx pgx.Tx, orgID, productID, warehouseID uuid.UUID, unit string) (*StockLevel, error) {

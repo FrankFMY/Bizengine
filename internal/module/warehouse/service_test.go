@@ -17,13 +17,17 @@ import (
 // --- mocks ---
 
 type mockWarehouseRepo struct {
-	stockLevels map[string]*StockLevel // key: "productID:warehouseID"
-	movements   []StockMovement
+	stockLevels    map[string]*StockLevel // key: "productID:warehouseID"
+	movements      []StockMovement
+	inventories    map[uuid.UUID]*Inventory
+	inventoryItems map[uuid.UUID][]InventoryItem
 }
 
 func newMockRepo() *mockWarehouseRepo {
 	return &mockWarehouseRepo{
-		stockLevels: make(map[string]*StockLevel),
+		stockLevels:    make(map[string]*StockLevel),
+		inventories:    make(map[uuid.UUID]*Inventory),
+		inventoryItems: make(map[uuid.UUID][]InventoryItem),
 	}
 }
 
@@ -85,6 +89,76 @@ func (m *mockWarehouseRepo) ListMovements(_ context.Context, orgID uuid.UUID, _ 
 
 func (m *mockWarehouseRepo) WithTx(_ context.Context, fn func(tx pgx.Tx) error) error {
 	return fn(nil)
+}
+
+func (m *mockWarehouseRepo) CreateInventory(_ context.Context, _ pgx.Tx, inv *Inventory) error {
+	cp := *inv
+	m.inventories[inv.ID] = &cp
+	return nil
+}
+
+func (m *mockWarehouseRepo) GetInventory(_ context.Context, orgID, invID uuid.UUID) (*Inventory, error) {
+	inv, ok := m.inventories[invID]
+	if !ok || inv.OrganizationID != orgID {
+		return nil, pgx.ErrNoRows
+	}
+	cp := *inv
+	return &cp, nil
+}
+
+func (m *mockWarehouseRepo) ListInventories(_ context.Context, orgID uuid.UUID, warehouseID *uuid.UUID, _ types.PageRequest) ([]Inventory, int, error) {
+	var result []Inventory
+	for _, inv := range m.inventories {
+		if inv.OrganizationID != orgID {
+			continue
+		}
+		if warehouseID != nil && inv.WarehouseID != *warehouseID {
+			continue
+		}
+		result = append(result, *inv)
+	}
+	return result, len(result), nil
+}
+
+func (m *mockWarehouseRepo) UpdateInventory(_ context.Context, _ pgx.Tx, inv *Inventory) error {
+	cp := *inv
+	m.inventories[inv.ID] = &cp
+	return nil
+}
+
+func (m *mockWarehouseRepo) CreateInventoryItems(_ context.Context, _ pgx.Tx, items []InventoryItem) error {
+	if len(items) == 0 {
+		return nil
+	}
+	invID := items[0].InventoryID
+	m.inventoryItems[invID] = append(m.inventoryItems[invID], items...)
+	return nil
+}
+
+func (m *mockWarehouseRepo) GetInventoryItems(_ context.Context, inventoryID uuid.UUID) ([]InventoryItem, error) {
+	return m.inventoryItems[inventoryID], nil
+}
+
+func (m *mockWarehouseRepo) UpdateInventoryItem(_ context.Context, _ pgx.Tx, item *InventoryItem) error {
+	items := m.inventoryItems[item.InventoryID]
+	for i := range items {
+		if items[i].ID == item.ID {
+			items[i] = *item
+			break
+		}
+	}
+	m.inventoryItems[item.InventoryID] = items
+	return nil
+}
+
+func (m *mockWarehouseRepo) ListStockForWarehouse(_ context.Context, orgID, warehouseID uuid.UUID) ([]StockLevel, error) {
+	var result []StockLevel
+	for _, sl := range m.stockLevels {
+		if sl.OrganizationID == orgID && sl.WarehouseID == warehouseID {
+			result = append(result, *sl)
+		}
+	}
+	return result, nil
 }
 
 type mockBus struct {

@@ -19,6 +19,18 @@ type Repository interface {
 	DeleteShift(ctx context.Context, orgID, shiftID uuid.UUID) error
 	HasOverlappingShift(ctx context.Context, orgID, employeeID uuid.UUID, start, end time.Time, excludeID *uuid.UUID) (bool, error)
 
+	// Payroll
+	CreatePayroll(ctx context.Context, p *Payroll) error
+	GetPayroll(ctx context.Context, orgID, payrollID uuid.UUID) (*Payroll, error)
+	ListPayrolls(ctx context.Context, orgID uuid.UUID, employeeID *uuid.UUID, year, month *int, page types.PageRequest) ([]Payroll, int, error)
+	UpdatePayroll(ctx context.Context, p *Payroll) error
+
+	// Absences
+	CreateAbsence(ctx context.Context, a *Absence) error
+	GetAbsence(ctx context.Context, orgID, absenceID uuid.UUID) (*Absence, error)
+	ListAbsences(ctx context.Context, orgID uuid.UUID, filter AbsenceFilter) ([]Absence, int, error)
+	UpdateAbsence(ctx context.Context, a *Absence) error
+
 	// Timesheets
 	CreateTimesheet(ctx context.Context, ts *Timesheet) error
 	GetTimesheet(ctx context.Context, orgID, tsID uuid.UUID) (*Timesheet, error)
@@ -122,4 +134,61 @@ type EmployeeFilter struct {
 	DepartmentID *uuid.UUID
 	Status       *string
 	Page         types.PageRequest
+}
+
+// Payroll represents a monthly payroll calculation.
+type Payroll struct {
+	ID             uuid.UUID    `json:"id"`
+	OrganizationID uuid.UUID    `json:"organization_id"`
+	EmployeeID     uuid.UUID    `json:"employee_id"`
+	Year           int          `json:"year"`
+	Month          int          `json:"month"`
+	GrossSalary    int64        `json:"gross_salary"`
+	NDFL           int64        `json:"ndfl"`
+	Deductions     int64        `json:"deductions"`
+	NetSalary      int64        `json:"net_salary"`
+	Status         string       `json:"status"` // draft, approved, paid
+	ApprovedAt     *time.Time   `json:"approved_at,omitempty"`
+	ApprovedBy     *uuid.UUID   `json:"approved_by,omitempty"`
+	CreatedAt      time.Time    `json:"created_at"`
+}
+
+// Absence represents an employee leave record.
+type Absence struct {
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	EmployeeID     uuid.UUID  `json:"employee_id"`
+	Type           string     `json:"type"` // vacation, sick_leave, personal, unpaid
+	StartDate      time.Time  `json:"start_date"`
+	EndDate        time.Time  `json:"end_date"`
+	Days           int        `json:"days"`
+	Status         string     `json:"status"` // pending, approved, rejected, cancelled
+	Notes          string     `json:"notes"`
+	ApprovedBy     *uuid.UUID `json:"approved_by,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
+// CreatePayrollInput is the input for payroll calculation.
+type CreatePayrollInput struct {
+	EmployeeID uuid.UUID `json:"employee_id"`
+	Year       int       `json:"year"`
+	Month      int       `json:"month"`
+	Deductions int64     `json:"deductions"`
+}
+
+// CreateAbsenceInput is the input for requesting absence.
+type CreateAbsenceInput struct {
+	EmployeeID uuid.UUID `json:"employee_id"`
+	Type       string    `json:"type"`
+	StartDate  string    `json:"start_date"`
+	EndDate    string    `json:"end_date"`
+	Notes      string    `json:"notes"`
+}
+
+// AbsenceFilter holds query params for listing absences.
+type AbsenceFilter struct {
+	EmployeeID *uuid.UUID
+	Type       *string
+	Status     *string
+	Page       types.PageRequest
 }

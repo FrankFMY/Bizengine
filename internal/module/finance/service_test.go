@@ -23,6 +23,8 @@ type mockFinanceRepo struct {
 	lines        map[uuid.UUID][]TransactionLine
 	invoices     map[uuid.UUID]*Invoice
 	hasLines     map[uuid.UUID]bool
+	periods      map[string]*FinancePeriod // key: "orgID:year:month"
+	cashOps      []CashOperation
 }
 
 func newMockFinanceRepo() *mockFinanceRepo {
@@ -33,6 +35,7 @@ func newMockFinanceRepo() *mockFinanceRepo {
 		lines:        make(map[uuid.UUID][]TransactionLine),
 		invoices:     make(map[uuid.UUID]*Invoice),
 		hasLines:     make(map[uuid.UUID]bool),
+		periods:      make(map[string]*FinancePeriod),
 	}
 }
 
@@ -168,6 +171,52 @@ func (m *mockFinanceRepo) GetTrialBalance(_ context.Context, _ uuid.UUID, _ time
 
 func (m *mockFinanceRepo) GetAccountBalance(_ context.Context, _, _ uuid.UUID, _, _ time.Time) (*AccountBalance, error) {
 	return &AccountBalance{}, nil
+}
+
+func (m *mockFinanceRepo) GetPeriod(_ context.Context, orgID uuid.UUID, year, month int) (*FinancePeriod, error) {
+	key := orgID.String() + ":" + string(rune(year)) + ":" + string(rune(month))
+	p, ok := m.periods[key]
+	if !ok {
+		return nil, assert.AnError
+	}
+	cp := *p
+	return &cp, nil
+}
+
+func (m *mockFinanceRepo) UpsertPeriod(_ context.Context, _ pgx.Tx, p *FinancePeriod) error {
+	key := p.OrganizationID.String() + ":" + string(rune(p.Year)) + ":" + string(rune(p.Month))
+	cp := *p
+	m.periods[key] = &cp
+	return nil
+}
+
+func (m *mockFinanceRepo) ListPeriods(_ context.Context, orgID uuid.UUID) ([]FinancePeriod, error) {
+	var result []FinancePeriod
+	for _, p := range m.periods {
+		if p.OrganizationID == orgID {
+			result = append(result, *p)
+		}
+	}
+	return result, nil
+}
+
+func (m *mockFinanceRepo) GetProfitAndLoss(_ context.Context, _ uuid.UUID, _, _ time.Time) ([]PnLRow, error) {
+	return nil, nil
+}
+
+func (m *mockFinanceRepo) CreateCashOperation(_ context.Context, _ pgx.Tx, op *CashOperation) error {
+	m.cashOps = append(m.cashOps, *op)
+	return nil
+}
+
+func (m *mockFinanceRepo) ListCashOperations(_ context.Context, orgID uuid.UUID, _ CashOperationFilter) ([]CashOperation, int, error) {
+	var result []CashOperation
+	for _, op := range m.cashOps {
+		if op.OrganizationID == orgID {
+			result = append(result, op)
+		}
+	}
+	return result, len(result), nil
 }
 
 func (m *mockFinanceRepo) WithTx(_ context.Context, fn func(tx pgx.Tx) error) error {

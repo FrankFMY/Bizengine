@@ -394,6 +394,156 @@ func (r *FinanceRepo) GetAccountBalance(ctx context.Context, orgID, accountID uu
 	return &bal, nil
 }
 
+// GetPeriod returns a finance period by year and month.
+func (r *FinanceRepo) GetPeriod(ctx context.Context, orgID uuid.UUID, year, month int) (*finance.FinancePeriod, error) {
+	var p finance.FinancePeriod
+	err := r.pool.QueryRow(ctx,
+		`SELECT organization_id, year, month, status, closed_at, closed_by
+		 FROM finance_periods WHERE organization_id = $1 AND year = $2 AND month = $3`,
+		orgID, year, month,
+	).Scan(&p.OrganizationID, &p.Year, &p.Month, &p.Status, &p.ClosedAt, &p.ClosedBy)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, errs.NewNotFound("period not found")
+		}
+		return nil, err
+	}
+	return &p, nil
+}
+
+// UpsertPeriod creates or updates a finance period.
+func (r *FinanceRepo) UpsertPeriod(ctx context.Context, tx pgx.Tx, p *finance.FinancePeriod) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO finance_periods (organization_id, year, month, status, closed_at, closed_by)
+		 VALUES ($1, $2, $3, $4, $5, $6)
+		 ON CONFLICT (organization_id, year, month) DO UPDATE SET status = $4, closed_at = $5, closed_by = $6`,
+		p.OrganizationID, p.Year, p.Month, p.Status, p.ClosedAt, p.ClosedBy,
+	)
+	return err
+}
+
+// ListPeriods returns all finance periods for an organization.
+func (r *FinanceRepo) ListPeriods(ctx context.Context, orgID uuid.UUID) ([]finance.FinancePeriod, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT organization_id, year, month, status, closed_at, closed_by
+		 FROM finance_periods WHERE organization_id = $1 ORDER BY year DESC, month DESC`,
+		orgID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var periods []finance.FinancePeriod
+	for rows.Next() {
+		var p finance.FinancePeriod
+		if err := rows.Scan(&p.OrganizationID, &p.Year, &p.Month, &p.Status, &p.ClosedAt, &p.ClosedBy); err != nil {
+			return nil, err
+		}
+		periods = append(periods, p)
+	}
+	return periods, rows.Err()
+}
+
+// GetProfitAndLoss returns revenue and expense account totals for a date range.
+func (r *FinanceRepo) GetProfitAndLoss(ctx context.Context, orgID uuid.UUID, from, to time.Time) ([]finance.PnLRow, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT a.id, a.code, a.name, a.type,
+		        COALESCE(SUM(CASE WHEN a.type = 'revenue' THEN tl.credit - tl.debit ELSE tl.debit - tl.credit END), 0) AS amount
+		 FROM accounts a
+		 JOIN transaction_lines tl ON tl.account_id = a.id AND tl.organization_id = a.organization_id
+		 JOIN transactions t ON t.id = tl.transaction_id AND t.is_posted = TRUE
+		 WHERE a.organization_id = $1 AND a.type IN ('revenue', 'expense') AND t.date >= $2 AND t.date <= $3
+		 GROUP BY a.id, a.code, a.name, a.type
+		 HAVING COALESCE(SUM(CASE WHEN a.type = 'revenue' THEN tl.credit - tl.debit ELSE tl.debit - tl.credit END), 0) != 0
+		 ORDER BY a.type DESC, a.code`,
+		orgID, from, to,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []finance.PnLRow
+	for rows.Next() {
+		var row finance.PnLRow
+		if err := rows.Scan(&row.AccountID, &row.Code, &row.Name, &row.Type, &row.Amount); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+// CreateCashOperation inserts a cash operation record.
+func (r *FinanceRepo) CreateCashOperation(ctx context.Context, tx pgx.Tx, op *finance.CashOperation) error {
+	_, err := tx.Exec(ctx,
+		`INSERT INTO cash_operations (id, organization_id, type, amount, description, account_code, actor_id, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		op.ID, op.OrganizationID, op.Type, op.Amount, op.Description, op.AccountCode, op.ActorID, op.CreatedAt,
+	)
+	return err
+}
+
+// ListCashOperations returns cash operations matching the filter.
+func (r *FinanceRepo) ListCashOperations(ctx context.Context, orgID uuid.UUID, filter finance.CashOperationFilter) ([]finance.CashOperation, int, error) {
+	filter.Page.Normalize()
+
+	var conditions []string
+	var args []any
+	argIdx := 1
+
+	conditions = append(conditions, fmt.Sprintf("organization_id = $%d", argIdx))
+	args = append(args, orgID)
+	argIdx++
+
+	if filter.Type != nil {
+		conditions = append(conditions, fmt.Sprintf("type = $%d", argIdx))
+		args = append(args, *filter.Type)
+		argIdx++
+	}
+	if filter.From != nil {
+		conditions = append(conditions, fmt.Sprintf("created_at >= $%d", argIdx))
+		args = append(args, *filter.From)
+		argIdx++
+	}
+	if filter.To != nil {
+		conditions = append(conditions, fmt.Sprintf("created_at <= $%d", argIdx))
+		args = append(args, *filter.To)
+		argIdx++
+	}
+
+	where := strings.Join(conditions, " AND ")
+
+	var total int
+	if err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM cash_operations WHERE "+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	query := fmt.Sprintf(
+		`SELECT id, organization_id, type, amount, description, account_code, actor_id, created_at
+		 FROM cash_operations WHERE %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d`,
+		where, argIdx, argIdx+1,
+	)
+	args = append(args, filter.Page.Limit, filter.Page.Offset)
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var ops []finance.CashOperation
+	for rows.Next() {
+		var op finance.CashOperation
+		if err := rows.Scan(&op.ID, &op.OrganizationID, &op.Type, &op.Amount, &op.Description, &op.AccountCode, &op.ActorID, &op.CreatedAt); err != nil {
+			return nil, 0, err
+		}
+		ops = append(ops, op)
+	}
+	return ops, total, rows.Err()
+}
+
 // WithTx executes fn within a transaction.
 func (r *FinanceRepo) WithTx(ctx context.Context, fn func(tx pgx.Tx) error) error {
 	tx, err := r.pool.Begin(ctx)

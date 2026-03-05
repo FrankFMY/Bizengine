@@ -299,3 +299,151 @@ func (h *FinanceHandler) MarkInvoicePaid(w http.ResponseWriter, r *http.Request)
 
 	respondOK(w, http.StatusOK, nil)
 }
+
+// ListPeriods handles GET /api/v1/organizations/{orgID}/finance/periods.
+func (h *FinanceHandler) ListPeriods(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	periods, err := h.financeSvc.ListPeriods(r.Context(), orgID)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondOK(w, http.StatusOK, periods)
+}
+
+// ClosePeriod handles POST /api/v1/organizations/{orgID}/finance/periods/close.
+func (h *FinanceHandler) ClosePeriod(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	userID, _ := auth.UserIDFromCtx(r.Context())
+
+	var input struct {
+		Year  int `json:"year"`
+		Month int `json:"month"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		respondError(w, err)
+		return
+	}
+
+	p, err := h.financeSvc.ClosePeriod(r.Context(), orgID, input.Year, input.Month, &userID)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondOK(w, http.StatusOK, p)
+}
+
+// ReopenPeriod handles POST /api/v1/organizations/{orgID}/finance/periods/reopen.
+func (h *FinanceHandler) ReopenPeriod(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	userID, _ := auth.UserIDFromCtx(r.Context())
+
+	var input struct {
+		Year  int `json:"year"`
+		Month int `json:"month"`
+	}
+	if err := decodeJSON(r, &input); err != nil {
+		respondError(w, err)
+		return
+	}
+
+	p, err := h.financeSvc.ReopenPeriod(r.Context(), orgID, input.Year, input.Month, &userID)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondOK(w, http.StatusOK, p)
+}
+
+// GetProfitAndLoss handles GET /api/v1/organizations/{orgID}/finance/reports/pnl.
+func (h *FinanceHandler) GetProfitAndLoss(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	from := time.Date(time.Now().Year(), 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Now()
+
+	if fromStr := r.URL.Query().Get("from"); fromStr != "" {
+		if t, err := time.Parse("2006-01-02", fromStr); err == nil {
+			from = t
+		}
+	}
+	if toStr := r.URL.Query().Get("to"); toStr != "" {
+		if t, err := time.Parse("2006-01-02", toStr); err == nil {
+			to = t
+		}
+	}
+
+	report, err := h.financeSvc.GetProfitAndLoss(r.Context(), orgID, from, to)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondOK(w, http.StatusOK, report)
+}
+
+// CreateCashOperation handles POST /api/v1/organizations/{orgID}/finance/cash.
+func (h *FinanceHandler) CreateCashOperation(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	userID, _ := auth.UserIDFromCtx(r.Context())
+
+	var input finance.CreateCashOperationInput
+	if err := decodeJSON(r, &input); err != nil {
+		respondError(w, err)
+		return
+	}
+
+	op, err := h.financeSvc.CreateCashOperation(r.Context(), orgID, input, &userID)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondCreated(w, op)
+}
+
+// ListCashOperations handles GET /api/v1/organizations/{orgID}/finance/cash.
+func (h *FinanceHandler) ListCashOperations(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	filter := finance.CashOperationFilter{
+		Type: queryString(r, "type"),
+		Page: parsePage(r),
+	}
+
+	result, err := h.financeSvc.ListCashOperations(r.Context(), orgID, filter)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondOK(w, http.StatusOK, result)
+}

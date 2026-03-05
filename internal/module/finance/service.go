@@ -117,6 +117,15 @@ func (s *Service) CreateTransaction(ctx context.Context, orgID uuid.UUID, input 
 		return nil, errs.NewBadRequest("invalid date format, expected YYYY-MM-DD")
 	}
 
+	// Check period is open
+	open, err := s.IsPeriodOpen(ctx, orgID, date)
+	if err != nil {
+		return nil, err
+	}
+	if !open {
+		return nil, errs.NewConflict("accounting period is closed for " + date.Format("2006-01"))
+	}
+
 	var totalDebit, totalCredit int64
 	for _, line := range input.Lines {
 		if line.Debit < 0 || line.Credit < 0 {
@@ -314,6 +323,187 @@ func (s *Service) CreateAutoTransaction(ctx context.Context, orgID uuid.UUID, da
 		},
 	}, nil)
 	return err
+}
+
+// ClosePeriod closes a monthly accounting period, preventing new transactions.
+func (s *Service) ClosePeriod(ctx context.Context, orgID uuid.UUID, year, month int, actorID *uuid.UUID) (*FinancePeriod, error) {
+	if month < 1 || month > 12 {
+		return nil, errs.NewBadRequest("month must be between 1 and 12")
+	}
+
+	p, err := s.repo.GetPeriod(ctx, orgID, year, month)
+	if err != nil {
+		// Period doesn't exist yet — create it as closed
+		p = &FinancePeriod{
+			OrganizationID: orgID,
+			Year:           year,
+			Month:          month,
+		}
+	}
+	if p.Status == "closed" {
+		return nil, errs.NewConflict("period is already closed")
+	}
+
+	now := time.Now()
+	p.Status = "closed"
+	p.ClosedAt = &now
+	p.ClosedBy = actorID
+
+	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
+		return s.repo.UpsertPeriod(ctx, tx, p)
+	}); err != nil {
+		return nil, err
+	}
+
+	s.publishEvent(ctx, orgID, "finance.period.closed", map[string]any{
+		"year":  year,
+		"month": month,
+	}, actorID)
+
+	return p, nil
+}
+
+// ReopenPeriod reopens a closed period.
+func (s *Service) ReopenPeriod(ctx context.Context, orgID uuid.UUID, year, month int, actorID *uuid.UUID) (*FinancePeriod, error) {
+	p, err := s.repo.GetPeriod(ctx, orgID, year, month)
+	if err != nil {
+		return nil, errs.NewNotFound("period not found")
+	}
+	if p.Status != "closed" {
+		return nil, errs.NewConflict("period is not closed")
+	}
+
+	p.Status = "open"
+	p.ClosedAt = nil
+	p.ClosedBy = nil
+
+	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
+		return s.repo.UpsertPeriod(ctx, tx, p)
+	}); err != nil {
+		return nil, err
+	}
+
+	return p, nil
+}
+
+// ListPeriods returns all finance periods for an organization.
+func (s *Service) ListPeriods(ctx context.Context, orgID uuid.UUID) ([]FinancePeriod, error) {
+	return s.repo.ListPeriods(ctx, orgID)
+}
+
+// IsPeriodOpen checks whether a transaction date falls in an open period.
+func (s *Service) IsPeriodOpen(ctx context.Context, orgID uuid.UUID, date time.Time) (bool, error) {
+	p, err := s.repo.GetPeriod(ctx, orgID, date.Year(), int(date.Month()))
+	if err != nil {
+		// No period record means open by default
+		return true, nil
+	}
+	return p.Status != "closed", nil
+}
+
+// GetProfitAndLoss returns revenue and expense totals for a date range.
+func (s *Service) GetProfitAndLoss(ctx context.Context, orgID uuid.UUID, from, to time.Time) (*PnLReport, error) {
+	rows, err := s.repo.GetProfitAndLoss(ctx, orgID, from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	var totalRevenue, totalExpense int64
+	for _, row := range rows {
+		switch row.Type {
+		case "revenue":
+			totalRevenue += row.Amount
+		case "expense":
+			totalExpense += row.Amount
+		}
+	}
+
+	return &PnLReport{
+		From:         from,
+		To:           to,
+		Rows:         rows,
+		TotalRevenue: totalRevenue,
+		TotalExpense: totalExpense,
+		NetProfit:    totalRevenue - totalExpense,
+	}, nil
+}
+
+// CreateCashOperation records a cash register deposit or withdrawal.
+func (s *Service) CreateCashOperation(ctx context.Context, orgID uuid.UUID, input CreateCashOperationInput, actorID *uuid.UUID) (*CashOperation, error) {
+	if input.Type != "deposit" && input.Type != "withdrawal" {
+		return nil, errs.NewBadRequest("type must be deposit or withdrawal")
+	}
+	if input.Amount <= 0 {
+		return nil, errs.NewBadRequest("amount must be positive")
+	}
+	if input.AccountCode == "" {
+		input.AccountCode = "50" // default to cash account
+	}
+
+	op := &CashOperation{
+		ID:             uuid.New(),
+		OrganizationID: orgID,
+		Type:           input.Type,
+		Amount:         input.Amount,
+		Description:    input.Description,
+		AccountCode:    input.AccountCode,
+		ActorID:        actorID,
+		CreatedAt:      time.Now(),
+	}
+
+	// Create double-entry transaction: deposit = Dt 50 Ct {counterpart}, withdrawal = reverse
+	debitCode := "50"
+	creditCode := input.AccountCode
+	if input.Type == "withdrawal" {
+		debitCode = input.AccountCode
+		creditCode = "50"
+	}
+	// If counterpart is cash itself, use "91" (other income/expense)
+	if debitCode == creditCode {
+		if input.Type == "deposit" {
+			creditCode = "91"
+		} else {
+			debitCode = "91"
+		}
+	}
+
+	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
+		if err := s.repo.CreateCashOperation(ctx, tx, op); err != nil {
+			return err
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	// Also create accounting transaction
+	_ = s.CreateAutoTransaction(ctx, orgID, op.CreatedAt.Format("2006-01-02"), "Cash: "+input.Description, debitCode, creditCode, input.Amount, nil, nil)
+
+	s.publishEvent(ctx, orgID, "finance.cash."+input.Type, map[string]any{
+		"operation_id": op.ID,
+		"amount":       input.Amount,
+		"type":         input.Type,
+	}, actorID)
+
+	return op, nil
+}
+
+// ListCashOperations returns cash operations matching the filter.
+func (s *Service) ListCashOperations(ctx context.Context, orgID uuid.UUID, filter CashOperationFilter) (*types.PageResponse[CashOperation], error) {
+	filter.Page.Normalize()
+	ops, total, err := s.repo.ListCashOperations(ctx, orgID, filter)
+	if err != nil {
+		return nil, err
+	}
+	if ops == nil {
+		ops = []CashOperation{}
+	}
+	return &types.PageResponse[CashOperation]{
+		Items:  ops,
+		Total:  total,
+		Limit:  filter.Page.Limit,
+		Offset: filter.Page.Offset,
+	}, nil
 }
 
 func (s *Service) publishEvent(ctx context.Context, orgID uuid.UUID, eventType string, data map[string]any, actorID *uuid.UUID) {

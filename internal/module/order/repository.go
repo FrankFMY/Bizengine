@@ -35,6 +35,13 @@ type Repository interface {
 	// NextOrderNumber atomically generates the next order number for an organization.
 	NextOrderNumber(ctx context.Context, tx pgx.Tx, orgID uuid.UUID) (int64, error)
 
+	// Refunds
+	CreateRefund(ctx context.Context, tx pgx.Tx, r *Refund) error
+	CreateRefundItems(ctx context.Context, tx pgx.Tx, items []RefundItem) error
+	GetRefund(ctx context.Context, orgID, refundID uuid.UUID) (*Refund, error)
+	GetRefundItems(ctx context.Context, refundID uuid.UUID) ([]RefundItem, error)
+	ListRefunds(ctx context.Context, orgID uuid.UUID, orderID *uuid.UUID, page types.PageRequest) ([]Refund, int, error)
+
 	// WithTx executes fn within a transaction.
 	WithTx(ctx context.Context, fn func(tx pgx.Tx) error) error
 }
@@ -125,4 +132,43 @@ type PayInput struct {
 // ShipInput is the input for recording shipment.
 type ShipInput struct {
 	Tracking string `json:"tracking"`
+}
+
+// Refund represents a refund record.
+type Refund struct {
+	ID             uuid.UUID    `json:"id"`
+	OrganizationID uuid.UUID    `json:"organization_id"`
+	OrderID        uuid.UUID    `json:"order_id"`
+	Status         string       `json:"status"`
+	Total          int64        `json:"total"`
+	Reason         string       `json:"reason"`
+	RefundMethod   string       `json:"refund_method"`
+	Ver            int          `json:"ver"`
+	Upd            time.Time    `json:"upd"`
+	Iat            time.Time    `json:"iat"`
+	Items          []RefundItem `json:"items,omitempty"`
+}
+
+// RefundItem represents a line item in a refund.
+type RefundItem struct {
+	ID          uuid.UUID `json:"id"`
+	RefundID    uuid.UUID `json:"refund_id"`
+	OrderItemID uuid.UUID `json:"order_item_id"`
+	Quantity    int       `json:"quantity"`
+	UnitPrice   int64     `json:"unit_price"`
+	Total       int64     `json:"total"`
+	Reason      string    `json:"reason"`
+}
+
+// CreateRefundInput is the input for creating a refund.
+type CreateRefundInput struct {
+	Items        []RefundItemInput `json:"items"`
+	RefundMethod string            `json:"refund_method"`
+}
+
+// RefundItemInput is a line item in a create refund request.
+type RefundItemInput struct {
+	OrderItemID uuid.UUID `json:"order_item_id"`
+	Quantity    int       `json:"quantity"`
+	Reason      string    `json:"reason"`
 }
