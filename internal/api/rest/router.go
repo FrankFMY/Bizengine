@@ -45,6 +45,7 @@ type RouterDeps struct {
 	WebhookH       *WebhookHandler
 	NotificationH  *NotificationHandler
 	AdminH         *AdminHandler
+	CRMH           *CRMHandler
 	HealthH        *HealthHandler
 }
 
@@ -274,6 +275,27 @@ func NewRouter(deps RouterDeps) http.Handler {
 						r.Use(auth.RequirePermission("hr.view"))
 						r.Get("/payroll", deps.HRH.ListPayrolls)
 						r.Get("/absences", deps.HRH.ListAbsences)
+					})
+				})
+
+				// CRM
+				r.Route("/crm", func(r chi.Router) {
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("crm.view"))
+						r.Get("/customers", deps.CRMH.ListCustomers)
+						r.Get("/customers/{id}", deps.CRMH.GetCustomer)
+						r.Get("/customers/{id}/orders", deps.CRMH.GetCustomerOrders)
+						r.Get("/customers/{id}/transactions", deps.CRMH.GetCustomerTransactions)
+						r.Get("/suppliers", deps.CRMH.ListSuppliers)
+						r.Get("/suppliers/{id}", deps.CRMH.GetSupplier)
+						r.Get("/suppliers/{id}/deliveries", deps.CRMH.GetSupplierDeliveries)
+					})
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("crm.manage"))
+						r.Post("/customers", deps.CRMH.CreateCustomer)
+						r.Put("/customers/{id}", deps.CRMH.UpdateCustomer)
+						r.Post("/customers/{id}/tags", deps.CRMH.UpdateCustomerTags)
+						r.Post("/suppliers", deps.CRMH.CreateSupplier)
 					})
 				})
 

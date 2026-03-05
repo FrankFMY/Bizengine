@@ -34,6 +34,7 @@ import (
 	"github.com/bizengine/engine/internal/module/catalog"
 	"github.com/bizengine/engine/internal/module/file"
 	"github.com/bizengine/engine/internal/module/finance"
+	"github.com/bizengine/engine/internal/module/crm"
 	"github.com/bizengine/engine/internal/module/hr"
 	"github.com/bizengine/engine/internal/module/logistics"
 	"github.com/bizengine/engine/internal/module/order"
@@ -110,6 +111,10 @@ func main() {
 	// Modules: HR
 	hrRepo := postgres.NewHRRepo(pool)
 	hrSvc := hr.NewService(hrRepo, entitySvc, eventBus)
+
+	// Modules: CRM
+	crmRepo := postgres.NewCRMRepo(pool)
+	crmSvc := crm.NewService(crmRepo, entitySvc, eventBus)
 
 	// Modules: Finance
 	financeRepo := postgres.NewFinanceRepo(pool)
@@ -283,6 +288,7 @@ func main() {
 		OrderH:        rest.NewOrderHandler(orderSvc),
 		ProcessH:      rest.NewProcessHandler(processEngine),
 		HRH:           rest.NewHRHandler(hrSvc),
+		CRMH:          rest.NewCRMHandler(crmSvc),
 		FinanceH:      rest.NewFinanceHandler(financeSvc),
 		LogisticsH:    rest.NewLogisticsHandler(logisticsSvc),
 		FileH:         rest.NewFileHandler(fileSvc),
@@ -501,6 +507,47 @@ func setupEventSubscriptions(eventBus event.Bus, warehouseSvc *warehouse.Service
 			date := ev.Timestamp.Format("2006-01-02")
 			refType := "reversal"
 			financeSvc.CreateAutoTransaction(ctx, ev.OrganizationID, date, "Order cancelled — reversal", "90", "62", total, &refType, ev.EntityID)
+		}
+		return nil
+	}))
+
+	// order.refunded → warehouse: return stock + finance: reversal Dt 62 Kt 51
+	eventBus.Subscribe("order.refunded", event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
+		var data struct {
+			Items []struct {
+				ProductID uuid.UUID `json:"product_id"`
+				Quantity  float64   `json:"quantity"`
+			} `json:"items"`
+			WarehouseID  *uuid.UUID `json:"warehouse_id"`
+			Total        float64    `json:"total"`
+			RefundMethod string     `json:"refund_method"`
+		}
+		if err := json.Unmarshal(ev.Data, &data); err != nil {
+			log.Error().Err(err).Msg("refund: failed to parse order.refunded event")
+			return nil
+		}
+		// Return stock to warehouse
+		if data.WarehouseID != nil {
+			for _, item := range data.Items {
+				refType := "refund"
+				warehouseSvc.Receive(ctx, ev.OrganizationID, warehouse.ReceiveInput{
+					ProductID:   item.ProductID,
+					WarehouseID: *data.WarehouseID,
+					Quantity:    item.Quantity,
+					Reason:      "Order refund return",
+				})
+				_ = refType
+			}
+		}
+		// Finance: reversal posting Dt 62 (Customers) Ct 51 (Bank) or Ct 50 (Cash)
+		if data.Total > 0 {
+			date := ev.Timestamp.Format("2006-01-02")
+			refType := "refund"
+			creditCode := "51"
+			if data.RefundMethod == "cash" {
+				creditCode = "50"
+			}
+			financeSvc.CreateAutoTransaction(ctx, ev.OrganizationID, date, "Order refund", "62", creditCode, int64(math.Round(data.Total)), &refType, ev.EntityID)
 		}
 		return nil
 	}))
