@@ -35,8 +35,11 @@ tmp/
 # Build output
 /engine
 
-# Documentation (specs, not part of source)
-/docs/
+# Internal docs (not published)
+docs/PROMPT_FOR_OPUS.md
+docs/IMPLEMENTATION_PLAN.md
+docs/BizEngine_Backend_Architecture.docx
+docs/modules/
 
 # Claude Code
 .claude/

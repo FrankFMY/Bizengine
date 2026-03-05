@@ -11,7 +11,7 @@ BizEngine provides a unified backend for managing business operations through an
 - **Universal entity model** — any business object is an Entity with flexible Components, no schema migrations needed for new object types
 - **Event sourcing** — full audit trail, reactive views via Centrifugo, replay to any point in time
 - **Process engine** — YAML-defined state machines for order fulfillment, stock replenishment, delivery tracking, employee onboarding
-- **Arcana integration** — reactive data sync engine with 20 graph definitions, JSON Patch diffs, and Centrifugo delivery
+- **Arcana integration** — reactive data sync engine with 21 graph definitions, JSON Patch diffs, and Centrifugo delivery
 - **Multi-tenancy** — organization-based isolation, every query scoped by `organization_id`
 - **Double-entry accounting** — financial module with proper debit/credit bookkeeping (int64 kopeks, no floats)
 - **3D space validation** — AABB collision detection and parent containment checks for spatial layouts
@@ -111,7 +111,7 @@ bizengine/
 |   +-- api/
 |   |   +-- rest/                # Chi router, all HTTP handlers
 |   |   +-- centrifugo/          # Connect/subscribe proxy, publisher
-|   +-- graphs/                  # Arcana graph definitions (20 graphs)
+|   +-- graphs/                  # Arcana graph definitions (21 graphs)
 |   +-- notification/            # Notification inbox service
 |   +-- webhook/                 # Webhook dispatch service
 |   +-- storage/

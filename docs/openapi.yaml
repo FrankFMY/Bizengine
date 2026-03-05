@@ -1,0 +1,530 @@
+openapi: 3.1.0
+info:
+  title: BizEngine API
+  version: 1.0.0
+  description: Business engine for managing organizations, products, orders, warehouses, HR, finance, logistics, and Russian government integrations.
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://api.bizengine.app
+    description: Production
+
+tags:
+  - name: Auth
+    description: Authentication and session management
+  - name: Organizations
+    description: Organization and member management
+  - name: Entities
+    description: Generic entity CRUD and components
+  - name: Catalog
+    description: Product catalog and categories
+  - name: Warehouse
+    description: Stock management, movements, and inventory
+  - name: Orders
+    description: Order lifecycle management
+  - name: Processes
+    description: Process engine, definitions, and instances
+  - name: HR
+    description: HR module — employees, shifts, timesheets
+  - name: Finance
+    description: Accounting, transactions, invoices
+  - name: Logistics
+    description: Routes, stops, geo tracking
+  - name: Files
+    description: File upload/download via presigned S3 URLs
+  - name: Export
+    description: Data export (CSV, PDF)
+  - name: Integrations
+    description: Russian government integrations (fiscal, EDO, marking, bank)
+  - name: Analytics
+    description: Dashboard and revenue analytics
+  - name: Webhooks
+    description: Webhook management and delivery
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string }
+
+  /metrics:
+    get:
+      summary: Application metrics
+      operationId: getMetrics
+      responses:
+        '200':
+          description: Metrics data
+
+  /api/v1/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, minLength: 8 }
+                name: { type: string }
+      responses:
+        '200':
+          description: Registration successful, session cookies set
+
+  /api/v1/auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: Login successful
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Log out (destroy session)
+      operationId: logout
+      responses:
+        '200':
+          description: Logged out
+
+  /api/v1/auth/check:
+    get:
+      tags: [Auth]
+      summary: Check authentication status
+      operationId: authCheck
+      responses:
+        '200':
+          description: Authenticated
+
+  /api/v1/organizations:
+    post:
+      tags: [Organizations]
+      summary: Create organization
+      operationId: createOrganization
+      responses:
+        '201':
+          description: Organization created
+    get:
+      tags: [Organizations]
+      summary: List organizations
+      operationId: listOrganizations
+      responses:
+        '200':
+          description: List of organizations
+
+  /api/v1/organizations/{orgID}/catalog/products:
+    get:
+      tags: [Catalog]
+      summary: List products
+      operationId: listProducts
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '200':
+          description: Product list
+    post:
+      tags: [Catalog]
+      summary: Create product
+      operationId: createProduct
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '201':
+          description: Product created
+
+  /api/v1/organizations/{orgID}/orders:
+    get:
+      tags: [Orders]
+      summary: List orders
+      operationId: listOrders
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '200':
+          description: Order list
+    post:
+      tags: [Orders]
+      summary: Create order
+      operationId: createOrder
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '201':
+          description: Order created
+
+  /api/v1/organizations/{orgID}/orders/{id}/confirm:
+    post:
+      tags: [Orders]
+      summary: Confirm order
+      operationId: confirmOrder
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: Order confirmed
+
+  /api/v1/organizations/{orgID}/orders/{id}/pay:
+    post:
+      tags: [Orders]
+      summary: Mark order as paid
+      operationId: payOrder
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: Payment recorded
+
+  /api/v1/organizations/{orgID}/orders/{id}/ship:
+    post:
+      tags: [Orders]
+      summary: Ship order
+      operationId: shipOrder
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: Order shipped
+
+  /api/v1/organizations/{orgID}/warehouse/{warehouseID}/stock:
+    get:
+      tags: [Warehouse]
+      summary: List stock levels
+      operationId: listStock
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: warehouseID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Stock levels
+
+  /api/v1/organizations/{orgID}/warehouse/receive:
+    post:
+      tags: [Warehouse]
+      summary: Receive stock
+      operationId: receiveStock
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '200':
+          description: Stock received
+
+  /api/v1/organizations/{orgID}/hr/employees:
+    get:
+      tags: [HR]
+      summary: List employees
+      operationId: listEmployees
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '200':
+          description: Employee list
+    post:
+      tags: [HR]
+      summary: Hire employee
+      operationId: hireEmployee
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '201':
+          description: Employee hired
+
+  /api/v1/organizations/{orgID}/finance/accounts:
+    get:
+      tags: [Finance]
+      summary: List accounts
+      operationId: listAccounts
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '200':
+          description: Account list
+
+  /api/v1/organizations/{orgID}/finance/transactions:
+    post:
+      tags: [Finance]
+      summary: Create transaction
+      operationId: createTransaction
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '201':
+          description: Transaction created
+
+  /api/v1/organizations/{orgID}/logistics/routes:
+    get:
+      tags: [Logistics]
+      summary: List delivery routes
+      operationId: listRoutes
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '200':
+          description: Route list
+
+  /api/v1/organizations/{orgID}/files/upload-url:
+    post:
+      tags: [Files]
+      summary: Request presigned upload URL
+      operationId: requestUploadURL
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                content_type: { type: string }
+                entity_id: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Upload URL generated
+
+  /api/v1/organizations/{orgID}/export:
+    post:
+      tags: [Export]
+      summary: Export data
+      operationId: exportData
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [format, type]
+              properties:
+                format: { type: string, enum: [csv, pdf] }
+                type: { type: string }
+      responses:
+        '200':
+          description: File download
+
+  /api/v1/organizations/{orgID}/integrations/fiscal/receipt:
+    post:
+      tags: [Integrations]
+      summary: Send fiscal receipt (ATOL)
+      operationId: sendReceipt
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '201':
+          description: Receipt sent
+
+  /api/v1/organizations/{orgID}/integrations/edo/documents:
+    post:
+      tags: [Integrations]
+      summary: Send EDO document (Diadoc)
+      operationId: sendEDODocument
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '201':
+          description: Document sent
+
+  /api/v1/organizations/{orgID}/integrations/marking/verify:
+    post:
+      tags: [Integrations]
+      summary: Verify marking code (Chestniy Znak)
+      operationId: verifyMarking
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '200':
+          description: Verification result
+
+  /api/v1/organizations/{orgID}/integrations/bank/import:
+    post:
+      tags: [Integrations]
+      summary: Import bank statement (1C format)
+      operationId: importBankStatement
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '200':
+          description: Statement imported
+
+  /api/v1/organizations/{orgID}/analytics/dashboard:
+    get:
+      tags: [Analytics]
+      summary: Get dashboard data
+      operationId: getDashboard
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '200':
+          description: Dashboard data
+
+  /api/v1/organizations/{orgID}/analytics/revenue:
+    get:
+      tags: [Analytics]
+      summary: Revenue time series
+      operationId: getRevenueSeries
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: days
+          in: query
+          schema: { type: integer, default: 30 }
+      responses:
+        '200':
+          description: Revenue data points
+
+  /api/v1/organizations/{orgID}/webhooks:
+    get:
+      tags: [Webhooks]
+      summary: List webhooks
+      operationId: listWebhooks
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '200':
+          description: Webhook list
+    post:
+      tags: [Webhooks]
+      summary: Create webhook
+      operationId: createWebhook
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, events]
+              properties:
+                url: { type: string, format: uri }
+                events: { type: array, items: { type: string } }
+                secret: { type: string }
+      responses:
+        '201':
+          description: Webhook created
+
+  /api/v1/organizations/{orgID}/webhooks/{id}/toggle:
+    post:
+      tags: [Webhooks]
+      summary: Toggle webhook active state
+      operationId: toggleWebhook
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - $ref: '#/components/parameters/id'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                active: { type: boolean }
+      responses:
+        '200':
+          description: Webhook toggled
+
+  /api/v1/organizations/{orgID}/webhooks/{id}/test:
+    post:
+      tags: [Webhooks]
+      summary: Send test webhook delivery
+      operationId: testWebhook
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: Test delivered
+
+  /api/v1/organizations/{orgID}/processes/definitions:
+    get:
+      tags: [Processes]
+      summary: List process definitions
+      operationId: listProcessDefinitions
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '200':
+          description: Definition list
+    post:
+      tags: [Processes]
+      summary: Create process definition (visual builder)
+      operationId: createProcessDefinition
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '201':
+          description: Definition created
+
+  /api/v1/organizations/{orgID}/processes/definitions/{defID}:
+    put:
+      tags: [Processes]
+      summary: Update process definition (visual builder)
+      operationId: updateProcessDefinition
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: defID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Definition updated
+    delete:
+      tags: [Processes]
+      summary: Delete process definition
+      operationId: deleteProcessDefinition
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: defID
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Definition deleted
+
+components:
+  parameters:
+    orgID:
+      name: orgID
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid

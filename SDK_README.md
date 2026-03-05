@@ -51,7 +51,7 @@ POST /arcana/sync
 
 ### Available Graphs
 
-20 graphs: `catalog_products_list`, `catalog_product_detail`, `catalog_categories_tree`, `warehouse_stock_list`, `warehouse_stock_detail`, `warehouse_low_stock`, `orders_list`, `order_detail`, `orders_dashboard`, `hr_employees_list`, `hr_employee_detail`, `hr_shifts_schedule`, `hr_timesheets_list`, `finance_trial_balance`, `finance_transactions_list`, `finance_account_balance`, `logistics_routes_list`, `logistics_route_detail`, `logistics_vehicles_map`, `dashboard_summary`.
+21 graphs: `catalog_products_list`, `catalog_product_detail`, `catalog_categories_tree`, `warehouse_stock_list`, `warehouse_stock_detail`, `warehouse_low_stock`, `orders_list`, `order_detail`, `orders_dashboard`, `hr_employees_list`, `hr_employee_detail`, `hr_shifts_schedule`, `hr_timesheets_list`, `finance_trial_balance`, `finance_transactions_list`, `finance_account_balance`, `logistics_routes_list`, `logistics_route_detail`, `logistics_vehicles_map`, `notifications_unread`, `dashboard_summary`.
 
 Full schema: `GET /arcana/schema`.
 
