@@ -184,6 +184,20 @@ func NewRouter(deps RouterDeps) http.Handler {
 						r.Use(auth.RequirePermission("warehouse.adjust"))
 						r.Post("/adjust", deps.WarehouseH.Adjust)
 					})
+					r.Route("/inventory", func(r chi.Router) {
+						r.Group(func(r chi.Router) {
+							r.Use(auth.RequirePermission("catalog.view"))
+							r.Get("/", deps.WarehouseH.ListInventories)
+							r.Get("/{id}", deps.WarehouseH.GetInventory)
+						})
+						r.Group(func(r chi.Router) {
+							r.Use(auth.RequirePermission("warehouse.adjust"))
+							r.Post("/", deps.WarehouseH.StartInventory)
+							r.Post("/{id}/count", deps.WarehouseH.CountItem)
+							r.Post("/{id}/apply", deps.WarehouseH.ApplyInventory)
+							r.Post("/{id}/cancel", deps.WarehouseH.CancelInventory)
+						})
+					})
 				})
 
 				// Orders
@@ -205,6 +219,8 @@ func NewRouter(deps RouterDeps) http.Handler {
 						r.Post("/{id}/pay", deps.OrderH.Pay)
 						r.Post("/{id}/ship", deps.OrderH.Ship)
 						r.Post("/{id}/deliver", deps.OrderH.Deliver)
+						r.Post("/{id}/refund", deps.OrderH.Refund)
+						r.Get("/refunds", deps.OrderH.ListRefunds)
 					})
 					r.Group(func(r chi.Router) {
 						r.Use(auth.RequirePermission("order.cancel"))
@@ -248,6 +264,16 @@ func NewRouter(deps RouterDeps) http.Handler {
 						r.Post("/timesheets/clock-in", deps.HRH.ClockIn)
 						r.Post("/timesheets/{id}/clock-out", deps.HRH.ClockOut)
 						r.Post("/timesheets/{id}/approve", deps.HRH.ApproveTimesheet)
+						r.Post("/payroll", deps.HRH.CalculatePayroll)
+						r.Post("/payroll/{id}/approve", deps.HRH.ApprovePayroll)
+						r.Post("/absences", deps.HRH.RequestAbsence)
+						r.Post("/absences/{id}/approve", deps.HRH.ApproveAbsence)
+						r.Post("/absences/{id}/reject", deps.HRH.RejectAbsence)
+					})
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("hr.view"))
+						r.Get("/payroll", deps.HRH.ListPayrolls)
+						r.Get("/absences", deps.HRH.ListAbsences)
 					})
 				})
 
@@ -300,6 +326,9 @@ func NewRouter(deps RouterDeps) http.Handler {
 						r.Get("/transactions/{id}", deps.FinanceH.GetTransaction)
 						r.Get("/invoices", deps.FinanceH.ListInvoices)
 						r.Get("/reports/trial-balance", deps.FinanceH.GetTrialBalance)
+						r.Get("/reports/pnl", deps.FinanceH.GetProfitAndLoss)
+						r.Get("/periods", deps.FinanceH.ListPeriods)
+						r.Get("/cash", deps.FinanceH.ListCashOperations)
 					})
 					r.Group(func(r chi.Router) {
 						r.Use(auth.RequirePermission("finance.manage"))
@@ -308,6 +337,9 @@ func NewRouter(deps RouterDeps) http.Handler {
 						r.Post("/transactions/{id}/post", deps.FinanceH.PostTransaction)
 						r.Post("/invoices", deps.FinanceH.CreateInvoice)
 						r.Post("/invoices/{id}/pay", deps.FinanceH.MarkInvoicePaid)
+						r.Post("/periods/close", deps.FinanceH.ClosePeriod)
+						r.Post("/periods/reopen", deps.FinanceH.ReopenPeriod)
+						r.Post("/cash", deps.FinanceH.CreateCashOperation)
 					})
 				})
 

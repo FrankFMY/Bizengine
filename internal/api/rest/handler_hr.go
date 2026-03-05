@@ -2,6 +2,7 @@ package rest
 
 import (
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -399,4 +400,175 @@ func (h *HRHandler) ApproveTimesheet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondOK(w, http.StatusOK, nil)
+}
+
+// CalculatePayroll handles POST /api/v1/organizations/{orgID}/hr/payroll.
+func (h *HRHandler) CalculatePayroll(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	userID, _ := auth.UserIDFromCtx(r.Context())
+
+	var input hr.CreatePayrollInput
+	if err := decodeJSON(r, &input); err != nil {
+		respondError(w, err)
+		return
+	}
+
+	p, err := h.hrSvc.CalculatePayroll(r.Context(), orgID, input, &userID)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondCreated(w, p)
+}
+
+// ApprovePayroll handles POST /api/v1/organizations/{orgID}/hr/payroll/{id}/approve.
+func (h *HRHandler) ApprovePayroll(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	id, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	userID, _ := auth.UserIDFromCtx(r.Context())
+
+	p, err := h.hrSvc.ApprovePayroll(r.Context(), orgID, id, &userID)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondOK(w, http.StatusOK, p)
+}
+
+// ListPayrolls handles GET /api/v1/organizations/{orgID}/hr/payroll.
+func (h *HRHandler) ListPayrolls(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	employeeID := queryUUID(r, "employee_id")
+	var year, month *int
+	if v := r.URL.Query().Get("year"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			year = &n
+		}
+	}
+	if v := r.URL.Query().Get("month"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			month = &n
+		}
+	}
+
+	resp, err := h.hrSvc.ListPayrolls(r.Context(), orgID, employeeID, year, month, parsePage(r))
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondOK(w, http.StatusOK, resp)
+}
+
+// RequestAbsence handles POST /api/v1/organizations/{orgID}/hr/absences.
+func (h *HRHandler) RequestAbsence(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	userID, _ := auth.UserIDFromCtx(r.Context())
+
+	var input hr.CreateAbsenceInput
+	if err := decodeJSON(r, &input); err != nil {
+		respondError(w, err)
+		return
+	}
+
+	a, err := h.hrSvc.RequestAbsence(r.Context(), orgID, input, &userID)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondCreated(w, a)
+}
+
+// ApproveAbsence handles POST /api/v1/organizations/{orgID}/hr/absences/{id}/approve.
+func (h *HRHandler) ApproveAbsence(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	id, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	userID, _ := auth.UserIDFromCtx(r.Context())
+
+	a, err := h.hrSvc.ApproveAbsence(r.Context(), orgID, id, &userID)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondOK(w, http.StatusOK, a)
+}
+
+// RejectAbsence handles POST /api/v1/organizations/{orgID}/hr/absences/{id}/reject.
+func (h *HRHandler) RejectAbsence(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	id, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	userID, _ := auth.UserIDFromCtx(r.Context())
+
+	a, err := h.hrSvc.RejectAbsence(r.Context(), orgID, id, &userID)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondOK(w, http.StatusOK, a)
+}
+
+// ListAbsences handles GET /api/v1/organizations/{orgID}/hr/absences.
+func (h *HRHandler) ListAbsences(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	filter := hr.AbsenceFilter{
+		EmployeeID: queryUUID(r, "employee_id"),
+		Type:       queryString(r, "type"),
+		Status:     queryString(r, "status"),
+		Page:       parsePage(r),
+	}
+
+	resp, err := h.hrSvc.ListAbsences(r.Context(), orgID, filter)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondOK(w, http.StatusOK, resp)
 }

@@ -20,6 +20,8 @@ import (
 type mockHRRepo struct {
 	shifts     map[uuid.UUID]*Shift
 	timesheets map[uuid.UUID]*Timesheet
+	payrolls   map[uuid.UUID]*Payroll
+	absences   map[uuid.UUID]*Absence
 	overlap    bool
 }
 
@@ -27,6 +29,8 @@ func newMockHRRepo() *mockHRRepo {
 	return &mockHRRepo{
 		shifts:     make(map[uuid.UUID]*Shift),
 		timesheets: make(map[uuid.UUID]*Timesheet),
+		payrolls:   make(map[uuid.UUID]*Payroll),
+		absences:   make(map[uuid.UUID]*Absence),
 	}
 }
 
@@ -112,6 +116,68 @@ func (m *mockHRRepo) GetOpenTimesheet(_ context.Context, orgID, employeeID uuid.
 		}
 	}
 	return nil, nil
+}
+
+func (m *mockHRRepo) CreatePayroll(_ context.Context, p *Payroll) error {
+	cp := *p
+	m.payrolls[p.ID] = &cp
+	return nil
+}
+
+func (m *mockHRRepo) GetPayroll(_ context.Context, orgID, payrollID uuid.UUID) (*Payroll, error) {
+	p, ok := m.payrolls[payrollID]
+	if !ok || p.OrganizationID != orgID {
+		return nil, assert.AnError
+	}
+	cp := *p
+	return &cp, nil
+}
+
+func (m *mockHRRepo) ListPayrolls(_ context.Context, orgID uuid.UUID, _ *uuid.UUID, _ *int, _ *int, _ types.PageRequest) ([]Payroll, int, error) {
+	var result []Payroll
+	for _, p := range m.payrolls {
+		if p.OrganizationID == orgID {
+			result = append(result, *p)
+		}
+	}
+	return result, len(result), nil
+}
+
+func (m *mockHRRepo) UpdatePayroll(_ context.Context, p *Payroll) error {
+	cp := *p
+	m.payrolls[p.ID] = &cp
+	return nil
+}
+
+func (m *mockHRRepo) CreateAbsence(_ context.Context, a *Absence) error {
+	cp := *a
+	m.absences[a.ID] = &cp
+	return nil
+}
+
+func (m *mockHRRepo) GetAbsence(_ context.Context, orgID, absenceID uuid.UUID) (*Absence, error) {
+	a, ok := m.absences[absenceID]
+	if !ok || a.OrganizationID != orgID {
+		return nil, assert.AnError
+	}
+	cp := *a
+	return &cp, nil
+}
+
+func (m *mockHRRepo) ListAbsences(_ context.Context, orgID uuid.UUID, _ AbsenceFilter) ([]Absence, int, error) {
+	var result []Absence
+	for _, a := range m.absences {
+		if a.OrganizationID == orgID {
+			result = append(result, *a)
+		}
+	}
+	return result, len(result), nil
+}
+
+func (m *mockHRRepo) UpdateAbsence(_ context.Context, a *Absence) error {
+	cp := *a
+	m.absences[a.ID] = &cp
+	return nil
 }
 
 type mockEntityRepo struct {

@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS absences;
+DROP TABLE IF EXISTS payrolls;
