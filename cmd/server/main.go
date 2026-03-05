@@ -15,9 +15,11 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
+	"github.com/FrankFMY/arcana"
 	"github.com/bizengine/engine/internal/api/centrifugo"
 	"github.com/bizengine/engine/internal/api/rest"
 	"github.com/bizengine/engine/internal/core/auth"
+	"github.com/bizengine/engine/internal/graphs"
 	"github.com/bizengine/engine/internal/views"
 	viewDefs "github.com/bizengine/engine/internal/views/defs"
 	"github.com/bizengine/engine/internal/core/entity"
@@ -132,6 +134,66 @@ func main() {
 		return nil
 	}))
 
+	// Arcana reactive sync engine (parallel mount)
+	arcanaEngine := arcana.New(arcana.Config{
+		Pool: arcana.PgxQuerier(pool),
+		Transport: arcana.NewCentrifugoTransport(arcana.CentrifugoConfig{
+			APIURL: cfg.Centrifugo.APIURL,
+			APIKey: cfg.Centrifugo.APIKey,
+		}),
+		AuthFunc: func(r *http.Request) (*arcana.Identity, error) {
+			sessionID := cookieValue(r, "teco_session")
+			seanceID := cookieValue(r, "teco_seance")
+			if sessionID == "" || seanceID == "" {
+				return nil, fmt.Errorf("unauthorized")
+			}
+
+			seance, err := sessionStore.GetSeance(r.Context(), seanceID)
+			if err != nil {
+				return nil, fmt.Errorf("unauthorized")
+			}
+			if seance.SessionID != sessionID {
+				return nil, fmt.Errorf("unauthorized")
+			}
+
+			sess, err := sessionStore.GetSession(r.Context(), sessionID)
+			if err != nil {
+				return nil, fmt.Errorf("unauthorized")
+			}
+
+			sessionStore.SlideSeance(r.Context(), seanceID, cfg.Session.SeanceTTL)
+
+			return &arcana.Identity{
+				SeanceID:    seanceID,
+				UserID:      sess.UserID.String(),
+				WorkspaceID: sess.OrganizationID.String(),
+				Role:        sess.Role,
+			}, nil
+		},
+	})
+	graphs.RegisterAll(arcanaEngine)
+	if err := arcanaEngine.Start(ctx); err != nil {
+		log.Fatal().Err(err).Msg("failed to start arcana engine")
+	}
+	defer arcanaEngine.Stop()
+	log.Info().Msg("arcana engine started")
+
+	// Event bus → Arcana invalidation (parallel to existing view invalidation)
+	eventBus.SubscribeAll(event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
+		data := graphs.EventDataFromJSON(ev.Data)
+		if ev.EntityID != nil {
+			if data == nil {
+				data = make(map[string]any)
+			}
+			data["entity_id"] = ev.EntityID.String()
+		}
+		changes := graphs.EventToChanges(ev.Type, data)
+		for _, ch := range changes {
+			arcanaEngine.Notify(ctx, ch)
+		}
+		return nil
+	}))
+
 	// Centrifugo connect/subscribe proxy handlers
 	connectHandler := centrifugo.NewConnectHandler(sessionStore, cfg.Session.SeanceTTL)
 	subscribeHandler := centrifugo.NewSubscribeHandler(sessionStore, cfg.Session.SeanceTTL)
@@ -169,6 +231,7 @@ func main() {
 	// Wrap router with internal endpoints for Centrifugo proxy
 	mux := http.NewServeMux()
 	mux.Handle("/", router)
+	mux.Handle("/arcana/", http.StripPrefix("/arcana", arcanaEngine.Handler()))
 	mux.HandleFunc("POST /api/internal/centrifugo/connect", connectHandler.ServeHTTP)
 	mux.HandleFunc("POST /api/internal/centrifugo/subscribe", subscribeHandler.ServeHTTP)
 
@@ -352,6 +415,14 @@ func (a *warehouseAdapter) CheckAvailability(ctx context.Context, orgID uuid.UUI
 		}
 	}
 	return a.svc.CheckAvailability(ctx, orgID, wItems)
+}
+
+func cookieValue(r *http.Request, name string) string {
+	c, err := r.Cookie(name)
+	if err != nil {
+		return ""
+	}
+	return c.Value
 }
 
 func setupLogger(level, env string) {

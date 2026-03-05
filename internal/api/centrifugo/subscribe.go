@@ -53,10 +53,17 @@ func (h *SubscribeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate channel format: "org:{uuid}" or "views:{seance_id}"
+	// Validate channel format: "org:{uuid}", "workspace:{uuid}", or "views:{seance_id}"
 	switch {
 	case strings.HasPrefix(req.Channel, "org:"):
 		orgID := strings.TrimPrefix(req.Channel, "org:")
+		if err := h.authorizeOrganization(r, orgID); err != nil {
+			writeSubscribeError(w, err)
+			return
+		}
+
+	case strings.HasPrefix(req.Channel, "workspace:"):
+		orgID := strings.TrimPrefix(req.Channel, "workspace:")
 		if err := h.authorizeOrganization(r, orgID); err != nil {
 			writeSubscribeError(w, err)
 			return

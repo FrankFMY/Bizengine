@@ -77,6 +77,7 @@ func (h *ConnectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			User: sess.UserID.String(),
 			Channels: []string{
 				"org:" + sess.OrganizationID.String(),
+				"workspace:" + sess.OrganizationID.String(),
 				"views:" + seanceID,
 			},
 			Data: data,
