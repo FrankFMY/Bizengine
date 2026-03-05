@@ -11,7 +11,7 @@ BizEngine provides a unified backend for managing business operations through an
 - **Universal entity model** — any business object is an Entity with flexible Components, no schema migrations needed for new object types
 - **Event sourcing** — full audit trail, reactive views via Centrifugo, replay to any point in time
 - **Process engine** — YAML-defined state machines for order fulfillment, stock replenishment, delivery tracking, employee onboarding
-- **Arcana integration** — reactive data sync engine with 21 graph definitions, JSON Patch diffs, and Centrifugo delivery
+- **Arcana integration** — reactive data sync engine with 32 graph definitions, JSON Patch diffs, pagination support, and Centrifugo delivery
 - **Multi-tenancy** — organization-based isolation, every query scoped by `organization_id`
 - **Double-entry accounting** — financial module with proper debit/credit bookkeeping (int64 kopeks, no floats)
 - **3D space validation** — AABB collision detection and parent containment checks for spatial layouts
@@ -24,12 +24,16 @@ BizEngine provides a unified backend for managing business operations through an
 
 | Module | Description |
 |--------|-------------|
-| **Catalog** | Products, categories, pricing, SKU/barcode, attributes |
-| **Warehouse** | Stock levels, movements (receive/ship/transfer/adjust), low-stock alerts |
-| **Orders** | Order lifecycle, auto-numbering, status transitions, payment tracking |
-| **HR** | Employees, departments, shifts, timesheets, clock-in/clock-out |
-| **Finance** | Chart of accounts, double-entry transactions, trial balance reports |
+| **Catalog** | Products, categories, pricing rules, SKU/barcode, units of measurement |
+| **Warehouse** | Stock levels, movements (receive/ship/transfer/adjust), inventory stocktaking, low-stock alerts |
+| **Orders** | Order lifecycle, auto-numbering, refunds with stock return and finance reversal, payment tracking |
+| **HR** | Employees, shifts, timesheets, payroll calculation (NDFL 13%), absence management (vacation/sick leave) |
+| **Finance** | Chart of accounts (РСБУ), double-entry transactions, P&L reports, period management, cash operations |
 | **Logistics** | Routes, stops, GPS tracking, driver assignment, geo-history |
+| **CRM** | Customers and suppliers management, tags, categories, order/transaction history |
+| **Settings** | Organization settings (currency, timezone, requisites, integrations, features) |
+| **Documents** | HTML print forms — invoice, TORG-12, act, receipt, price tags |
+| **Import** | Mass data import from CSV/XLSX (products, customers, suppliers) with Windows-1251 support |
 | **Files** | Presigned S3/MinIO upload and download URLs, entity attachment |
 | **Webhooks** | External endpoint subscriptions, HMAC signing, event-driven dispatch |
 | **Notifications** | Per-user inbox, event-driven creation, read/unread tracking |
@@ -79,7 +83,7 @@ Dependency direction: API -> Module -> Core -> Storage. Never reversed.
 | File Storage | MinIO (S3-compatible) | Presigned URLs for direct browser uploads |
 | HTTP Router | chi/v5 | Lightweight, net/http compatible |
 | Auth | Cookie sessions + argon2id | HttpOnly cookies + Redis session store |
-| Reactive Sync | [Arcana](https://github.com/FrankFMY/arcana) | Graph-based subscriptions, JSON Patch diffs |
+| Reactive Sync | [Arcana v0.1.3](https://github.com/FrankFMY/arcana) | Graph-based subscriptions, JSON Patch diffs, pagination |
 | SQL Driver | pgx/v5 | Native PostgreSQL, no ORM |
 | Logging | zerolog | Structured JSON logs |
 | Config | go-envconfig | Env-based configuration |
@@ -100,20 +104,24 @@ bizengine/
 |   |   +-- process/             # State machine engine
 |   |   +-- auth/                # Sessions, RBAC, middleware
 |   +-- module/                  # Business logic
-|   |   +-- catalog/             # Product catalog
-|   |   +-- warehouse/           # Inventory management
-|   |   +-- order/               # Order processing
-|   |   +-- hr/                  # Human resources
-|   |   +-- finance/             # Double-entry accounting
+|   |   +-- catalog/             # Product catalog, pricing rules
+|   |   +-- warehouse/           # Inventory management, stocktaking
+|   |   +-- order/               # Order processing, refunds
+|   |   +-- hr/                  # Employees, payroll, absences
+|   |   +-- finance/             # Double-entry accounting, P&L, periods, cash
 |   |   +-- logistics/           # Routes and tracking
+|   |   +-- crm/                 # Customer and supplier management
+|   |   +-- settings/            # Organization settings
 |   |   +-- file/                # File upload/download (S3/MinIO)
 |   |   +-- space/               # 3D AABB spatial validation
 |   +-- api/
 |   |   +-- rest/                # Chi router, all HTTP handlers
 |   |   +-- centrifugo/          # Connect/subscribe proxy, publisher
-|   +-- graphs/                  # Arcana graph definitions (21 graphs)
+|   +-- graphs/                  # Arcana graph definitions (32 graphs)
 |   +-- notification/            # Notification inbox service
 |   +-- webhook/                 # Webhook dispatch service
+|   +-- dataimport/              # Mass CSV/XLSX data import
+|   +-- documents/               # HTML print form generation
 |   +-- storage/
 |   |   +-- postgres/            # All repository implementations
 |   |   +-- redis/               # Session store
@@ -126,7 +134,7 @@ bizengine/
 |   +-- errs/                    # Typed errors (NotFound, Conflict, BadRequest)
 |   +-- money/                   # Financial arithmetic (int64 kopeks)
 |   +-- dsl/                     # YAML process definition parser + validator
-+-- migrations/                  # 14 numbered up/down SQL migrations
++-- migrations/                  # 19 numbered up/down SQL migrations
 +-- processes/                   # 4 YAML business process definitions
 +-- deploy/                      # Dockerfile, docker-compose, centrifugo.json
 +-- docs/                        # Technical documentation
@@ -208,6 +216,46 @@ POST   /api/v1/organizations/{orgID}/orders/{id}/pay
 POST   /api/v1/organizations/{orgID}/orders/{id}/ship
 POST   /api/v1/organizations/{orgID}/orders/{id}/deliver
 POST   /api/v1/organizations/{orgID}/orders/{id}/cancel
+POST   /api/v1/organizations/{orgID}/orders/{id}/refund
+GET    /api/v1/organizations/{orgID}/orders/refunds
+GET    /api/v1/organizations/{orgID}/orders/refunds/{id}
+```
+
+### CRM
+```
+POST   /api/v1/organizations/{orgID}/crm/customers
+GET    /api/v1/organizations/{orgID}/crm/customers
+GET    /api/v1/organizations/{orgID}/crm/customers/{id}
+PUT    /api/v1/organizations/{orgID}/crm/customers/{id}
+PUT    /api/v1/organizations/{orgID}/crm/customers/{id}/tags
+POST   /api/v1/organizations/{orgID}/crm/suppliers
+GET    /api/v1/organizations/{orgID}/crm/suppliers
+GET    /api/v1/organizations/{orgID}/crm/suppliers/{id}
+PUT    /api/v1/organizations/{orgID}/crm/suppliers/{id}
+```
+
+### Settings
+```
+GET    /api/v1/organizations/{orgID}/settings
+PUT    /api/v1/organizations/{orgID}/settings
+PUT    /api/v1/organizations/{orgID}/settings/integrations
+PUT    /api/v1/organizations/{orgID}/settings/logo
+```
+
+### Documents (print forms)
+```
+GET    /api/v1/organizations/{orgID}/documents/invoice/{orderID}
+GET    /api/v1/organizations/{orgID}/documents/torg12/{orderID}
+GET    /api/v1/organizations/{orgID}/documents/act/{orderID}
+GET    /api/v1/organizations/{orgID}/documents/receipt/{orderID}
+GET    /api/v1/organizations/{orgID}/documents/price-tags?product_ids=...
+```
+
+### Import (mass data)
+```
+POST   /api/v1/organizations/{orgID}/import/products      # CSV/XLSX multipart upload
+POST   /api/v1/organizations/{orgID}/import/customers
+POST   /api/v1/organizations/{orgID}/import/suppliers
 ```
 
 ### HR
@@ -225,6 +273,13 @@ POST   /api/v1/organizations/{orgID}/hr/timesheets/clock-in
 POST   /api/v1/organizations/{orgID}/hr/timesheets/{id}/clock-out
 GET    /api/v1/organizations/{orgID}/hr/timesheets
 POST   /api/v1/organizations/{orgID}/hr/timesheets/{id}/approve
+POST   /api/v1/organizations/{orgID}/hr/payrolls/calculate
+POST   /api/v1/organizations/{orgID}/hr/payrolls/{id}/approve
+GET    /api/v1/organizations/{orgID}/hr/payrolls
+POST   /api/v1/organizations/{orgID}/hr/absences
+POST   /api/v1/organizations/{orgID}/hr/absences/{id}/approve
+POST   /api/v1/organizations/{orgID}/hr/absences/{id}/reject
+GET    /api/v1/organizations/{orgID}/hr/absences
 ```
 
 ### Finance
@@ -240,6 +295,11 @@ POST   /api/v1/organizations/{orgID}/finance/invoices
 GET    /api/v1/organizations/{orgID}/finance/invoices
 POST   /api/v1/organizations/{orgID}/finance/invoices/{id}/pay
 GET    /api/v1/organizations/{orgID}/finance/reports/trial-balance
+GET    /api/v1/organizations/{orgID}/finance/reports/pnl?from=...&to=...
+POST   /api/v1/organizations/{orgID}/finance/periods/{year}/{month}/close
+GET    /api/v1/organizations/{orgID}/finance/periods
+POST   /api/v1/organizations/{orgID}/finance/cash-operations
+GET    /api/v1/organizations/{orgID}/finance/cash-operations
 ```
 
 ### Logistics
@@ -339,14 +399,23 @@ All mutations produce events that flow through the event bus. Subscribers react 
 |-------|-------------|
 | `catalog.product.created/updated/archived` | Product lifecycle |
 | `order.created/submitted/confirmed/paid/shipped/delivered/cancelled` | Order lifecycle |
+| `order.refunded` | Order refund with stock return and finance reversal |
 | `warehouse.stock.received/shipped/transferred/adjusted/low` | Inventory changes |
+| `warehouse.inventory.started/counted/completed` | Inventory stocktaking |
 | `hr.employee.hired/terminated` | Employee lifecycle |
 | `hr.shift.created/started/completed` | Shift management |
 | `hr.timesheet.approved` | Timesheet approval |
+| `hr.payroll.calculated/approved` | Payroll calculation and approval |
+| `hr.absence.requested/approved/rejected` | Absence management (vacation, sick leave) |
 | `finance.transaction.created/posted` | Financial transactions |
+| `finance.period.opened/closed` | Accounting period management |
+| `finance.cash.created` | Cash operations (deposits, withdrawals) |
 | `logistics.route.created/started/completed` | Route lifecycle |
 | `logistics.stop.arrived/completed` | Stop tracking |
 | `logistics.geo.updated` | GPS position updates |
+| `crm.customer.created/updated` | Customer management |
+| `crm.supplier.created/updated` | Supplier management |
+| `settings.updated` | Organization settings changes |
 | `notification.created` | Notification inbox |
 
 The event bus supports exact matching (`order.paid`) and wildcard subscriptions (`warehouse.stock.*`). Event subscribers run in detached goroutines to avoid blocking the request.
@@ -539,13 +608,13 @@ Request processing order:
 
 ## Codebase stats
 
-- **~28,000 lines** of Go code
-- **300+ unit tests** across 30+ test suites
-- **14 database migrations** (28 files with up/down)
+- **~35,000 lines** of Go code
+- **240+ unit tests** across 26 test suites
+- **19 database migrations** (38 files with up/down)
 - **4 YAML process definitions** + custom definitions via API
-- **20 Arcana graph definitions** for reactive data sync
-- **95+ REST API endpoints** + 6 Arcana endpoints
-- **25+ event types** with async subscriber fan-out
+- **32 Arcana graph definitions** for reactive data sync
+- **180+ REST API endpoints** + 6 Arcana endpoints
+- **40+ event types** with async subscriber fan-out
 
 ## Author
 
