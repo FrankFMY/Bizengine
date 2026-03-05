@@ -3,7 +3,7 @@ module github.com/bizengine/engine
 go 1.24.0
 
 require (
-	github.com/FrankFMY/arcana v0.1.0
+	github.com/FrankFMY/arcana v0.1.1
 	github.com/alicebob/miniredis/v2 v2.37.0
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/google/uuid v1.6.0
@@ -81,5 +81,3 @@ require (
 	google.golang.org/grpc v1.79.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
-
-replace github.com/FrankFMY/arcana => ../arcana
