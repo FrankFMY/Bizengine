@@ -530,3 +530,95 @@ func TestAutoTransaction(t *testing.T) {
 	err := svc.CreateAutoTransaction(ctx, orgID, "2025-01-15", "Order payment", "51", "62", 50000, nil, nil)
 	require.NoError(t, err)
 }
+
+func TestClosePeriod(t *testing.T) {
+	orgID := uuid.New()
+	actorID := uuid.New()
+	ctx := context.Background()
+
+	svc, _, _ := setupFinanceService()
+
+	period, err := svc.ClosePeriod(ctx, orgID, 2025, 1, &actorID)
+	require.NoError(t, err)
+	assert.Equal(t, "closed", period.Status)
+	assert.Equal(t, 2025, period.Year)
+	assert.Equal(t, 1, period.Month)
+	assert.NotNil(t, period.ClosedAt)
+}
+
+func TestClosePeriodAlreadyClosed(t *testing.T) {
+	orgID := uuid.New()
+	actorID := uuid.New()
+	ctx := context.Background()
+
+	svc, _, _ := setupFinanceService()
+
+	_, err := svc.ClosePeriod(ctx, orgID, 2025, 6, &actorID)
+	require.NoError(t, err)
+
+	_, err = svc.ClosePeriod(ctx, orgID, 2025, 6, &actorID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "already closed")
+}
+
+func TestListPeriods(t *testing.T) {
+	orgID := uuid.New()
+	actorID := uuid.New()
+	ctx := context.Background()
+
+	svc, _, _ := setupFinanceService()
+
+	svc.ClosePeriod(ctx, orgID, 2025, 1, &actorID)
+	svc.ClosePeriod(ctx, orgID, 2025, 2, &actorID)
+
+	periods, err := svc.ListPeriods(ctx, orgID)
+	require.NoError(t, err)
+	assert.Len(t, periods, 2)
+}
+
+func TestCreateCashOperation(t *testing.T) {
+	orgID := uuid.New()
+	actorID := uuid.New()
+	ctx := context.Background()
+
+	svc, _, _ := setupFinanceService()
+	svc.SeedDefaultAccounts(ctx, orgID)
+
+	op, err := svc.CreateCashOperation(ctx, orgID, CreateCashOperationInput{
+		Type:        "deposit",
+		Amount:      100000,
+		Description: "Cash sale",
+		AccountCode: "50",
+	}, &actorID)
+	require.NoError(t, err)
+	assert.Equal(t, "deposit", op.Type)
+	assert.Equal(t, int64(100000), op.Amount)
+}
+
+func TestCashOperationInvalidType(t *testing.T) {
+	orgID := uuid.New()
+	actorID := uuid.New()
+	ctx := context.Background()
+
+	svc, _, _ := setupFinanceService()
+
+	_, err := svc.CreateCashOperation(ctx, orgID, CreateCashOperationInput{
+		Type:   "invalid",
+		Amount: 1000,
+	}, &actorID)
+	assert.Error(t, err)
+}
+
+func TestGetProfitAndLoss(t *testing.T) {
+	orgID := uuid.New()
+	ctx := context.Background()
+
+	svc, _, _ := setupFinanceService()
+
+	from := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	to := time.Date(2025, 1, 31, 23, 59, 59, 0, time.UTC)
+
+	report, err := svc.GetProfitAndLoss(ctx, orgID, from, to)
+	require.NoError(t, err)
+	assert.NotNil(t, report)
+}

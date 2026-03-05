@@ -555,3 +555,149 @@ func TestEmploymentHasAutoFields(t *testing.T) {
 	_, hasHireDate := emp.Employment["hire_date"]
 	assert.True(t, hasHireDate, "should auto-fill hire_date")
 }
+
+func TestCalculatePayroll(t *testing.T) {
+	orgID := uuid.New()
+	actorID := uuid.New()
+	ctx := context.Background()
+
+	svc, _, _ := setupHRService()
+
+	emp, err := svc.HireEmployee(ctx, orgID, HireInput{
+		Name:     "Payroll Worker",
+		Position: "Developer",
+		Salary:   map[string]any{"base_salary": float64(100000)},
+	}, &actorID)
+	require.NoError(t, err)
+
+	payroll, err := svc.CalculatePayroll(ctx, orgID, CreatePayrollInput{
+		EmployeeID: emp.ID,
+		Year:       2025,
+		Month:      3,
+		Deductions: 5000,
+	}, &actorID)
+	require.NoError(t, err)
+	assert.Equal(t, "draft", payroll.Status)
+	assert.Equal(t, int64(100000), payroll.GrossSalary)
+	assert.Equal(t, int64(13000), payroll.NDFL)
+	assert.Equal(t, int64(5000), payroll.Deductions)
+	assert.Equal(t, int64(82000), payroll.NetSalary)
+}
+
+func TestPayrollInvalidMonth(t *testing.T) {
+	orgID := uuid.New()
+	actorID := uuid.New()
+	ctx := context.Background()
+
+	svc, _, _ := setupHRService()
+
+	_, err := svc.CalculatePayroll(ctx, orgID, CreatePayrollInput{
+		EmployeeID: uuid.New(),
+		Year:       2025,
+		Month:      13,
+	}, &actorID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "month must be between 1 and 12")
+}
+
+func TestApprovePayroll(t *testing.T) {
+	orgID := uuid.New()
+	actorID := uuid.New()
+	ctx := context.Background()
+
+	svc, _, _ := setupHRService()
+
+	emp, err := svc.HireEmployee(ctx, orgID, HireInput{
+		Name:     "Worker",
+		Position: "QA",
+		Salary:   map[string]any{"base_salary": float64(80000)},
+	}, &actorID)
+	require.NoError(t, err)
+
+	payroll, err := svc.CalculatePayroll(ctx, orgID, CreatePayrollInput{
+		EmployeeID: emp.ID,
+		Year:       2025,
+		Month:      6,
+	}, &actorID)
+	require.NoError(t, err)
+
+	approved, err := svc.ApprovePayroll(ctx, orgID, payroll.ID, &actorID)
+	require.NoError(t, err)
+	assert.Equal(t, "approved", approved.Status)
+	assert.NotNil(t, approved.ApprovedAt)
+}
+
+func TestRequestAbsence(t *testing.T) {
+	orgID := uuid.New()
+	actorID := uuid.New()
+	ctx := context.Background()
+
+	svc, _, _ := setupHRService()
+
+	emp, err := svc.HireEmployee(ctx, orgID, HireInput{
+		Name: "Vacationer", Position: "PM",
+	}, &actorID)
+	require.NoError(t, err)
+
+	absence, err := svc.RequestAbsence(ctx, orgID, CreateAbsenceInput{
+		EmployeeID: emp.ID,
+		Type:       "vacation",
+		StartDate:  "2025-07-01",
+		EndDate:    "2025-07-14",
+		Notes:      "summer vacation",
+	}, &actorID)
+	require.NoError(t, err)
+	assert.Equal(t, "pending", absence.Status)
+	assert.Equal(t, "vacation", absence.Type)
+	assert.Equal(t, 14, absence.Days)
+}
+
+func TestApproveAbsence(t *testing.T) {
+	orgID := uuid.New()
+	actorID := uuid.New()
+	ctx := context.Background()
+
+	svc, _, _ := setupHRService()
+
+	emp, err := svc.HireEmployee(ctx, orgID, HireInput{
+		Name: "Sick Leave", Position: "Engineer",
+	}, &actorID)
+	require.NoError(t, err)
+
+	absence, err := svc.RequestAbsence(ctx, orgID, CreateAbsenceInput{
+		EmployeeID: emp.ID,
+		Type:       "sick_leave",
+		StartDate:  "2025-03-01",
+		EndDate:    "2025-03-05",
+	}, &actorID)
+	require.NoError(t, err)
+
+	approved, err := svc.ApproveAbsence(ctx, orgID, absence.ID, &actorID)
+	require.NoError(t, err)
+	assert.Equal(t, "approved", approved.Status)
+}
+
+func TestRejectAbsence(t *testing.T) {
+	orgID := uuid.New()
+	actorID := uuid.New()
+	ctx := context.Background()
+
+	svc, _, _ := setupHRService()
+
+	emp, err := svc.HireEmployee(ctx, orgID, HireInput{
+		Name: "Rejected", Position: "Intern",
+	}, &actorID)
+	require.NoError(t, err)
+
+	absence, err := svc.RequestAbsence(ctx, orgID, CreateAbsenceInput{
+		EmployeeID: emp.ID,
+		Type:       "personal",
+		StartDate:  "2025-04-01",
+		EndDate:    "2025-04-03",
+	}, &actorID)
+	require.NoError(t, err)
+
+	rejected, err := svc.RejectAbsence(ctx, orgID, absence.ID, &actorID)
+	require.NoError(t, err)
+	assert.Equal(t, "rejected", rejected.Status)
+}

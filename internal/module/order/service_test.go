@@ -450,6 +450,105 @@ func TestCannotUpdateConfirmedOrder(t *testing.T) {
 	assert.Contains(t, err.Error(), "draft or new")
 }
 
+func TestRefundPaidOrder(t *testing.T) {
+	orgID := uuid.New()
+	actorID := uuid.New()
+	ctx := context.Background()
+
+	svc, repo, bus := setupOrderService(nil)
+
+	o, err := svc.Create(ctx, orgID, CreateOrderInput{
+		Items: []CreateItemInput{
+			{ProductID: uuid.New(), Quantity: 3, UnitPrice: 10000},
+			{ProductID: uuid.New(), Quantity: 1, UnitPrice: 5000},
+		},
+	}, &actorID)
+	require.NoError(t, err)
+
+	// Move to paid
+	o.Status = "paid"
+	repo.orders[o.ID] = o
+
+	items := repo.items[o.ID]
+	require.Len(t, items, 2)
+
+	refund, err := svc.Refund(ctx, orgID, o.ID, CreateRefundInput{
+		Items: []RefundItemInput{
+			{OrderItemID: items[0].ID, Quantity: 2, Reason: "defective"},
+		},
+		RefundMethod: "cash",
+	}, &actorID)
+	require.NoError(t, err)
+	assert.Equal(t, "pending", refund.Status)
+	assert.Equal(t, int64(20000), refund.Total)
+	assert.Len(t, refund.Items, 1)
+	assert.Equal(t, "defective", refund.Reason)
+
+	// Verify event published
+	var found bool
+	for _, ev := range bus.published {
+		if ev.Type == "order.refunded" {
+			found = true
+		}
+	}
+	assert.True(t, found, "order.refunded event should be published")
+}
+
+func TestRefundDraftOrderFails(t *testing.T) {
+	orgID := uuid.New()
+	actorID := uuid.New()
+	ctx := context.Background()
+
+	svc, _, _ := setupOrderService(nil)
+
+	o, err := svc.Create(ctx, orgID, CreateOrderInput{
+		Items: []CreateItemInput{
+			{ProductID: uuid.New(), Quantity: 1, UnitPrice: 10000},
+		},
+	}, &actorID)
+	require.NoError(t, err)
+	assert.Equal(t, "draft", o.Status)
+
+	_, err = svc.Refund(ctx, orgID, o.ID, CreateRefundInput{
+		Items: []RefundItemInput{
+			{OrderItemID: uuid.New(), Quantity: 1, Reason: "test"},
+		},
+	}, &actorID)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "paid, shipped, or delivered")
+}
+
+func TestListRefunds(t *testing.T) {
+	orgID := uuid.New()
+	actorID := uuid.New()
+	ctx := context.Background()
+
+	svc, repo, _ := setupOrderService(nil)
+
+	o, err := svc.Create(ctx, orgID, CreateOrderInput{
+		Items: []CreateItemInput{
+			{ProductID: uuid.New(), Quantity: 5, UnitPrice: 1000},
+		},
+	}, &actorID)
+	require.NoError(t, err)
+
+	o.Status = "paid"
+	repo.orders[o.ID] = o
+
+	items := repo.items[o.ID]
+	_, err = svc.Refund(ctx, orgID, o.ID, CreateRefundInput{
+		Items: []RefundItemInput{
+			{OrderItemID: items[0].ID, Quantity: 1, Reason: "test"},
+		},
+	}, &actorID)
+	require.NoError(t, err)
+
+	result, err := svc.ListRefunds(ctx, orgID, &o.ID, types.PageRequest{Limit: 50})
+	require.NoError(t, err)
+	assert.Equal(t, 1, result.Total)
+	assert.Len(t, result.Items, 1)
+}
+
 func TestOrderItemTotalCalculation(t *testing.T) {
 	orgID := uuid.New()
 	actorID := uuid.New()

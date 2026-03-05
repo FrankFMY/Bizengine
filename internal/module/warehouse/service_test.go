@@ -436,6 +436,55 @@ func TestReserveUnreserve(t *testing.T) {
 	})
 }
 
+func TestStartInventory(t *testing.T) {
+	orgID := uuid.New()
+	actorID := uuid.New()
+	warehouseID := uuid.New()
+	productA := uuid.New()
+	ctx := context.Background()
+
+	svc, repo, _ := setupSvc()
+	repo.stockLevels[stockKey(productA, warehouseID)] = &StockLevel{
+		OrganizationID: orgID, ProductID: productA, WarehouseID: warehouseID,
+		Quantity: 100, Unit: "шт", UpdatedAt: time.Now(),
+	}
+
+	inv, err := svc.StartInventory(ctx, orgID, StartInventoryInput{
+		WarehouseID: warehouseID,
+		Notes:       "monthly check",
+	}, &actorID)
+	require.NoError(t, err)
+	assert.Equal(t, "in_progress", inv.Status)
+	assert.Len(t, inv.Items, 1)
+	assert.Equal(t, float64(100), inv.Items[0].Expected)
+}
+
+func TestCountItemAndCompleteInventory(t *testing.T) {
+	orgID := uuid.New()
+	actorID := uuid.New()
+	warehouseID := uuid.New()
+	productA := uuid.New()
+	ctx := context.Background()
+
+	svc, repo, _ := setupSvc()
+	repo.stockLevels[stockKey(productA, warehouseID)] = &StockLevel{
+		OrganizationID: orgID, ProductID: productA, WarehouseID: warehouseID,
+		Quantity: 100, Unit: "шт", UpdatedAt: time.Now(),
+	}
+
+	inv, err := svc.StartInventory(ctx, orgID, StartInventoryInput{
+		WarehouseID: warehouseID,
+	}, &actorID)
+	require.NoError(t, err)
+
+	// Count: actual = 95 (shortage of 5)
+	item, err := svc.CountItem(ctx, orgID, inv.ID, productA, 95, &actorID)
+	require.NoError(t, err)
+	assert.NotNil(t, item.Actual)
+	assert.Equal(t, float64(95), *item.Actual)
+	assert.Equal(t, float64(-5), item.Discrepancy)
+}
+
 func TestCheckAvailability(t *testing.T) {
 	orgID := uuid.New()
 	productA := uuid.New()
