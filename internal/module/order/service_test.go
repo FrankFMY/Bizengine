@@ -209,7 +209,7 @@ func TestCreateOrder(t *testing.T) {
 		}, &actorID)
 
 		require.NoError(t, err)
-		assert.Equal(t, "new", o.Status)
+		assert.Equal(t, "draft", o.Status)
 		assert.Equal(t, "ORD-00001", o.Number)
 		assert.Equal(t, int64(25000), o.Total) // 2*10000 + 1*5000
 		assert.Len(t, o.Items, 2)
@@ -260,6 +260,12 @@ func TestOrderLifecycle(t *testing.T) {
 		},
 	}, &actorID)
 	require.NoError(t, err)
+	assert.Equal(t, "draft", o.Status)
+
+	// Submit
+	o, err = svc.Submit(ctx, orgID, o.ID, &actorID)
+	require.NoError(t, err)
+	assert.Equal(t, "new", o.Status)
 
 	// Confirm
 	o, err = svc.Confirm(ctx, orgID, o.ID, &actorID)
@@ -290,6 +296,7 @@ func TestOrderLifecycle(t *testing.T) {
 		eventTypes[ev.Type] = true
 	}
 	assert.True(t, eventTypes["order.created"])
+	assert.True(t, eventTypes["order.submitted"])
 	assert.True(t, eventTypes["order.confirmed"])
 	assert.True(t, eventTypes["order.paid"])
 	assert.True(t, eventTypes["order.shipped"])
@@ -320,13 +327,14 @@ func TestCancelOrder(t *testing.T) {
 		o, _ := svc.Create(ctx, orgID, CreateOrderInput{
 			Items: []CreateItemInput{{ProductID: uuid.New(), Quantity: 1, UnitPrice: 1000}},
 		}, &actorID)
+		svc.Submit(ctx, orgID, o.ID, &actorID)
 		svc.Confirm(ctx, orgID, o.ID, &actorID)
 		svc.Pay(ctx, orgID, o.ID, PayInput{Amount: 1000, Method: "cash"}, &actorID)
 		svc.Ship(ctx, orgID, o.ID, ShipInput{}, &actorID)
 
 		_, err := svc.Cancel(ctx, orgID, o.ID, "test", &actorID)
 		require.Error(t, err)
-		assert.Contains(t, err.Error(), "can only be cancelled from new, confirmed, or paid")
+		assert.Contains(t, err.Error(), "can only be cancelled from draft, new, confirmed, or paid")
 	})
 }
 
@@ -343,6 +351,7 @@ func TestConfirmCheckAvailability(t *testing.T) {
 			WarehouseID: &warehouseID,
 			Items:       []CreateItemInput{{ProductID: uuid.New(), Quantity: 100, UnitPrice: 1000}},
 		}, &actorID)
+		svc.Submit(ctx, orgID, o.ID, &actorID)
 
 		_, err := svc.Confirm(ctx, orgID, o.ID, &actorID)
 		require.Error(t, err)
@@ -384,6 +393,7 @@ func TestCannotUpdateConfirmedOrder(t *testing.T) {
 	o, _ := svc.Create(ctx, orgID, CreateOrderInput{
 		Items: []CreateItemInput{{ProductID: uuid.New(), Quantity: 1, UnitPrice: 1000}},
 	}, &actorID)
+	svc.Submit(ctx, orgID, o.ID, &actorID)
 	svc.Confirm(ctx, orgID, o.ID, &actorID)
 
 	_, err := svc.Update(ctx, orgID, o.ID, UpdateOrderInput{

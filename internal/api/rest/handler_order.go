@@ -5,6 +5,7 @@ import (
 
 	"github.com/bizengine/engine/internal/core/auth"
 	"github.com/bizengine/engine/internal/module/order"
+	"github.com/bizengine/engine/pkg/errs"
 )
 
 // OrderHandler handles order endpoints.
@@ -29,6 +30,15 @@ func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var input order.CreateOrderInput
 	if err := decodeJSON(r, &input); err != nil {
 		respondError(w, err)
+		return
+	}
+
+	v := errs.ValidationErrors{}
+	if len(input.Items) == 0 {
+		v.Set("items", "REQUIRED")
+	}
+	if v.HasErrors() {
+		respondValidation(w, v)
 		return
 	}
 
@@ -219,6 +229,29 @@ func (h *OrderHandler) Deliver(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondOK(w, http.StatusOK,o)
+}
+
+// Submit handles POST /api/v1/organizations/{orgID}/orders/{id}/submit.
+func (h *OrderHandler) Submit(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	id, err := parseUUID(r, "id")
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+	userID, _ := auth.UserIDFromCtx(r.Context())
+
+	o, err := h.orderSvc.Submit(r.Context(), orgID, id, &userID)
+	if err != nil {
+		respondError(w, err)
+		return
+	}
+
+	respondOK(w, http.StatusOK, o)
 }
 
 // Cancel handles POST /api/v1/organizations/{orgID}/orders/{id}/cancel.

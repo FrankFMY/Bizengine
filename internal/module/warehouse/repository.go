@@ -44,6 +44,7 @@ type StockLevel struct {
 	Reserved    float64   `json:"reserved"`
 	Available   float64   `json:"available"`
 	Unit        string    `json:"unit"`
+	CostPerUnit *int64    `json:"cost_per_unit,omitempty"`
 	MinQuantity float64   `json:"min_quantity"`
 	MaxQuantity *float64  `json:"max_quantity,omitempty"`
 	UpdatedAt   time.Time `json:"updated_at"`

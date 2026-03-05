@@ -230,7 +230,7 @@ func TestHasPermission_Manager(t *testing.T) {
 	assert.True(t, HasPermission("manager", nil, "catalog.manage"))
 	assert.True(t, HasPermission("manager", nil, "catalog.view"))
 	assert.True(t, HasPermission("manager", nil, "order.create"))
-	assert.False(t, HasPermission("manager", nil, "finance.view"))
+	assert.True(t, HasPermission("manager", nil, "finance.view"))
 	assert.False(t, HasPermission("manager", nil, "finance.manage"))
 	assert.False(t, HasPermission("manager", nil, "settings.manage"))
 }

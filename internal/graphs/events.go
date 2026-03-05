@@ -157,6 +157,11 @@ func EventToChanges(eventType string, data map[string]any) []arcana.Change {
 			}
 		}
 
+	case "notification":
+		return []arcana.Change{
+			{Table: "notifications", Columns: []string{"read", "iat"}},
+		}
+
 	default:
 		return nil
 	}

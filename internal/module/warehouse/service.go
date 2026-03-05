@@ -3,6 +3,7 @@ package warehouse
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -104,6 +105,22 @@ func (s *Service) Receive(ctx context.Context, orgID uuid.UUID, input ReceiveInp
 			return err
 		}
 
+		// Recalculate weighted average cost
+		if input.CostPerUnit != nil {
+			oldCost := int64(0)
+			if sl.CostPerUnit != nil {
+				oldCost = *sl.CostPerUnit
+			}
+			if sl.Quantity == 0 {
+				sl.CostPerUnit = input.CostPerUnit
+			} else {
+				totalCost := int64(math.Round(float64(oldCost)*sl.Quantity + float64(*input.CostPerUnit)*input.Quantity))
+				newQty := sl.Quantity + input.Quantity
+				avg := int64(math.Round(float64(totalCost) / newQty))
+				sl.CostPerUnit = &avg
+			}
+		}
+
 		sl.Quantity += input.Quantity
 		sl.UpdatedAt = time.Now()
 		if err := s.repo.UpsertStockLevel(ctx, tx, sl); err != nil {
@@ -136,12 +153,16 @@ func (s *Service) Receive(ctx context.Context, orgID uuid.UUID, input ReceiveInp
 		return nil, err
 	}
 
-	s.publishEvent(ctx, orgID, input.ProductID, "warehouse.stock.received", input.ActorID, map[string]any{
+	evData := map[string]any{
 		"product_id":   input.ProductID,
 		"warehouse_id": input.WarehouseID,
 		"quantity":     input.Quantity,
 		"new_quantity": result.NewQuantity,
-	})
+	}
+	if input.CostPerUnit != nil {
+		evData["total_cost"] = float64(*input.CostPerUnit) * input.Quantity
+	}
+	s.publishEvent(ctx, orgID, input.ProductID, "warehouse.stock.received", input.ActorID, evData)
 
 	return &result, nil
 }

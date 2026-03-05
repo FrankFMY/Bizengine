@@ -11,6 +11,7 @@ import (
 
 	"github.com/bizengine/engine/internal/core/event"
 	"github.com/bizengine/engine/pkg/dsl"
+	"github.com/bizengine/engine/pkg/errs"
 	"github.com/bizengine/engine/pkg/types"
 )
 
@@ -266,6 +267,34 @@ func (e *Engine) executeNotify(ctx context.Context, source types.Event, params m
 	}
 	ev.Data, _ = json.Marshal(params)
 	e.eventBus.Publish(ctx, ev)
+}
+
+// SaveDefinition creates or updates a process definition via the visual builder.
+func (e *Engine) SaveDefinition(ctx context.Context, def *DefinitionRecord) error {
+	if validationErrs := dsl.Validate(&def.Definition); len(validationErrs) > 0 {
+		return errs.NewBadRequest(fmt.Sprintf("invalid definition: %s", validationErrs[0].Message))
+	}
+	if err := e.repo.UpsertDefinition(ctx, def); err != nil {
+		return err
+	}
+	if def.IsActive {
+		e.defs[def.Definition.TriggerOn] = &def.Definition
+	}
+	return nil
+}
+
+// DeleteDefinition removes a process definition.
+func (e *Engine) DeleteDefinition(ctx context.Context, id string, orgID uuid.UUID) error {
+	if err := e.repo.DeleteDefinition(ctx, id, orgID); err != nil {
+		return err
+	}
+	for trigger, def := range e.defs {
+		if def.ID == id {
+			delete(e.defs, trigger)
+			break
+		}
+	}
+	return nil
 }
 
 // TriggerManual allows manual triggering of an event for process advancement.

@@ -25,7 +25,8 @@ func NewEventStore(pool *pgxpool.Pool) *EventStore {
 func (s *EventStore) Append(ctx context.Context, ev types.Event) error {
 	_, err := s.pool.Exec(ctx,
 		`INSERT INTO events (id, organization_id, entity_id, type, data, actor_id, timestamp, version)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		 ON CONFLICT (id, "timestamp") DO NOTHING`,
 		ev.ID, ev.OrganizationID, ev.EntityID, ev.Type, ev.Data, ev.ActorID, ev.Timestamp, ev.Version,
 	)
 	return err

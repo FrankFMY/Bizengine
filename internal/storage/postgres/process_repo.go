@@ -91,6 +91,19 @@ func (r *ProcessRepo) ListDefinitions(ctx context.Context, orgID uuid.UUID) ([]p
 	return defs, rows.Err()
 }
 
+// DeleteDefinition removes a process definition by ID and organization.
+func (r *ProcessRepo) DeleteDefinition(ctx context.Context, id string, orgID uuid.UUID) error {
+	tag, err := r.pool.Exec(ctx,
+		`DELETE FROM process_definitions WHERE id = $1 AND organization_id = $2`, id, orgID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return errs.NewNotFound("process definition not found")
+	}
+	return nil
+}
+
 // CreateInstance creates a new process instance.
 func (r *ProcessRepo) CreateInstance(ctx context.Context, inst *process.Instance) error {
 	_, err := r.pool.Exec(ctx,

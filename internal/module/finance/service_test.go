@@ -244,7 +244,7 @@ func TestSeedDefaultAccounts(t *testing.T) {
 	svc, repo, _ := setupFinanceService()
 	err := svc.SeedDefaultAccounts(ctx, orgID)
 	require.NoError(t, err)
-	assert.Len(t, repo.accounts, 10)
+	assert.Len(t, repo.accounts, 11)
 }
 
 func TestCreateTransaction(t *testing.T) {

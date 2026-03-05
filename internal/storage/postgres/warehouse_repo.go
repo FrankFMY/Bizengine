@@ -27,12 +27,12 @@ func NewWarehouseRepo(pool *pgxpool.Pool) *WarehouseRepo {
 func (r *WarehouseRepo) GetStockLevel(ctx context.Context, orgID, productID, warehouseID uuid.UUID) (*warehouse.StockLevel, error) {
 	var sl warehouse.StockLevel
 	err := r.pool.QueryRow(ctx,
-		`SELECT organization_id, product_id, warehouse_id, quantity, reserved, unit, min_quantity, max_quantity, updated_at
+		`SELECT organization_id, product_id, warehouse_id, quantity, reserved, unit, min_quantity, max_quantity, cost_per_unit, updated_at
 		 FROM stock_levels
 		 WHERE organization_id = $1 AND product_id = $2 AND warehouse_id = $3`,
 		orgID, productID, warehouseID,
 	).Scan(&sl.OrganizationID, &sl.ProductID, &sl.WarehouseID, &sl.Quantity, &sl.Reserved,
-		&sl.Unit, &sl.MinQuantity, &sl.MaxQuantity, &sl.UpdatedAt)
+		&sl.Unit, &sl.MinQuantity, &sl.MaxQuantity, &sl.CostPerUnit, &sl.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errs.NewNotFound("stock level not found")
@@ -132,12 +132,12 @@ func (r *WarehouseRepo) GetLowStock(ctx context.Context, orgID uuid.UUID) ([]war
 // UpsertStockLevel creates or updates a stock level.
 func (r *WarehouseRepo) UpsertStockLevel(ctx context.Context, tx pgx.Tx, sl *warehouse.StockLevel) error {
 	_, err := tx.Exec(ctx,
-		`INSERT INTO stock_levels (organization_id, product_id, warehouse_id, quantity, reserved, unit, min_quantity, max_quantity, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		`INSERT INTO stock_levels (organization_id, product_id, warehouse_id, quantity, reserved, unit, min_quantity, max_quantity, cost_per_unit, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		 ON CONFLICT (organization_id, product_id, warehouse_id) DO UPDATE SET
-		   quantity = $4, reserved = $5, unit = $6, min_quantity = $7, max_quantity = $8, updated_at = $9`,
+		   quantity = $4, reserved = $5, unit = $6, min_quantity = $7, max_quantity = $8, cost_per_unit = $9, updated_at = $10`,
 		sl.OrganizationID, sl.ProductID, sl.WarehouseID, sl.Quantity, sl.Reserved,
-		sl.Unit, sl.MinQuantity, sl.MaxQuantity, sl.UpdatedAt,
+		sl.Unit, sl.MinQuantity, sl.MaxQuantity, sl.CostPerUnit, sl.UpdatedAt,
 	)
 	return err
 }

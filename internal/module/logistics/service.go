@@ -160,6 +160,17 @@ func (s *Service) ArriveAtStop(ctx context.Context, orgID, routeID, stopID uuid.
 		return nil, errs.NewConflict("stop has already been visited")
 	}
 
+	// Enforce sequential order: all previous stops must be completed
+	stops, err := s.repo.ListStops(ctx, routeID)
+	if err != nil {
+		return nil, err
+	}
+	for _, prev := range stops {
+		if prev.SortOrder < stop.SortOrder && prev.Status != "completed" {
+			return nil, errs.NewConflict("previous stops must be completed first")
+		}
+	}
+
 	now := time.Now()
 	stop.Status = "arrived"
 	stop.ActualArrival = &now

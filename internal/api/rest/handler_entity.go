@@ -5,9 +5,12 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"github.com/bizengine/engine/internal/core/auth"
 	"github.com/bizengine/engine/internal/core/entity"
+	"github.com/bizengine/engine/internal/module/space"
+	"github.com/bizengine/engine/pkg/errs"
 )
 
 // EntityHandler handles entity CRUD endpoints.
@@ -165,13 +168,86 @@ func (h *EntityHandler) SetComponent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if compType == "bounds" {
+		if err := h.validateBounds(r, orgID, entityID, data); err != nil {
+			var ve errs.ValidationErrors
+			switch err.(type) {
+			case *space.OutOfBoundsError:
+				ve = errs.ValidationErrors{}
+				ve.Set("bounds", "OUTSIDE_PARENT")
+				respondValidation(w, ve)
+				return
+			case *space.CollisionError:
+				ve = errs.ValidationErrors{}
+				ve.Set("bounds", "COLLISION")
+				respondValidation(w, ve)
+				return
+			default:
+				respondError(w, err)
+				return
+			}
+		}
+	}
+
 	c, err := h.entitySvc.SetComponent(r.Context(), orgID, entityID, compType, data, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
-	respondOK(w, http.StatusOK,c)
+	respondOK(w, http.StatusOK, c)
+}
+
+func (h *EntityHandler) validateBounds(r *http.Request, orgID, entityID uuid.UUID, data json.RawMessage) error {
+	var bounds space.AABB
+	if err := json.Unmarshal(data, &bounds); err != nil {
+		return errs.NewBadRequest("invalid bounds data: " + err.Error())
+	}
+	if !bounds.Valid() {
+		return errs.NewBadRequest("invalid bounds: min must be less than max on all axes")
+	}
+
+	e, err := h.entitySvc.Get(r.Context(), orgID, entityID, false)
+	if err != nil {
+		return err
+	}
+
+	newObj := space.Placement{ID: entityID.String(), Box: bounds}
+
+	var parentBounds *space.AABB
+	if e.ParentID != nil {
+		parentComp, err := h.entitySvc.GetComponent(r.Context(), orgID, *e.ParentID, "bounds")
+		if err == nil {
+			var pb space.AABB
+			if json.Unmarshal(parentComp.Data, &pb) == nil && pb.Valid() {
+				parentBounds = &pb
+			}
+		}
+	}
+
+	siblings, err := h.entitySvc.List(r.Context(), orgID, entity.ListFilter{
+		ParentID: e.ParentID,
+	}, false)
+	if err != nil {
+		return err
+	}
+
+	var sibPlacements []space.Placement
+	for _, sib := range siblings.Items {
+		if sib.ID == entityID {
+			continue
+		}
+		sibComp, err := h.entitySvc.GetComponent(r.Context(), orgID, sib.ID, "bounds")
+		if err != nil {
+			continue
+		}
+		var sb space.AABB
+		if json.Unmarshal(sibComp.Data, &sb) == nil && sb.Valid() {
+			sibPlacements = append(sibPlacements, space.Placement{ID: sib.ID.String(), Box: sb})
+		}
+	}
+
+	return space.ValidatePlacement(newObj, parentBounds, sibPlacements)
 }
 
 // GetComponent handles GET /api/v1/organizations/{orgID}/entities/{entityID}/components/{type}.

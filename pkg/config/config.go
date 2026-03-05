@@ -16,6 +16,7 @@ type Config struct {
 	NATS        NATSConfig        `env:", prefix=NATS_"`
 	Session     SessionConfig     `env:", prefix=SESSION_"`
 	Centrifugo  CentrifugoConfig  `env:", prefix=CENTRIFUGO_"`
+	S3          S3Config          `env:", prefix=S3_"`
 	LogLevel    string            `env:"LOG_LEVEL, default=info"`
 	Env         string            `env:"ENV, default=development"`
 }
@@ -66,6 +67,15 @@ type SessionConfig struct {
 type CentrifugoConfig struct {
 	APIURL string `env:"API_URL, default=http://localhost:8000/api"`
 	APIKey string `env:"API_KEY, default=centrifugo-api-key-change-me"`
+}
+
+// S3Config holds S3/MinIO object storage settings.
+type S3Config struct {
+	Endpoint  string `env:"ENDPOINT, default=http://localhost:9000"`
+	Bucket    string `env:"BUCKET, default=bizengine"`
+	Region    string `env:"REGION, default=us-east-1"`
+	AccessKey string `env:"ACCESS_KEY, default=minioadmin"`
+	SecretKey string `env:"SECRET_KEY, default=minioadmin"`
 }
 
 // Load reads configuration from environment variables.

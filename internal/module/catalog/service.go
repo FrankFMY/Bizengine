@@ -98,49 +98,42 @@ func (s *Service) CreateProduct(ctx context.Context, orgID uuid.UUID, input Crea
 		}
 	}
 
-	// Create entity
-	e, err := s.entitySvc.Create(ctx, orgID, entity.CreateEntityInput{
-		Kind:     "product",
-		Name:     input.Name,
-		ParentID: input.CategoryID,
-	}, actorID)
-	if err != nil {
-		return nil, err
+	// Build components map
+	components := map[string]json.RawMessage{
+		"price": input.Price,
 	}
-
-	// Set components
-	if _, err := s.entitySvc.SetComponent(ctx, orgID, e.ID, "price", input.Price, actorID); err != nil {
-		return nil, err
-	}
-
 	if input.Barcode == nil && input.SKU != "" {
 		input.Barcode, _ = json.Marshal(map[string]string{"internal": input.SKU})
 	}
 	if input.Barcode != nil {
-		if _, err := s.entitySvc.SetComponent(ctx, orgID, e.ID, "barcode", input.Barcode, actorID); err != nil {
-			return nil, err
-		}
+		components["barcode"] = input.Barcode
 	}
 	if input.Attributes != nil {
-		if _, err := s.entitySvc.SetComponent(ctx, orgID, e.ID, "attributes", input.Attributes, actorID); err != nil {
-			return nil, err
-		}
+		components["attributes"] = input.Attributes
 	}
 	if input.Media != nil {
-		if _, err := s.entitySvc.SetComponent(ctx, orgID, e.ID, "media", input.Media, actorID); err != nil {
-			return nil, err
-		}
+		components["media"] = input.Media
+	}
+
+	// Create entity + components in a single transaction
+	e, err := s.entitySvc.CreateWithComponents(ctx, orgID, entity.CreateEntityInput{
+		Kind:     "product",
+		Name:     input.Name,
+		ParentID: input.CategoryID,
+	}, components, actorID)
+	if err != nil {
+		return nil, err
 	}
 
 	// Publish catalog-specific event
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		EntityID:    &e.ID,
-		Type:        "catalog.product.created",
-		ActorID:     actorID,
-		Timestamp:   time.Now(),
-		Version:     1,
+		EntityID:       &e.ID,
+		Type:           "catalog.product.created",
+		ActorID:        actorID,
+		Timestamp:      time.Now(),
+		Version:        1,
 	}
 	ev.Data, _ = json.Marshal(map[string]any{
 		"id":          e.ID,
@@ -150,7 +143,7 @@ func (s *Service) CreateProduct(ctx context.Context, orgID uuid.UUID, input Crea
 	})
 	s.eventBus.Publish(ctx, ev)
 
-	return s.GetProduct(ctx, orgID, e.ID)
+	return entityToProduct(e), nil
 }
 
 // GetProduct returns a product with all its components.

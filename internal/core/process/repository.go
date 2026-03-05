@@ -17,6 +17,7 @@ type Repository interface {
 	UpsertDefinition(ctx context.Context, def *DefinitionRecord) error
 	GetDefinition(ctx context.Context, id string, orgID *uuid.UUID) (*DefinitionRecord, error)
 	ListDefinitions(ctx context.Context, orgID uuid.UUID) ([]DefinitionRecord, error)
+	DeleteDefinition(ctx context.Context, id string, orgID uuid.UUID) error
 
 	// Instances
 	CreateInstance(ctx context.Context, inst *Instance) error

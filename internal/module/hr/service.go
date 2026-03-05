@@ -397,11 +397,17 @@ func (s *Service) ApproveTimesheet(ctx context.Context, orgID, tsID uuid.UUID, a
 		return err
 	}
 
-	s.publishEvent(ctx, orgID, ts.EmployeeID, "hr.timesheet.approved", map[string]any{
+	evData := map[string]any{
 		"timesheet_id": ts.ID.String(),
 		"employee_id":  ts.EmployeeID.String(),
 		"hours_worked": ts.HoursWorked,
-	}, actorID)
+	}
+	if emp, err := s.GetEmployee(ctx, orgID, ts.EmployeeID); err == nil && emp.Salary != nil {
+		if baseSalary, ok := emp.Salary["base_salary"].(float64); ok && baseSalary > 0 {
+			evData["hourly_rate"] = baseSalary / 100 / 176
+		}
+	}
+	s.publishEvent(ctx, orgID, ts.EmployeeID, "hr.timesheet.approved", evData, actorID)
 
 	return nil
 }

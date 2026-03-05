@@ -79,6 +79,100 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, input CreateEntit
 	return e, nil
 }
 
+// CreateWithComponents creates an entity and sets multiple components in a single transaction.
+func (s *Service) CreateWithComponents(ctx context.Context, orgID uuid.UUID, input CreateEntityInput, components map[string]json.RawMessage, actorID *uuid.UUID) (*types.Entity, error) {
+	if input.Kind == "" {
+		return nil, errs.NewBadRequest("kind is required")
+	}
+	if input.Name == "" {
+		return nil, errs.NewBadRequest("name is required")
+	}
+
+	e := &types.Entity{
+		ID:             uuid.New(),
+		OrganizationID: orgID,
+		Kind:           input.Kind,
+		Name:           input.Name,
+		ParentID:       input.ParentID,
+		Meta:           input.Meta,
+	}
+	if e.Meta == nil {
+		e.Meta = json.RawMessage(`{}`)
+	}
+
+	entityEv := types.Event{
+		ID:             uuid.New(),
+		OrganizationID: orgID,
+		EntityID:       &e.ID,
+		Type:           "entity.created",
+		ActorID:        actorID,
+		Timestamp:      time.Now(),
+		Version:        1,
+	}
+	entityEv.Data, _ = json.Marshal(map[string]any{
+		"id":     e.ID,
+		"kind":   e.Kind,
+		"name":   e.Name,
+		"status": "active",
+	})
+
+	var compEvents []types.Event
+	var createdComponents []types.Component
+
+	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
+		if err := s.repo.CreateTx(ctx, tx, e); err != nil {
+			return err
+		}
+		if err := s.eventStore.AppendTx(ctx, tx, entityEv); err != nil {
+			return err
+		}
+
+		for compType, data := range components {
+			c := &types.Component{
+				ID:             uuid.New(),
+				EntityID:       e.ID,
+				OrganizationID: orgID,
+				Type:           compType,
+				Data:           data,
+			}
+			if err := s.repo.SetComponentTx(ctx, tx, c); err != nil {
+				return err
+			}
+
+			ev := types.Event{
+				ID:             uuid.New(),
+				OrganizationID: orgID,
+				EntityID:       &e.ID,
+				Type:           "component.set",
+				ActorID:        actorID,
+				Timestamp:      time.Now(),
+				Version:        1,
+			}
+			ev.Data, _ = json.Marshal(map[string]any{
+				"entity_id": e.ID,
+				"type":      compType,
+				"data":      data,
+			})
+			if err := s.eventStore.AppendTx(ctx, tx, ev); err != nil {
+				return err
+			}
+			compEvents = append(compEvents, ev)
+			createdComponents = append(createdComponents, *c)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
+	s.eventBus.Publish(ctx, entityEv)
+	for _, ev := range compEvents {
+		s.eventBus.Publish(ctx, ev)
+	}
+
+	e.Components = createdComponents
+	return e, nil
+}
+
 // Get returns an entity by ID with optional components.
 func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID, includeComponents bool) (*types.Entity, error) {
 	e, err := s.repo.GetByID(ctx, orgID, id)

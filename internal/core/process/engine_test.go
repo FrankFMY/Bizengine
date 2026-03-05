@@ -87,6 +87,11 @@ func (m *mockProcessRepo) UpdateInstance(_ context.Context, inst *Instance) erro
 	return nil
 }
 
+func (m *mockProcessRepo) DeleteDefinition(_ context.Context, id string, _ uuid.UUID) error {
+	delete(m.definitions, id)
+	return nil
+}
+
 type mockBus struct {
 	published []types.Event
 }

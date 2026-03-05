@@ -1,9 +1,11 @@
 package rest
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
@@ -24,7 +26,8 @@ type RouterDeps struct {
 	Disconnector   Disconnector
 	ViewUnsub      ViewUnsubscriber
 	RedisClient    *redis.Client
-	Pool          *pgxpool.Pool
+	Pool           *pgxpool.Pool
+	OnOrgCreated   []func(ctx context.Context, orgID uuid.UUID) error
 	EntityH       *EntityHandler
 	EventH        *EventHandler
 	OrganizationH *OrganizationHandler
@@ -35,8 +38,14 @@ type RouterDeps struct {
 	HRH           *HRHandler
 	FinanceH      *FinanceHandler
 	LogisticsH    *LogisticsHandler
-	AdminH        *AdminHandler
-	HealthH       *HealthHandler
+	FileH          *FileHandler
+	ExportH        *ExportHandler
+	IntegrationH   *IntegrationHandler
+	AnalyticsH     *AnalyticsHandler
+	WebhookH       *WebhookHandler
+	NotificationH  *NotificationHandler
+	AdminH         *AdminHandler
+	HealthH        *HealthHandler
 }
 
 // NewRouter creates a Chi router with all routes configured.
@@ -45,12 +54,16 @@ func NewRouter(deps RouterDeps) http.Handler {
 
 	// Global middleware
 	r.Use(Recoverer)
+	r.Use(SecurityHeaders)
 	r.Use(CORSMiddleware(deps.AllowedOrigins))
+	r.Use(MetricsMiddleware)
 	r.Use(Logger)
+	r.Use(RateLimit(300))
+	r.Use(APIVersion("1.0"))
 	r.Use(TrimStrings)
 	r.Use(UnwrapRequest)
 
-	// Health check (no auth)
+	// Health & metrics (no auth)
 	if deps.HealthH != nil {
 		r.Get("/health", deps.HealthH.Handle)
 	} else {
@@ -58,13 +71,14 @@ func NewRouter(deps RouterDeps) http.Handler {
 			respondOK(w, http.StatusOK, map[string]string{"status": "ok"})
 		})
 	}
+	r.Get("/metrics", MetricsHandler)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		authH := NewAuthHandler(deps.AuthSvc, deps.CookieSecure, deps.Disconnector, deps.ViewUnsub)
 
 		// Dev convenience endpoint (no auth middleware)
 		if deps.Pool != nil {
-			passH := NewPassTempHandler(deps.Pool, deps.AuthSvc, deps.CookieSecure)
+			passH := NewPassTempHandler(deps.Pool, deps.AuthSvc, deps.CookieSecure, deps.OnOrgCreated...)
 			r.Post("/pass/temp", passH.Handle)
 		}
 
@@ -147,38 +161,71 @@ func NewRouter(deps RouterDeps) http.Handler {
 
 				// Warehouse
 				r.Route("/warehouse", func(r chi.Router) {
-					r.Post("/receive", deps.WarehouseH.Receive)
-					r.Post("/ship", deps.WarehouseH.Ship)
-					r.Post("/transfer", deps.WarehouseH.Transfer)
-					r.Post("/adjust", deps.WarehouseH.Adjust)
-					r.Get("/low-stock", deps.WarehouseH.GetLowStock)
-					r.Get("/movements", deps.WarehouseH.ListMovements)
-
-					r.Get("/{warehouseID}/stock", deps.WarehouseH.ListStock)
-					r.Get("/{warehouseID}/stock/{productID}", deps.WarehouseH.GetStockLevel)
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("catalog.view"))
+						r.Get("/low-stock", deps.WarehouseH.GetLowStock)
+						r.Get("/movements", deps.WarehouseH.ListMovements)
+						r.Get("/{warehouseID}/stock", deps.WarehouseH.ListStock)
+						r.Get("/{warehouseID}/stock/{productID}", deps.WarehouseH.GetStockLevel)
+					})
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("warehouse.receive"))
+						r.Post("/receive", deps.WarehouseH.Receive)
+					})
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("warehouse.ship"))
+						r.Post("/ship", deps.WarehouseH.Ship)
+					})
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("warehouse.transfer"))
+						r.Post("/transfer", deps.WarehouseH.Transfer)
+					})
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("warehouse.adjust"))
+						r.Post("/adjust", deps.WarehouseH.Adjust)
+					})
 				})
 
 				// Orders
 				r.Route("/orders", func(r chi.Router) {
-					r.Post("/", deps.OrderH.Create)
-					r.Get("/", deps.OrderH.List)
-					r.Get("/{id}", deps.OrderH.Get)
-					r.Put("/{id}", deps.OrderH.Update)
-					r.Post("/{id}/confirm", deps.OrderH.Confirm)
-					r.Post("/{id}/pay", deps.OrderH.Pay)
-					r.Post("/{id}/ship", deps.OrderH.Ship)
-					r.Post("/{id}/deliver", deps.OrderH.Deliver)
-					r.Post("/{id}/cancel", deps.OrderH.Cancel)
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("order.view"))
+						r.Get("/", deps.OrderH.List)
+						r.Get("/{id}", deps.OrderH.Get)
+					})
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("order.create"))
+						r.Post("/", deps.OrderH.Create)
+					})
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("order.update"))
+						r.Put("/{id}", deps.OrderH.Update)
+						r.Post("/{id}/submit", deps.OrderH.Submit)
+						r.Post("/{id}/confirm", deps.OrderH.Confirm)
+						r.Post("/{id}/pay", deps.OrderH.Pay)
+						r.Post("/{id}/ship", deps.OrderH.Ship)
+						r.Post("/{id}/deliver", deps.OrderH.Deliver)
+					})
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("order.cancel"))
+						r.Post("/{id}/cancel", deps.OrderH.Cancel)
+					})
 				})
 
 				// Processes
 				r.Route("/processes", func(r chi.Router) {
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("process.manage"))
+						r.Post("/trigger", deps.ProcessH.Trigger)
+						r.Post("/definitions", deps.ProcessH.CreateDefinition)
+						r.Put("/definitions/{defID}", deps.ProcessH.UpdateDefinition)
+						r.Delete("/definitions/{defID}", deps.ProcessH.DeleteDefinition)
+					})
 					r.Get("/definitions", deps.ProcessH.ListDefinitions)
 					r.Get("/definitions/{defID}", deps.ProcessH.GetDefinition)
 					r.Get("/instances", deps.ProcessH.ListInstances)
 					r.Get("/instances/{instID}", deps.ProcessH.GetInstance)
 					r.Get("/entity/{entityID}", deps.ProcessH.GetByEntity)
-					r.Post("/trigger", deps.ProcessH.Trigger)
 				})
 
 				// HR
@@ -206,16 +253,21 @@ func NewRouter(deps RouterDeps) http.Handler {
 
 				// Logistics
 				r.Route("/logistics", func(r chi.Router) {
-					r.Post("/routes", deps.LogisticsH.CreateRoute)
-					r.Get("/routes", deps.LogisticsH.ListRoutes)
-					r.Get("/routes/{id}", deps.LogisticsH.GetRoute)
-					r.Post("/routes/{id}/start", deps.LogisticsH.StartRoute)
-					r.Post("/routes/{id}/complete", deps.LogisticsH.CompleteRoute)
-					r.Post("/routes/{id}/stops/{stopID}/arrive", deps.LogisticsH.ArriveAtStop)
-					r.Post("/routes/{id}/stops/{stopID}/complete", deps.LogisticsH.CompleteStop)
-
-					r.Post("/geo", deps.LogisticsH.UpdateGeo)
-					r.Get("/geo/{entityID}/track", deps.LogisticsH.GetTrack)
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("logistics.view"))
+						r.Get("/routes", deps.LogisticsH.ListRoutes)
+						r.Get("/routes/{id}", deps.LogisticsH.GetRoute)
+						r.Get("/geo/{entityID}/track", deps.LogisticsH.GetTrack)
+					})
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("logistics.manage"))
+						r.Post("/routes", deps.LogisticsH.CreateRoute)
+						r.Post("/routes/{id}/start", deps.LogisticsH.StartRoute)
+						r.Post("/routes/{id}/complete", deps.LogisticsH.CompleteRoute)
+						r.Post("/routes/{id}/stops/{stopID}/arrive", deps.LogisticsH.ArriveAtStop)
+						r.Post("/routes/{id}/stops/{stopID}/complete", deps.LogisticsH.CompleteStop)
+						r.Post("/geo", deps.LogisticsH.UpdateGeo)
+					})
 				})
 
 				// Admin (debug/monitoring)
@@ -224,6 +276,17 @@ func NewRouter(deps RouterDeps) http.Handler {
 						r.Get("/state", deps.AdminH.State)
 						r.Post("/invalidate", deps.AdminH.Invalidate)
 						r.Get("/graphs", deps.AdminH.Graphs)
+					})
+				}
+
+				// Files
+				if deps.FileH != nil {
+					r.Route("/files", func(r chi.Router) {
+						r.Get("/", deps.FileH.ListByEntity)
+						r.Get("/{id}", deps.FileH.Download)
+						r.Post("/upload-url", deps.FileH.RequestUpload)
+						r.Post("/{id}/confirm", deps.FileH.Confirm)
+						r.Delete("/{id}", deps.FileH.Delete)
 					})
 				}
 
@@ -247,6 +310,65 @@ func NewRouter(deps RouterDeps) http.Handler {
 						r.Post("/invoices/{id}/pay", deps.FinanceH.MarkInvoicePaid)
 					})
 				})
+
+				// Export
+				if deps.ExportH != nil {
+					r.Post("/export", deps.ExportH.Export)
+				}
+
+				// Integrations (Russian government + bank)
+				if deps.IntegrationH != nil {
+					r.Route("/integrations", func(r chi.Router) {
+						r.Route("/fiscal", func(r chi.Router) {
+							r.Post("/receipt", deps.IntegrationH.SendReceipt)
+							r.Get("/receipt/{receiptID}", deps.IntegrationH.GetReceiptStatus)
+						})
+						r.Route("/edo", func(r chi.Router) {
+							r.Post("/documents", deps.IntegrationH.SendEDODocument)
+							r.Get("/documents/incoming", deps.IntegrationH.GetIncomingEDO)
+							r.Post("/documents/{docID}/accept", deps.IntegrationH.AcceptEDODocument)
+							r.Post("/documents/{docID}/reject", deps.IntegrationH.RejectEDODocument)
+						})
+						r.Route("/marking", func(r chi.Router) {
+							r.Post("/verify", deps.IntegrationH.VerifyMarking)
+							r.Post("/receipt", deps.IntegrationH.RegisterMarkingReceipt)
+							r.Post("/shipment", deps.IntegrationH.RegisterMarkingShipment)
+						})
+						r.Route("/bank", func(r chi.Router) {
+							r.Post("/import", deps.IntegrationH.ImportBankStatement)
+							r.Post("/export", deps.IntegrationH.ExportPaymentOrders)
+						})
+					})
+				}
+
+				// Analytics
+				if deps.AnalyticsH != nil {
+					r.Route("/analytics", func(r chi.Router) {
+						r.Get("/dashboard", deps.AnalyticsH.Dashboard)
+						r.Get("/revenue", deps.AnalyticsH.RevenueSeries)
+					})
+				}
+
+				// Webhooks
+				if deps.WebhookH != nil {
+					r.Route("/webhooks", func(r chi.Router) {
+						r.Post("/", deps.WebhookH.Create)
+						r.Get("/", deps.WebhookH.List)
+						r.Delete("/{id}", deps.WebhookH.Delete)
+						r.Post("/{id}/toggle", deps.WebhookH.Toggle)
+						r.Post("/{id}/test", deps.WebhookH.Test)
+					})
+				}
+
+				// Notifications
+				if deps.NotificationH != nil {
+					r.Route("/notifications", func(r chi.Router) {
+						r.Get("/", deps.NotificationH.List)
+						r.Get("/count", deps.NotificationH.CountUnread)
+						r.Post("/read-all", deps.NotificationH.MarkAllRead)
+						r.Post("/{id}/read", deps.NotificationH.MarkRead)
+					})
+				}
 			})
 		})
 	})

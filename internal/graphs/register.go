@@ -36,6 +36,9 @@ func RegisterAll(engine *arcana.Engine) {
 		logisticsRouteDetail,
 		logisticsVehiclesMap,
 
+		// Notifications
+		notificationsUnread,
+
 		// Dashboard
 		dashboardSummary,
 	}

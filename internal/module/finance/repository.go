@@ -180,6 +180,7 @@ func DefaultAccounts() []CreateAccountInput {
 	return []CreateAccountInput{
 		{Code: "10", Name: "Materials", Type: "asset"},
 		{Code: "41", Name: "Goods", Type: "asset"},
+		{Code: "44", Name: "Selling expenses", Type: "expense"},
 		{Code: "50", Name: "Cash", Type: "asset"},
 		{Code: "51", Name: "Bank account", Type: "asset"},
 		{Code: "60", Name: "Suppliers", Type: "liability"},

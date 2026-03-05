@@ -103,7 +103,7 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, input CreateOrder
 			EntityID:    e.ID,
 			Number:      number,
 			CustomerID:  input.CustomerID,
-			Status:      "new",
+			Status:      "draft",
 			Subtotal:    subtotal,
 			Discount:    totalDiscount,
 			Tax:         totalTax,
@@ -176,6 +176,33 @@ func (s *Service) List(ctx context.Context, orgID uuid.UUID, filter OrderFilter)
 		Limit:  filter.Page.Limit,
 		Offset: filter.Page.Offset,
 	}, nil
+}
+
+// Submit transitions order from draft to new.
+func (s *Service) Submit(ctx context.Context, orgID, orderID uuid.UUID, actorID *uuid.UUID) (*Order, error) {
+	o, err := s.repo.GetOrder(ctx, orgID, orderID)
+	if err != nil {
+		return nil, err
+	}
+	if o.Status != "draft" {
+		return nil, errs.NewConflict("order must be in 'draft' status to submit")
+	}
+
+	o.Status = "new"
+	o.UpdatedAt = time.Now()
+	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
+		return s.repo.UpdateOrder(ctx, tx, o)
+	}); err != nil {
+		return nil, err
+	}
+
+	s.publishEvent(ctx, orgID, o.EntityID, "order.submitted", actorID, map[string]any{
+		"order_id": o.ID,
+		"number":   o.Number,
+		"total":    o.Total,
+	})
+
+	return o, nil
 }
 
 // Confirm transitions order to confirmed status.
@@ -332,9 +359,9 @@ func (s *Service) Cancel(ctx context.Context, orgID, orderID uuid.UUID, reason s
 	if err != nil {
 		return nil, err
 	}
-	allowed := map[string]bool{"new": true, "confirmed": true, "paid": true}
+	allowed := map[string]bool{"draft": true, "new": true, "confirmed": true, "paid": true}
 	if !allowed[o.Status] {
-		return nil, errs.NewConflict("order can only be cancelled from new, confirmed, or paid status")
+		return nil, errs.NewConflict("order can only be cancelled from draft, new, confirmed, or paid status")
 	}
 
 	// Fetch items for unreserve event data
@@ -364,6 +391,7 @@ func (s *Service) Cancel(ctx context.Context, orgID, orderID uuid.UUID, reason s
 	eventData := map[string]any{
 		"order_id": o.ID,
 		"reason":   reason,
+		"total":    o.Total,
 		"items":    eventItems,
 	}
 	if o.WarehouseID != nil {

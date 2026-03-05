@@ -12,21 +12,23 @@ import (
 
 // HealthHandler provides extended health check.
 type HealthHandler struct {
-	pool         *pgxpool.Pool
-	redis        *redis.Client
-	arcanaEngine *arcana.Engine
-	startedAt    time.Time
-	version      string
+	pool          *pgxpool.Pool
+	redis         *redis.Client
+	arcanaEngine  *arcana.Engine
+	centrifugoURL string
+	startedAt     time.Time
+	version       string
 }
 
 // NewHealthHandler creates a HealthHandler.
-func NewHealthHandler(pool *pgxpool.Pool, redis *redis.Client, arcanaEngine *arcana.Engine, version string) *HealthHandler {
+func NewHealthHandler(pool *pgxpool.Pool, redis *redis.Client, arcanaEngine *arcana.Engine, centrifugoURL, version string) *HealthHandler {
 	return &HealthHandler{
-		pool:         pool,
-		redis:        redis,
-		arcanaEngine: arcanaEngine,
-		startedAt:    time.Now(),
-		version:      version,
+		pool:          pool,
+		redis:         redis,
+		arcanaEngine:  arcanaEngine,
+		centrifugoURL: centrifugoURL,
+		startedAt:     time.Now(),
+		version:       version,
 	}
 }
 
@@ -57,17 +59,31 @@ func (h *HealthHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	centrifugoStatus := "not configured"
+	if h.centrifugoURL != "" {
+		centrifugoStatus = "ok"
+		client := &http.Client{Timeout: 2 * time.Second}
+		resp, err := client.Get(h.centrifugoURL + "/health")
+		if err != nil || resp.StatusCode != http.StatusOK {
+			centrifugoStatus = "error"
+		}
+		if resp != nil {
+			resp.Body.Close()
+		}
+	}
+
 	status := "ok"
-	if pgStatus != "ok" || redisStatus == "error" {
+	if pgStatus != "ok" || redisStatus == "error" || centrifugoStatus == "error" {
 		status = "degraded"
 	}
 
 	respondOK(w, http.StatusOK, map[string]any{
-		"status":   status,
-		"postgres": pgStatus,
-		"redis":    redisStatus,
-		"arcana":   arcanaStatus,
-		"uptime":   time.Since(h.startedAt).String(),
-		"version":  h.version,
+		"status":     status,
+		"postgres":   pgStatus,
+		"redis":      redisStatus,
+		"arcana":     arcanaStatus,
+		"centrifugo": centrifugoStatus,
+		"uptime":     time.Since(h.startedAt).String(),
+		"version":    h.version,
 	})
 }

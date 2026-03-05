@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -28,9 +29,19 @@ import (
 	"github.com/bizengine/engine/internal/module/finance"
 	"github.com/bizengine/engine/internal/module/hr"
 	"github.com/bizengine/engine/internal/module/logistics"
+	"github.com/bizengine/engine/internal/analytics"
+	"github.com/bizengine/engine/internal/export"
+	"github.com/bizengine/engine/internal/integration/bank"
+	"github.com/bizengine/engine/internal/integration/chestnyznak"
+	"github.com/bizengine/engine/internal/integration/edo"
+	"github.com/bizengine/engine/internal/integration/fns"
+	"github.com/bizengine/engine/internal/notification"
+	"github.com/bizengine/engine/internal/webhook"
+	"github.com/bizengine/engine/internal/module/file"
 	"github.com/bizengine/engine/internal/module/order"
 	"github.com/bizengine/engine/internal/module/warehouse"
 	"github.com/bizengine/engine/internal/storage/postgres"
+	s3client "github.com/bizengine/engine/internal/storage/s3"
 	redisStore "github.com/bizengine/engine/internal/storage/redis"
 	"github.com/bizengine/engine/pkg/config"
 	"github.com/bizengine/engine/pkg/dsl"
@@ -71,9 +82,10 @@ func main() {
 	// Session store
 	sessionStore := redisStore.NewSessionStore(redisClient)
 
-	// Core: Event Store + Bus
+	// Core: Event Store + Bus (PersistentBus auto-persists all events)
 	eventStore := postgres.NewEventStore(pool)
-	eventBus := event.NewLocalBus()
+	localBus := event.NewLocalBus()
+	eventBus := event.NewPersistentBus(localBus, eventStore)
 
 	// Core: Entity
 	entityRepo := postgres.NewEntityRepo(pool)
@@ -107,23 +119,77 @@ func main() {
 	logisticsRepo := postgres.NewLogisticsRepo(pool)
 	logisticsSvc := logistics.NewService(logisticsRepo, eventBus)
 
+	// Storage: S3/MinIO
+	s3c, err := s3client.NewClient(ctx, s3client.Config{
+		Endpoint:  cfg.S3.Endpoint,
+		Bucket:    cfg.S3.Bucket,
+		Region:    cfg.S3.Region,
+		AccessKey: cfg.S3.AccessKey,
+		SecretKey: cfg.S3.SecretKey,
+	})
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create S3 client")
+	}
+	if err := s3c.EnsureBucket(ctx); err != nil {
+		log.Warn().Err(err).Msg("failed to ensure S3 bucket (MinIO may be unavailable)")
+	}
+
+	// Modules: Files
+	fileRepo := postgres.NewFileRepo(pool)
+	fileSvc := file.NewService(fileRepo, &s3Adapter{client: s3c})
+
+	// Notifications (stubs for now — swap for real SMTP/SMS in production)
+	emailSender := notification.NewEmailStub()
+	smsSender := notification.NewSMSStub()
+	pushSender := notification.NewPushStub()
+	notifSvc := notification.NewService(emailSender, smsSender, pushSender)
+	notifRepo := postgres.NewNotificationRepo(pool)
+	notifSvc.SetRepo(notifRepo)
+
+	// Export
+	exportSvc := export.NewService()
+
+	// Integrations (stubs — swap for real clients when API keys are configured)
+	fiscalSvc := fns.NewStub()
+	edoSvc := edo.NewStub()
+	markingSvc := chestnyznak.NewStub()
+	bankingSvc := bank.NewStub()
+
+	// Analytics
+	analyticsSvc := analytics.NewService(pool)
+
+	// Webhooks
+	webhookRepo := postgres.NewWebhookRepo(pool)
+	webhookSvc := webhook.NewService(webhookRepo)
+
 	// Core: Process Engine
 	processRepo := postgres.NewProcessRepo(pool)
 	processEngine := process.NewEngine(processRepo, eventBus)
 	loadProcessDefinitions(processEngine)
 
 	// Inter-module event subscriptions
-	setupEventSubscriptions(eventBus, warehouseSvc, processEngine, financeSvc)
+	setupEventSubscriptions(eventBus, warehouseSvc, processEngine, financeSvc, orderSvc)
+	setupNotificationSubscriptions(eventBus, notifSvc, authRepo)
+
+	// Webhook dispatch: forward all events to matching webhooks
+	eventBus.SubscribeAll(event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
+		var data any
+		json.Unmarshal(ev.Data, &data)
+		webhookSvc.Dispatch(ctx, ev.OrganizationID, ev.Type, data)
+		return nil
+	}))
 
 	// Centrifugo publisher: forward events to Centrifugo for real-time delivery
 	centPub := centrifugo.NewPublisher(cfg.Centrifugo.APIURL, cfg.Centrifugo.APIKey)
 	eventBus.SubscribeAll(event.SubscriberFunc(centPub.HandleEvent))
 
 	// Arcana reactive sync engine
+	// Arcana transport appends "/api" internally, so strip it from the configured URL
+	centrifugoBase := strings.TrimSuffix(cfg.Centrifugo.APIURL, "/api")
 	arcanaEngine := arcana.New(arcana.Config{
 		Pool: arcana.PgxQuerier(pool),
 		Transport: arcana.NewCentrifugoTransport(arcana.CentrifugoConfig{
-			APIURL: cfg.Centrifugo.APIURL,
+			APIURL: centrifugoBase,
 			APIKey: cfg.Centrifugo.APIKey,
 		}),
 		AuthFunc: func(r *http.Request) (*arcana.Identity, error) {
@@ -192,6 +258,15 @@ func main() {
 		Disconnector:   centPub,
 		RedisClient:  redisClient,
 		Pool:         pool,
+		OnOrgCreated: []func(ctx context.Context, orgID uuid.UUID) error{
+			financeSvc.SeedDefaultAccounts,
+			func(ctx context.Context, orgID uuid.UUID) error {
+				_, err := pool.Exec(ctx,
+					`INSERT INTO order_number_sequences (organization_id, last_number) VALUES ($1, 0) ON CONFLICT DO NOTHING`,
+					orgID)
+				return err
+			},
+		},
 		EntityH:      rest.NewEntityHandler(entitySvc),
 		EventH:       rest.NewEventHandler(eventStore),
 		OrganizationH: rest.NewOrganizationHandler(authSvc, authRepo,
@@ -210,8 +285,14 @@ func main() {
 		HRH:        rest.NewHRHandler(hrSvc),
 		FinanceH:   rest.NewFinanceHandler(financeSvc),
 		LogisticsH: rest.NewLogisticsHandler(logisticsSvc),
+		FileH:      rest.NewFileHandler(fileSvc),
+		ExportH:    rest.NewExportHandler(exportSvc),
+		IntegrationH: rest.NewIntegrationHandler(fiscalSvc, edoSvc, markingSvc, bankingSvc),
+		AnalyticsH: rest.NewAnalyticsHandler(analyticsSvc),
+		WebhookH:       rest.NewWebhookHandler(webhookSvc),
+		NotificationH:  rest.NewNotificationHandler(notifSvc),
 		AdminH:     rest.NewAdminHandler(arcanaEngine, version),
-		HealthH:    rest.NewHealthHandler(pool, redisClient, arcanaEngine, version),
+		HealthH:    rest.NewHealthHandler(pool, redisClient, arcanaEngine, cfg.Centrifugo.APIURL, version),
 	})
 
 	// Wrap router with internal endpoints for Centrifugo proxy
@@ -280,7 +361,7 @@ func loadProcessDefinitions(engine *process.Engine) {
 	}
 }
 
-func setupEventSubscriptions(eventBus event.Bus, warehouseSvc *warehouse.Service, processEngine *process.Engine, financeSvc *finance.Service) {
+func setupEventSubscriptions(eventBus event.Bus, warehouseSvc *warehouse.Service, processEngine *process.Engine, financeSvc *finance.Service, orderSvc *order.Service) {
 	// Warehouse reacts to order events
 	eventBus.Subscribe("order.confirmed", event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
 		var data struct {
@@ -380,6 +461,50 @@ func setupEventSubscriptions(eventBus event.Bus, warehouseSvc *warehouse.Service
 		return nil
 	}))
 
+	// hr.timesheet.approved → finance auto-posting (Dt 44 Selling expenses, Ct 70 Payroll)
+	eventBus.Subscribe("hr.timesheet.approved", event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
+		var data map[string]any
+		json.Unmarshal(ev.Data, &data)
+		hoursWorked, _ := data["hours_worked"].(float64)
+		hourlyRate, _ := data["hourly_rate"].(float64)
+		if hoursWorked > 0 && hourlyRate > 0 {
+			amount := int64(math.Round(hoursWorked * hourlyRate * 100))
+			date := ev.Timestamp.Format("2006-01-02")
+			refType := "timesheet"
+			financeSvc.CreateAutoTransaction(ctx, ev.OrganizationID, date, "Timesheet approved", "44", "70", amount, &refType, ev.EntityID)
+		}
+		return nil
+	}))
+
+	// order.cancelled → reverse posting (Dt 90 Sales, Ct 62 Customers) to reverse initial revenue
+	eventBus.Subscribe("order.cancelled", event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
+		var data map[string]any
+		json.Unmarshal(ev.Data, &data)
+
+		// Try to get order total from event or by querying
+		var total int64
+		if t, ok := data["total"].(float64); ok && t > 0 {
+			total = int64(math.Round(t))
+		} else if orderIDStr, ok := data["order_id"].(string); ok && orderIDStr != "" {
+			oid, err := uuid.Parse(orderIDStr)
+			if err != nil {
+				return nil
+			}
+			o, err := orderSvc.Get(ctx, ev.OrganizationID, oid, false)
+			if err != nil || o == nil {
+				return nil
+			}
+			total = o.Total
+		}
+
+		if total > 0 {
+			date := ev.Timestamp.Format("2006-01-02")
+			refType := "reversal"
+			financeSvc.CreateAutoTransaction(ctx, ev.OrganizationID, date, "Order cancelled — reversal", "90", "62", total, &refType, ev.EntityID)
+		}
+		return nil
+	}))
+
 	// Process Engine handles all events for state machine advancement
 	eventBus.SubscribeAll(event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
 		return processEngine.HandleEvent(ctx, ev)
@@ -401,6 +526,81 @@ func (a *warehouseAdapter) CheckAvailability(ctx context.Context, orgID uuid.UUI
 		}
 	}
 	return a.svc.CheckAvailability(ctx, orgID, wItems)
+}
+
+// s3Adapter bridges s3client.Client to file.ObjectStorage interface.
+type s3Adapter struct {
+	client *s3client.Client
+}
+
+func (a *s3Adapter) PresignedPutURL(ctx context.Context, key, contentType string, ttl time.Duration) (string, error) {
+	return a.client.PresignedPutURL(ctx, key, contentType, ttl)
+}
+
+func (a *s3Adapter) PresignedGetURL(ctx context.Context, key string, ttl time.Duration) (string, error) {
+	return a.client.PresignedGetURL(ctx, key, ttl)
+}
+
+func (a *s3Adapter) HeadObject(ctx context.Context, key string) (*file.ObjectMeta, error) {
+	meta, err := a.client.HeadObject(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	return &file.ObjectMeta{
+		ContentType:   meta.ContentType,
+		ContentLength: meta.ContentLength,
+		LastModified:  meta.LastModified,
+	}, nil
+}
+
+func (a *s3Adapter) Delete(ctx context.Context, key string) error {
+	return a.client.Delete(ctx, key)
+}
+
+func setupNotificationSubscriptions(eventBus event.Bus, notifSvc *notification.Service, authRepo auth.Repository) {
+	createNotif := func(ctx context.Context, ev types.Event, title, body, severity, refType string) {
+		org, err := authRepo.GetOrganization(ctx, ev.OrganizationID)
+		if err != nil {
+			return
+		}
+		n := &notification.Notification{
+			ID:             uuid.New(),
+			OrganizationID: ev.OrganizationID,
+			UserID:         org.OwnerID,
+			Title:          title,
+			Body:           body,
+			Severity:       severity,
+			ReferenceType:  &refType,
+			ReferenceID:    ev.EntityID,
+			Ver:            1,
+			Upd:            ev.Timestamp,
+			Iat:            ev.Timestamp,
+		}
+		if err := notifSvc.CreateNotification(ctx, n); err != nil {
+			log.Error().Err(err).Str("type", refType).Msg("notification: failed to create")
+		}
+	}
+
+	eventBus.Subscribe("order.paid", event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
+		var data map[string]any
+		json.Unmarshal(ev.Data, &data)
+		amount, _ := data["amount"].(float64)
+		createNotif(ctx, ev, "Payment received", fmt.Sprintf("Payment of %.2f received", amount/100), "info", "order")
+		return nil
+	}))
+
+	eventBus.Subscribe("warehouse.stock.low", event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
+		var data map[string]any
+		json.Unmarshal(ev.Data, &data)
+		product, _ := data["product_name"].(string)
+		createNotif(ctx, ev, "Low stock alert", product+" is running low", "warning", "stock")
+		return nil
+	}))
+
+	eventBus.Subscribe("hr.shift.created", event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
+		createNotif(ctx, ev, "New shift scheduled", "A new shift has been scheduled", "info", "shift")
+		return nil
+	}))
 }
 
 func cookieValue(r *http.Request, name string) string {

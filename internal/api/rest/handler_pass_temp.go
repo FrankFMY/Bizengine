@@ -20,20 +20,19 @@ type PassTempHandler struct {
 	pool         *pgxpool.Pool
 	authSvc      *auth.Service
 	cookieSecure bool
+	onOrgCreated []func(ctx context.Context, orgID uuid.UUID) error
 }
 
-func NewPassTempHandler(pool *pgxpool.Pool, authSvc *auth.Service, cookieSecure bool) *PassTempHandler {
-	return &PassTempHandler{pool: pool, authSvc: authSvc, cookieSecure: cookieSecure}
+func NewPassTempHandler(pool *pgxpool.Pool, authSvc *auth.Service, cookieSecure bool, onOrgCreated ...func(ctx context.Context, orgID uuid.UUID) error) *PassTempHandler {
+	return &PassTempHandler{pool: pool, authSvc: authSvc, cookieSecure: cookieSecure, onOrgCreated: onOrgCreated}
 }
 
 type passTempInput struct {
-	Data struct {
-		Country string `json:"country"`
-		Phone   string `json:"phone"`
-		Secret  string `json:"secret"`
-		Name    string `json:"name"`
-		INN     string `json:"inn"`
-	} `json:"data"`
+	Country string `json:"country"`
+	Phone   string `json:"phone"`
+	Secret  string `json:"secret"`
+	Name    string `json:"name"`
+	INN     string `json:"inn"`
 }
 
 var reNonDigit = regexp.MustCompile(`\D`)
@@ -59,7 +58,7 @@ func (h *PassTempHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	d := input.Data
+	d := input
 	if strings.TrimSpace(d.Phone) == "" {
 		respondError(w, errs.NewBadRequest("phone is required"))
 		return
@@ -93,6 +92,7 @@ func (h *PassTempHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	var userID uuid.UUID
 	var orgID uuid.UUID
 	var phoneID uuid.UUID
+	var newOrgCreated bool
 
 	err = pgxTransaction(r.Context(), h.pool, func(tx pgx.Tx) error {
 		// Find or create user by phone
@@ -107,10 +107,11 @@ func (h *PassTempHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		if err == pgx.ErrNoRows || existingUserID == nil {
 			userID = uuid.New()
 			name := d.Name
+			placeholderEmail := "phone+" + unformat + "@pass.local"
 			_, err = tx.Exec(r.Context(),
 				`INSERT INTO users (id, email, password_hash, full_name, phone, is_active, name, secret, created_at, updated_at)
 				 VALUES ($1, $2, $3, $4, $5, true, $6, $7, $8, $9)`,
-				userID, "", "", "", nil, &name, hash, now, now,
+				userID, placeholderEmail, "", "", nil, &name, hash, now, now,
 			)
 			if err != nil {
 				return err
@@ -162,6 +163,7 @@ func (h *PassTempHandler) Handle(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return err
 			}
+			newOrgCreated = true
 		} else if err != nil {
 			return err
 		}
@@ -193,6 +195,15 @@ func (h *PassTempHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondError(w, errs.Wrap(err, errs.CodeInternal, "transaction failed"))
 		return
+	}
+
+	if newOrgCreated {
+		for _, fn := range h.onOrgCreated {
+			if err := fn(r.Context(), orgID); err != nil {
+				respondError(w, errs.Wrap(err, errs.CodeInternal, "failed to initialize organization"))
+				return
+			}
+		}
 	}
 
 	user := &types.User{
