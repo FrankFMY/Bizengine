@@ -193,6 +193,146 @@ export interface WarehouseStockListResult {
   version: number;
 }
 
+export interface CrmCustomerDetailParams {
+  id: string;
+}
+
+export interface CrmCustomerDetailResult {
+  refs: DataRef[];
+  tables: Record<string, Record<string, Record<string, unknown>>>;
+  version: number;
+  total?: number;
+}
+
+export interface CrmCustomersListParams {
+  search?: string;
+  tag?: string;
+  category?: string;
+}
+
+export interface CrmCustomersListResult {
+  refs: DataRef[];
+  tables: Record<string, Record<string, Record<string, unknown>>>;
+  version: number;
+  total?: number;
+}
+
+export interface CrmSuppliersListParams {
+  search?: string;
+}
+
+export interface CrmSuppliersListResult {
+  refs: DataRef[];
+  tables: Record<string, Record<string, Record<string, unknown>>>;
+  version: number;
+  total?: number;
+}
+
+export type OrganizationSettingsParams = Record<string, never>;
+
+export interface OrganizationSettingsResult {
+  refs: DataRef[];
+  tables: Record<string, Record<string, Record<string, unknown>>>;
+  version: number;
+}
+
+export interface FinancePnlParams {
+  from: string;
+  to: string;
+}
+
+export interface FinancePnlResult {
+  refs: DataRef[];
+  tables: Record<string, Record<string, Record<string, unknown>>>;
+  version: number;
+}
+
+export type FinancePeriodsListParams = Record<string, never>;
+
+export interface FinancePeriodsListResult {
+  refs: DataRef[];
+  tables: Record<string, Record<string, Record<string, unknown>>>;
+  version: number;
+}
+
+export interface FinanceCashOperationsParams {
+  limit?: number;
+  offset?: number;
+}
+
+export interface FinanceCashOperationsResult {
+  refs: DataRef[];
+  tables: Record<string, Record<string, Record<string, unknown>>>;
+  version: number;
+  total?: number;
+}
+
+export interface HrPayrollListParams {
+  year: number;
+  month: number;
+}
+
+export interface HrPayrollListResult {
+  refs: DataRef[];
+  tables: Record<string, Record<string, Record<string, unknown>>>;
+  version: number;
+}
+
+export interface HrAbsencesListParams {
+  employee_id?: string;
+  status?: string;
+}
+
+export interface HrAbsencesListResult {
+  refs: DataRef[];
+  tables: Record<string, Record<string, Record<string, unknown>>>;
+  version: number;
+  total?: number;
+}
+
+export interface WarehouseInventoryDetailParams {
+  product_id: string;
+}
+
+export interface WarehouseInventoryDetailResult {
+  refs: DataRef[];
+  tables: Record<string, Record<string, Record<string, unknown>>>;
+  version: number;
+}
+
+export interface OrderRefundsListParams {
+  limit?: number;
+  offset?: number;
+}
+
+export interface OrderRefundsListResult {
+  refs: DataRef[];
+  tables: Record<string, Record<string, Record<string, unknown>>>;
+  version: number;
+  total?: number;
+}
+
+export interface NotificationsListParams {
+  unread_only?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface NotificationsListResult {
+  refs: DataRef[];
+  tables: Record<string, Record<string, Record<string, unknown>>>;
+  version: number;
+  total?: number;
+}
+
+export type NotificationsUnreadParams = Record<string, never>;
+
+export interface NotificationsUnreadResult {
+  refs: DataRef[];
+  tables: Record<string, Record<string, Record<string, unknown>>>;
+  version: number;
+}
+
 export interface DataRef {
   table: string;
   id: string;
@@ -235,20 +375,33 @@ export type Views = {
   "catalog_categories_tree": { params: CatalogCategoriesTreeParams; result: CatalogCategoriesTreeResult };
   "catalog_product_detail": { params: CatalogProductDetailParams; result: CatalogProductDetailResult };
   "catalog_products_list": { params: CatalogProductsListParams; result: CatalogProductsListResult };
+  "crm_customer_detail": { params: CrmCustomerDetailParams; result: CrmCustomerDetailResult };
+  "crm_customers_list": { params: CrmCustomersListParams; result: CrmCustomersListResult };
+  "crm_suppliers_list": { params: CrmSuppliersListParams; result: CrmSuppliersListResult };
   "dashboard_summary": { params: DashboardSummaryParams; result: DashboardSummaryResult };
   "finance_account_balance": { params: FinanceAccountBalanceParams; result: FinanceAccountBalanceResult };
+  "finance_cash_operations": { params: FinanceCashOperationsParams; result: FinanceCashOperationsResult };
+  "finance_periods_list": { params: FinancePeriodsListParams; result: FinancePeriodsListResult };
+  "finance_pnl": { params: FinancePnlParams; result: FinancePnlResult };
   "finance_transactions_list": { params: FinanceTransactionsListParams; result: FinanceTransactionsListResult };
   "finance_trial_balance": { params: FinanceTrialBalanceParams; result: FinanceTrialBalanceResult };
+  "hr_absences_list": { params: HrAbsencesListParams; result: HrAbsencesListResult };
   "hr_employee_detail": { params: HrEmployeeDetailParams; result: HrEmployeeDetailResult };
   "hr_employees_list": { params: HrEmployeesListParams; result: HrEmployeesListResult };
+  "hr_payroll_list": { params: HrPayrollListParams; result: HrPayrollListResult };
   "hr_shifts_schedule": { params: HrShiftsScheduleParams; result: HrShiftsScheduleResult };
   "hr_timesheets_list": { params: HrTimesheetsListParams; result: HrTimesheetsListResult };
   "logistics_route_detail": { params: LogisticsRouteDetailParams; result: LogisticsRouteDetailResult };
   "logistics_routes_list": { params: LogisticsRoutesListParams; result: LogisticsRoutesListResult };
   "logistics_vehicles_map": { params: LogisticsVehiclesMapParams; result: LogisticsVehiclesMapResult };
+  "notifications_list": { params: NotificationsListParams; result: NotificationsListResult };
+  "notifications_unread": { params: NotificationsUnreadParams; result: NotificationsUnreadResult };
   "order_detail": { params: OrderDetailParams; result: OrderDetailResult };
+  "order_refunds_list": { params: OrderRefundsListParams; result: OrderRefundsListResult };
   "orders_dashboard": { params: OrdersDashboardParams; result: OrdersDashboardResult };
   "orders_list": { params: OrdersListParams; result: OrdersListResult };
+  "organization_settings": { params: OrganizationSettingsParams; result: OrganizationSettingsResult };
+  "warehouse_inventory_detail": { params: WarehouseInventoryDetailParams; result: WarehouseInventoryDetailResult };
   "warehouse_low_stock": { params: WarehouseLowStockParams; result: WarehouseLowStockResult };
   "warehouse_stock_detail": { params: WarehouseStockDetailParams; result: WarehouseStockDetailResult };
   "warehouse_stock_list": { params: WarehouseStockListParams; result: WarehouseStockListResult };

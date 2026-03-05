@@ -30,6 +30,40 @@ export interface Views {
       components: ["data"];
     };
   };
+  crm_customer_detail: {
+    params: {
+      id: string;
+    };
+    deps: {
+      entities: ["name", "status"];
+      components: ["data"];
+      orders: ["status", "total"];
+    };
+  };
+  crm_customers_list: {
+    params: {
+      category?: string;
+      limit?: number;
+      offset?: number;
+      search?: string;
+      tag?: string;
+    };
+    deps: {
+      entities: ["name", "status"];
+      components: ["data"];
+    };
+  };
+  crm_suppliers_list: {
+    params: {
+      limit?: number;
+      offset?: number;
+      search?: string;
+    };
+    deps: {
+      entities: ["name", "status"];
+      components: ["data"];
+    };
+  };
   dashboard_summary: {
     params: {
     };
@@ -48,6 +82,32 @@ export interface Views {
       transactions: ["is_posted"];
     };
   };
+  finance_cash_operations: {
+    params: {
+      limit?: number;
+      offset?: number;
+    };
+    deps: {
+      cash_operations: ["type", "amount", "created_at"];
+    };
+  };
+  finance_periods_list: {
+    params: {
+    };
+    deps: {
+      finance_periods: ["status", "closed_at"];
+    };
+  };
+  finance_pnl: {
+    params: {
+      from: string;
+      to: string;
+    };
+    deps: {
+      accounts: ["code", "name", "type"];
+      transactions: ["is_posted", "date"];
+    };
+  };
   finance_transactions_list: {
     params: {
       account_id?: string;
@@ -64,6 +124,18 @@ export interface Views {
     deps: {
       accounts: ["code", "name", "type"];
       transactions: ["is_posted"];
+    };
+  };
+  hr_absences_list: {
+    params: {
+      employee_id?: string;
+      limit?: number;
+      offset?: number;
+      status?: string;
+    };
+    deps: {
+      absences: ["type", "status", "start_date", "end_date"];
+      entities: ["name"];
     };
   };
   hr_employee_detail: {
@@ -86,6 +158,16 @@ export interface Views {
     deps: {
       entities: ["name", "status"];
       components: ["data"];
+    };
+  };
+  hr_payroll_list: {
+    params: {
+      month: number;
+      year: number;
+    };
+    deps: {
+      payrolls: ["status", "net_salary", "gross_salary"];
+      entities: ["name"];
     };
   };
   hr_shifts_schedule: {
@@ -136,6 +218,23 @@ export interface Views {
       entities: ["name"];
     };
   };
+  notifications_list: {
+    params: {
+      limit?: number;
+      offset?: number;
+      unread_only?: string;
+    };
+    deps: {
+      notifications: ["read", "iat"];
+    };
+  };
+  notifications_unread: {
+    params: {
+    };
+    deps: {
+      notifications: ["read", "iat"];
+    };
+  };
   order_detail: {
     params: {
       order_id: string;
@@ -144,6 +243,15 @@ export interface Views {
       orders: ["status", "total", "updated_at"];
       order_items: ["quantity", "unit_price", "total"];
       entities: ["name"];
+    };
+  };
+  order_refunds_list: {
+    params: {
+      limit?: number;
+      offset?: number;
+    };
+    deps: {
+      orders: ["status", "total", "refunded_at"];
     };
   };
   orders_dashboard: {
@@ -161,6 +269,22 @@ export interface Views {
     };
     deps: {
       orders: ["status", "total", "updated_at"];
+      entities: ["name"];
+    };
+  };
+  organization_settings: {
+    params: {
+    };
+    deps: {
+      organization_settings: ["currency", "timezone", "features", "requisites"];
+    };
+  };
+  warehouse_inventory_detail: {
+    params: {
+      product_id: string;
+    };
+    deps: {
+      stock_levels: ["quantity", "reserved"];
       entities: ["name"];
     };
   };
