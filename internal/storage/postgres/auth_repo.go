@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -272,18 +273,9 @@ func (r *AuthRepo) RemoveMember(ctx context.Context, orgID, userID uuid.UUID) er
 
 
 func isDuplicateKey(err error) bool {
-	return err != nil && (contains(err.Error(), "duplicate key") || contains(err.Error(), "23505"))
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchString(s, substr)
-}
-
-func searchString(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
+	if err == nil {
+		return false
 	}
-	return false
+	msg := err.Error()
+	return strings.Contains(msg, "duplicate key") || strings.Contains(msg, "23505")
 }

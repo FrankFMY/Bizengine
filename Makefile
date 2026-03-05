@@ -1,4 +1,4 @@
-.PHONY: build run dev test test-integration test-coverage migrate-up migrate-down lint clean
+.PHONY: build run dev test test-integration test-coverage migrate-up migrate-down lint clean gen-types install-hooks seed dev-full watch-types
 
 BIN=./bin/engine
 CMD=./cmd/server
@@ -39,5 +39,30 @@ migrate-create:
 lint:
 	go vet ./...
 
+gen-types:
+	go run ./cmd/gen-types/
+
+seed:
+	go run ./cmd/seed/
+
+dev-full:
+	docker compose up -d
+	@sleep 3
+	$(MAKE) migrate-up
+	$(MAKE) seed
+	$(MAKE) dev
+
+watch-types:
+	@echo "Watching internal/graphs/ for changes..."
+	@while true; do \
+		inotifywait -q -e modify -r internal/graphs/ 2>/dev/null || fswatch -1 internal/graphs/ 2>/dev/null || sleep 5; \
+		echo "Regenerating types..."; \
+		$(MAKE) gen-types; \
+	done
+
 clean:
 	rm -rf bin/ tmp/ coverage.out coverage.html
+
+install-hooks:
+	cp scripts/pre-commit.sh .git/hooks/pre-commit
+	chmod +x .git/hooks/pre-commit

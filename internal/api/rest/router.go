@@ -17,24 +17,26 @@ type ViewUnsubscriber interface {
 
 // RouterDeps holds all dependencies for the REST router.
 type RouterDeps struct {
-	AuthSvc      *auth.Service
-	AuthRepo     auth.Repository
-	CookieSecure bool
-	Disconnector Disconnector
-	ViewUnsub    ViewUnsubscriber
-	RedisClient  *redis.Client
-	Pool         *pgxpool.Pool
-	EntityH      *EntityHandler
-	EventH       *EventHandler
-	OrganizationH   *OrganizationHandler
-	CatalogH     *CatalogHandler
-	WarehouseH   *WarehouseHandler
-	OrderH       *OrderHandler
-	ProcessH     *ProcessHandler
-	HRH          *HRHandler
-	FinanceH     *FinanceHandler
-	LogisticsH   *LogisticsHandler
-	ViewsH       *ViewsHandler
+	AuthSvc        *auth.Service
+	AuthRepo       auth.Repository
+	CookieSecure   bool
+	AllowedOrigins []string
+	Disconnector   Disconnector
+	ViewUnsub      ViewUnsubscriber
+	RedisClient    *redis.Client
+	Pool          *pgxpool.Pool
+	EntityH       *EntityHandler
+	EventH        *EventHandler
+	OrganizationH *OrganizationHandler
+	CatalogH      *CatalogHandler
+	WarehouseH    *WarehouseHandler
+	OrderH        *OrderHandler
+	ProcessH      *ProcessHandler
+	HRH           *HRHandler
+	FinanceH      *FinanceHandler
+	LogisticsH    *LogisticsHandler
+	AdminH        *AdminHandler
+	HealthH       *HealthHandler
 }
 
 // NewRouter creates a Chi router with all routes configured.
@@ -43,15 +45,19 @@ func NewRouter(deps RouterDeps) http.Handler {
 
 	// Global middleware
 	r.Use(Recoverer)
-	r.Use(CORS)
+	r.Use(CORSMiddleware(deps.AllowedOrigins))
 	r.Use(Logger)
 	r.Use(TrimStrings)
 	r.Use(UnwrapRequest)
 
 	// Health check (no auth)
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		respondOK(w, http.StatusOK, map[string]string{"status": "ok"})
-	})
+	if deps.HealthH != nil {
+		r.Get("/health", deps.HealthH.Handle)
+	} else {
+		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+			respondOK(w, http.StatusOK, map[string]string{"status": "ok"})
+		})
+	}
 
 	r.Route("/api/v1", func(r chi.Router) {
 		authH := NewAuthHandler(deps.AuthSvc, deps.CookieSecure, deps.Disconnector, deps.ViewUnsub)
@@ -122,16 +128,21 @@ func NewRouter(deps RouterDeps) http.Handler {
 
 				// Catalog
 				r.Route("/catalog", func(r chi.Router) {
-					r.Post("/products", deps.CatalogH.CreateProduct)
-					r.Get("/products", deps.CatalogH.ListProducts)
-					r.Get("/products/{id}", deps.CatalogH.GetProduct)
-					r.Put("/products/{id}", deps.CatalogH.UpdateProduct)
-					r.Post("/products/{id}/archive", deps.CatalogH.ArchiveProduct)
-
-					r.Post("/categories", deps.CatalogH.CreateCategory)
-					r.Get("/categories", deps.CatalogH.ListCategories)
-					r.Put("/categories/{id}", deps.CatalogH.UpdateCategory)
-					r.Delete("/categories/{id}", deps.CatalogH.DeleteCategory)
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("catalog.view"))
+						r.Get("/products", deps.CatalogH.ListProducts)
+						r.Get("/products/{id}", deps.CatalogH.GetProduct)
+						r.Get("/categories", deps.CatalogH.ListCategories)
+					})
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("catalog.manage"))
+						r.Post("/products", deps.CatalogH.CreateProduct)
+						r.Put("/products/{id}", deps.CatalogH.UpdateProduct)
+						r.Post("/products/{id}/archive", deps.CatalogH.ArchiveProduct)
+						r.Post("/categories", deps.CatalogH.CreateCategory)
+						r.Put("/categories/{id}", deps.CatalogH.UpdateCategory)
+						r.Delete("/categories/{id}", deps.CatalogH.DeleteCategory)
+					})
 				})
 
 				// Warehouse
@@ -172,21 +183,25 @@ func NewRouter(deps RouterDeps) http.Handler {
 
 				// HR
 				r.Route("/hr", func(r chi.Router) {
-					r.Post("/employees", deps.HRH.HireEmployee)
-					r.Get("/employees", deps.HRH.ListEmployees)
-					r.Get("/employees/{id}", deps.HRH.GetEmployee)
-					r.Put("/employees/{id}", deps.HRH.UpdateEmployee)
-					r.Post("/employees/{id}/terminate", deps.HRH.TerminateEmployee)
-
-					r.Post("/shifts", deps.HRH.CreateShift)
-					r.Get("/shifts", deps.HRH.ListShifts)
-					r.Put("/shifts/{id}", deps.HRH.UpdateShift)
-					r.Delete("/shifts/{id}", deps.HRH.DeleteShift)
-
-					r.Post("/timesheets/clock-in", deps.HRH.ClockIn)
-					r.Post("/timesheets/{id}/clock-out", deps.HRH.ClockOut)
-					r.Get("/timesheets", deps.HRH.ListTimesheets)
-					r.Post("/timesheets/{id}/approve", deps.HRH.ApproveTimesheet)
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("hr.view"))
+						r.Get("/employees", deps.HRH.ListEmployees)
+						r.Get("/employees/{id}", deps.HRH.GetEmployee)
+						r.Get("/shifts", deps.HRH.ListShifts)
+						r.Get("/timesheets", deps.HRH.ListTimesheets)
+					})
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("hr.manage"))
+						r.Post("/employees", deps.HRH.HireEmployee)
+						r.Put("/employees/{id}", deps.HRH.UpdateEmployee)
+						r.Post("/employees/{id}/terminate", deps.HRH.TerminateEmployee)
+						r.Post("/shifts", deps.HRH.CreateShift)
+						r.Put("/shifts/{id}", deps.HRH.UpdateShift)
+						r.Delete("/shifts/{id}", deps.HRH.DeleteShift)
+						r.Post("/timesheets/clock-in", deps.HRH.ClockIn)
+						r.Post("/timesheets/{id}/clock-out", deps.HRH.ClockOut)
+						r.Post("/timesheets/{id}/approve", deps.HRH.ApproveTimesheet)
+					})
 				})
 
 				// Logistics
@@ -203,33 +218,35 @@ func NewRouter(deps RouterDeps) http.Handler {
 					r.Get("/geo/{entityID}/track", deps.LogisticsH.GetTrack)
 				})
 
-				// Finance
-				r.Route("/finance", func(r chi.Router) {
-					r.Get("/accounts", deps.FinanceH.ListAccounts)
-					r.Post("/accounts", deps.FinanceH.CreateAccount)
-					r.Get("/accounts/{id}/balance", deps.FinanceH.GetAccountBalance)
-
-					r.Post("/transactions", deps.FinanceH.CreateTransaction)
-					r.Get("/transactions", deps.FinanceH.ListTransactions)
-					r.Get("/transactions/{id}", deps.FinanceH.GetTransaction)
-					r.Post("/transactions/{id}/post", deps.FinanceH.PostTransaction)
-
-					r.Post("/invoices", deps.FinanceH.CreateInvoice)
-					r.Get("/invoices", deps.FinanceH.ListInvoices)
-					r.Post("/invoices/{id}/pay", deps.FinanceH.MarkInvoicePaid)
-
-					r.Get("/reports/trial-balance", deps.FinanceH.GetTrialBalance)
-				})
-
-				// Views (reactive subscriptions)
-				if deps.ViewsH != nil {
-					r.Route("/views", func(r chi.Router) {
-						r.Post("/subscribe", deps.ViewsH.Subscribe)
-						r.Post("/unsubscribe", deps.ViewsH.Unsubscribe)
-						r.Get("/active", deps.ViewsH.Active)
-						r.Post("/sync", deps.ViewsH.Sync)
+				// Admin (debug/monitoring)
+				if deps.AdminH != nil {
+					r.Route("/admin", func(r chi.Router) {
+						r.Get("/state", deps.AdminH.State)
+						r.Post("/invalidate", deps.AdminH.Invalidate)
+						r.Get("/graphs", deps.AdminH.Graphs)
 					})
 				}
+
+				// Finance
+				r.Route("/finance", func(r chi.Router) {
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("finance.view"))
+						r.Get("/accounts", deps.FinanceH.ListAccounts)
+						r.Get("/accounts/{id}/balance", deps.FinanceH.GetAccountBalance)
+						r.Get("/transactions", deps.FinanceH.ListTransactions)
+						r.Get("/transactions/{id}", deps.FinanceH.GetTransaction)
+						r.Get("/invoices", deps.FinanceH.ListInvoices)
+						r.Get("/reports/trial-balance", deps.FinanceH.GetTrialBalance)
+					})
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("finance.manage"))
+						r.Post("/accounts", deps.FinanceH.CreateAccount)
+						r.Post("/transactions", deps.FinanceH.CreateTransaction)
+						r.Post("/transactions/{id}/post", deps.FinanceH.PostTransaction)
+						r.Post("/invoices", deps.FinanceH.CreateInvoice)
+						r.Post("/invoices/{id}/pay", deps.FinanceH.MarkInvoicePaid)
+					})
+				})
 			})
 		})
 	})

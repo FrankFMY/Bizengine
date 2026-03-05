@@ -217,17 +217,20 @@ func TestHasPermission_Viewer(t *testing.T) {
 
 func TestHasPermission_Operator(t *testing.T) {
 	assert.True(t, HasPermission("operator", nil, "entity.read"))
+	assert.True(t, HasPermission("operator", nil, "catalog.view"))
 	assert.True(t, HasPermission("operator", nil, "warehouse.receive"))
 	assert.True(t, HasPermission("operator", nil, "warehouse.ship"))
 	assert.False(t, HasPermission("operator", nil, "warehouse.adjust"))
 	assert.False(t, HasPermission("operator", nil, "entity.create"))
+	assert.False(t, HasPermission("operator", nil, "catalog.manage"))
 }
 
 func TestHasPermission_Manager(t *testing.T) {
 	assert.True(t, HasPermission("manager", nil, "entity.create"))
 	assert.True(t, HasPermission("manager", nil, "catalog.manage"))
+	assert.True(t, HasPermission("manager", nil, "catalog.view"))
 	assert.True(t, HasPermission("manager", nil, "order.create"))
-	assert.True(t, HasPermission("manager", nil, "finance.view"))
+	assert.False(t, HasPermission("manager", nil, "finance.view"))
 	assert.False(t, HasPermission("manager", nil, "finance.manage"))
 	assert.False(t, HasPermission("manager", nil, "settings.manage"))
 }

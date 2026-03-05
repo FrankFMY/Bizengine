@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -20,8 +21,6 @@ import (
 	"github.com/bizengine/engine/internal/api/rest"
 	"github.com/bizengine/engine/internal/core/auth"
 	"github.com/bizengine/engine/internal/graphs"
-	"github.com/bizengine/engine/internal/views"
-	viewDefs "github.com/bizengine/engine/internal/views/defs"
 	"github.com/bizengine/engine/internal/core/entity"
 	"github.com/bizengine/engine/internal/core/event"
 	"github.com/bizengine/engine/internal/core/process"
@@ -37,6 +36,8 @@ import (
 	"github.com/bizengine/engine/pkg/dsl"
 	"github.com/bizengine/engine/pkg/types"
 )
+
+var version = "0.1.0"
 
 func main() {
 	ctx := context.Background()
@@ -118,23 +119,7 @@ func main() {
 	centPub := centrifugo.NewPublisher(cfg.Centrifugo.APIURL, cfg.Centrifugo.APIKey)
 	eventBus.SubscribeAll(event.SubscriberFunc(centPub.HandleEvent))
 
-	// View system
-	viewRegistry := views.NewRegistry()
-	viewDefs.RegisterAll(viewRegistry)
-	log.Info().Int("views", len(viewRegistry.All())).Msg("registered view definitions")
-	viewPub := views.NewCentrifugoViewPublisher(cfg.Centrifugo.APIURL, cfg.Centrifugo.APIKey)
-	viewManager := views.NewManager(viewRegistry, pool, viewPub)
-
-	// Event bus → view invalidation
-	eventBus.SubscribeAll(event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
-		changes := views.EventToChanges(ev)
-		for _, ch := range changes {
-			viewManager.Invalidate(ctx, ch)
-		}
-		return nil
-	}))
-
-	// Arcana reactive sync engine (parallel mount)
+	// Arcana reactive sync engine
 	arcanaEngine := arcana.New(arcana.Config{
 		Pool: arcana.PgxQuerier(pool),
 		Transport: arcana.NewCentrifugoTransport(arcana.CentrifugoConfig{
@@ -200,11 +185,11 @@ func main() {
 
 	// REST Router
 	router := rest.NewRouter(rest.RouterDeps{
-		AuthSvc:      authSvc,
-		AuthRepo:     authRepo,
-		CookieSecure: cfg.Session.CookieSecure,
-		Disconnector: centPub,
-		ViewUnsub:    viewManager,
+		AuthSvc:        authSvc,
+		AuthRepo:       authRepo,
+		CookieSecure:   cfg.Session.CookieSecure,
+		AllowedOrigins: cfg.Server.AllowedOrigins,
+		Disconnector:   centPub,
 		RedisClient:  redisClient,
 		Pool:         pool,
 		EntityH:      rest.NewEntityHandler(entitySvc),
@@ -225,7 +210,8 @@ func main() {
 		HRH:        rest.NewHRHandler(hrSvc),
 		FinanceH:   rest.NewFinanceHandler(financeSvc),
 		LogisticsH: rest.NewLogisticsHandler(logisticsSvc),
-		ViewsH:     rest.NewViewsHandler(viewManager),
+		AdminH:     rest.NewAdminHandler(arcanaEngine, version),
+		HealthH:    rest.NewHealthHandler(pool, redisClient, arcanaEngine, version),
 	})
 
 	// Wrap router with internal endpoints for Centrifugo proxy
@@ -360,7 +346,7 @@ func setupEventSubscriptions(eventBus event.Bus, warehouseSvc *warehouse.Service
 		if total > 0 {
 			date := ev.Timestamp.Format("2006-01-02")
 			refType := "order"
-			financeSvc.CreateAutoTransaction(ctx, ev.OrganizationID, date, "Order created", "62", "90", int64(total), &refType, ev.EntityID)
+			financeSvc.CreateAutoTransaction(ctx, ev.OrganizationID, date, "Order created", "62", "90", int64(math.Round(total)), &refType, ev.EntityID)
 		}
 		return nil
 	}))
@@ -377,7 +363,7 @@ func setupEventSubscriptions(eventBus event.Bus, warehouseSvc *warehouse.Service
 			if method == "cash" {
 				debitCode = "50"
 			}
-			financeSvc.CreateAutoTransaction(ctx, ev.OrganizationID, date, "Order payment", debitCode, "62", int64(amount), &refType, ev.EntityID)
+			financeSvc.CreateAutoTransaction(ctx, ev.OrganizationID, date, "Order payment", debitCode, "62", int64(math.Round(amount)), &refType, ev.EntityID)
 		}
 		return nil
 	}))
@@ -389,7 +375,7 @@ func setupEventSubscriptions(eventBus event.Bus, warehouseSvc *warehouse.Service
 		if cost > 0 {
 			date := ev.Timestamp.Format("2006-01-02")
 			refType := "stock"
-			financeSvc.CreateAutoTransaction(ctx, ev.OrganizationID, date, "Stock received", "41", "60", int64(cost), &refType, ev.EntityID)
+			financeSvc.CreateAutoTransaction(ctx, ev.OrganizationID, date, "Stock received", "41", "60", int64(math.Round(cost)), &refType, ev.EntityID)
 		}
 		return nil
 	}))

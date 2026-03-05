@@ -92,6 +92,7 @@ func (h *PassTempHandler) Handle(w http.ResponseWriter, r *http.Request) {
 
 	var userID uuid.UUID
 	var orgID uuid.UUID
+	var phoneID uuid.UUID
 
 	err = pgxTransaction(r.Context(), h.pool, func(tx pgx.Tx) error {
 		// Find or create user by phone
@@ -115,7 +116,7 @@ func (h *PassTempHandler) Handle(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 
-			phoneID := uuid.New()
+			phoneID = uuid.New()
 			_, err = tx.Exec(r.Context(),
 				`INSERT INTO phones (id, user_id, unformat, format, country, ver, upd, iat)
 				 VALUES ($1, $2, $3, $4, $5, 1, $6, $7)`,
@@ -132,6 +133,13 @@ func (h *PassTempHandler) Handle(w http.ResponseWriter, r *http.Request) {
 				`UPDATE users SET secret = $2, name = $3, updated_at = $4 WHERE id = $1`,
 				userID, hash, d.Name, now,
 			)
+			if err != nil {
+				return err
+			}
+			err = tx.QueryRow(r.Context(),
+				`SELECT id FROM phones WHERE user_id = $1 AND unformat = $2 LIMIT 1`,
+				userID, unformat,
+			).Scan(&phoneID)
 			if err != nil {
 				return err
 			}
@@ -191,7 +199,7 @@ func (h *PassTempHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		ID:       userID,
 		IsActive: true,
 	}
-	sess, seance, err := h.authSvc.CreateSessionAndSeance(r.Context(), user, uuid.New(), orgID, "owner")
+	sess, seance, err := h.authSvc.CreateSessionAndSeance(r.Context(), user, phoneID, orgID, "owner")
 	if err != nil {
 		respondError(w, errs.Wrap(err, errs.CodeInternal, "failed to create session"))
 		return

@@ -41,3 +41,5 @@ tmp/
 # Claude Code
 .claude/
 CLAUDE.md
+gen-types
+seed

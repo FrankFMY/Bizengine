@@ -22,8 +22,9 @@ type Config struct {
 
 // ServerConfig holds HTTP server settings.
 type ServerConfig struct {
-	Host string `env:"HOST, default=0.0.0.0"`
-	Port int    `env:"PORT, default=8080"`
+	Host           string   `env:"HOST, default=0.0.0.0"`
+	Port           int      `env:"PORT, default=8080"`
+	AllowedOrigins []string `env:"ALLOWED_ORIGINS"`
 }
 
 // DBConfig holds PostgreSQL connection settings.

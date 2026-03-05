@@ -9,14 +9,15 @@ import (
 
 // Session represents an authenticated user session stored in Redis.
 type Session struct {
-	ID          string    `json:"id"`
-	UserID      uuid.UUID `json:"user_id"`
-	PhoneID     uuid.UUID `json:"phone_id"`
+	ID             string    `json:"id"`
+	UserID         uuid.UUID `json:"user_id"`
+	PhoneID        uuid.UUID `json:"phone_id"`
 	OrganizationID uuid.UUID `json:"organization_id"`
-	Role        string    `json:"role"`
-	Email       string    `json:"email"`
-	FullName    string    `json:"full_name"`
-	CreatedAt   time.Time `json:"created_at"`
+	Role           string    `json:"role"`
+	Permissions    []string  `json:"permissions,omitempty"`
+	Email          string    `json:"email"`
+	FullName       string    `json:"full_name"`
+	CreatedAt      time.Time `json:"created_at"`
 }
 
 // Seance represents an activity proof tied to a session.

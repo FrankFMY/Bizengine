@@ -160,6 +160,9 @@ var orderDetail = arcana.GraphDef{
 				"total":      itemTotal,
 			})
 		}
+		if err := itemRows.Err(); err != nil {
+			return nil, err
+		}
 
 		return result, nil
 	},

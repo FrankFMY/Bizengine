@@ -84,7 +84,7 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (*LoginResu
 		phoneID = uuid.New()
 	}
 
-	sess, seance, err := s.createSessionAndSeance(ctx, user, phoneID, uuid.Nil, "")
+	sess, seance, err := s.createSessionAndSeance(ctx, user, phoneID, uuid.Nil, "", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -119,6 +119,7 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*LoginResult, er
 
 	var orgID uuid.UUID
 	var role string
+	var perms []string
 	if len(organizations) > 0 {
 		orgID = organizations[0].ID
 		member, err := s.repo.GetMember(ctx, organizations[0].ID, user.ID)
@@ -127,6 +128,7 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*LoginResult, er
 			if member.Admin {
 				role = "owner"
 			}
+			perms = parseLaborPermissions(member.Permissions)
 		}
 	}
 
@@ -135,7 +137,7 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*LoginResult, er
 		phoneID = uuid.New()
 	}
 
-	sess, seance, err := s.createSessionAndSeance(ctx, user, phoneID, orgID, role)
+	sess, seance, err := s.createSessionAndSeance(ctx, user, phoneID, orgID, role, perms)
 	if err != nil {
 		return nil, err
 	}
@@ -202,6 +204,7 @@ func (s *Service) SwitchOrganization(ctx context.Context, sessionID string, orgI
 	if member.Admin {
 		sess.Role = "owner"
 	}
+	sess.Permissions = parseLaborPermissions(member.Permissions)
 
 	if err := s.sessionStore.UpdateSession(ctx, sess, s.sessionTTL); err != nil {
 		return nil, err
@@ -263,20 +266,25 @@ func (s *Service) Store() SessionStore {
 }
 
 // CreateSessionAndSeance creates a session and seance for the given user.
-func (s *Service) CreateSessionAndSeance(ctx context.Context, user *types.User, phoneID, orgID uuid.UUID, role string) (*Session, *Seance, error) {
-	return s.createSessionAndSeance(ctx, user, phoneID, orgID, role)
+func (s *Service) CreateSessionAndSeance(ctx context.Context, user *types.User, phoneID, orgID uuid.UUID, role string, perms ...[]string) (*Session, *Seance, error) {
+	var p []string
+	if len(perms) > 0 {
+		p = perms[0]
+	}
+	return s.createSessionAndSeance(ctx, user, phoneID, orgID, role, p)
 }
 
-func (s *Service) createSessionAndSeance(ctx context.Context, user *types.User, phoneID, orgID uuid.UUID, role string) (*Session, *Seance, error) {
+func (s *Service) createSessionAndSeance(ctx context.Context, user *types.User, phoneID, orgID uuid.UUID, role string, perms []string) (*Session, *Seance, error) {
 	sess := &Session{
-		ID:          uuid.New().String(),
-		UserID:      user.ID,
-		PhoneID:     phoneID,
+		ID:             uuid.New().String(),
+		UserID:         user.ID,
+		PhoneID:        phoneID,
 		OrganizationID: orgID,
-		Role:        role,
-		Email:       user.Email,
-		FullName:    user.FullName,
-		CreatedAt:   time.Now(),
+		Role:           role,
+		Permissions:    perms,
+		Email:          user.Email,
+		FullName:       user.FullName,
+		CreatedAt:      time.Now(),
 	}
 	if err := s.sessionStore.CreateSession(ctx, sess, s.sessionTTL); err != nil {
 		return nil, nil, err
@@ -292,4 +300,15 @@ func (s *Service) createSessionAndSeance(ctx context.Context, user *types.User, 
 	}
 
 	return sess, seance, nil
+}
+
+func parseLaborPermissions(raw json.RawMessage) []string {
+	if len(raw) == 0 {
+		return nil
+	}
+	var perms []string
+	if err := json.Unmarshal(raw, &perms); err != nil {
+		return nil
+	}
+	return perms
 }

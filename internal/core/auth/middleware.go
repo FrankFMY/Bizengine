@@ -11,11 +11,12 @@ import (
 type contextKey string
 
 const (
-	ctxKeyUserID      contextKey = "user_id"
+	ctxKeyUserID         contextKey = "user_id"
 	ctxKeyOrganizationID contextKey = "organization_id"
-	ctxKeyRole        contextKey = "role"
-	ctxKeySessionID   contextKey = "session_id"
-	ctxKeySeanceID    contextKey = "seance_id"
+	ctxKeyRole           contextKey = "role"
+	ctxKeyPermissions    contextKey = "permissions"
+	ctxKeySessionID      contextKey = "session_id"
+	ctxKeySeanceID       contextKey = "seance_id"
 )
 
 // Exported context keys for testing.
@@ -73,6 +74,7 @@ func Middleware(svc *Service) func(http.Handler) http.Handler {
 
 			ctx = context.WithValue(ctx, ctxKeyUserID, sess.UserID)
 			ctx = context.WithValue(ctx, ctxKeyRole, sess.Role)
+			ctx = context.WithValue(ctx, ctxKeyPermissions, sess.Permissions)
 			ctx = context.WithValue(ctx, ctxKeySessionID, sess.ID)
 			ctx = context.WithValue(ctx, ctxKeySeanceID, seanceCookie.Value)
 
@@ -172,6 +174,12 @@ func OrganizationIDFromCtx(ctx context.Context) (uuid.UUID, bool) {
 func RoleFromCtx(ctx context.Context) string {
 	role, _ := ctx.Value(ctxKeyRole).(string)
 	return role
+}
+
+// PermissionsFromCtx extracts custom permissions from context.
+func PermissionsFromCtx(ctx context.Context) []string {
+	perms, _ := ctx.Value(ctxKeyPermissions).([]string)
+	return perms
 }
 
 // SessionIDFromCtx extracts session ID from context.
