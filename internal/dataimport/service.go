@@ -259,7 +259,7 @@ func (s *Service) parseCSV(data []byte) ([][]string, error) {
 	r.LazyQuotes = true
 
 	records, err := r.ReadAll()
-	if err != nil {
+	if err != nil || (len(records) > 0 && len(records[0]) <= 1) {
 		// Try semicolon separator
 		r = csv.NewReader(bytes.NewReader(data))
 		r.Comma = ';'

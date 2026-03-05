@@ -440,6 +440,15 @@ func (s *Service) CreateCashOperation(ctx context.Context, orgID uuid.UUID, inpu
 		input.AccountCode = "50" // default to cash account
 	}
 
+	date := time.Now()
+	open, err := s.IsPeriodOpen(ctx, orgID, date)
+	if err != nil {
+		return nil, err
+	}
+	if !open {
+		return nil, errs.NewConflict("accounting period is closed for " + date.Format("2006-01"))
+	}
+
 	op := &CashOperation{
 		ID:             uuid.New(),
 		OrganizationID: orgID,
