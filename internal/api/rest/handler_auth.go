@@ -66,7 +66,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	auth.SetAuthCookies(w, result.Session, result.Seance, h.authSvc.SessionTTL(), h.authSvc.SeanceTTL(), h.cookieSecure)
 
 	respondOK(w, http.StatusOK, map[string]any{
-		"user":       result.User,
+		"user":          result.User,
 		"organizations": result.Organizations,
 	})
 }
@@ -194,6 +194,6 @@ func (h *AuthHandler) SwitchOrganization(w http.ResponseWriter, r *http.Request)
 
 	respondOK(w, http.StatusOK, map[string]any{
 		"organization_id": sess.OrganizationID,
-		"role":         sess.Role,
+		"role":            sess.Role,
 	})
 }

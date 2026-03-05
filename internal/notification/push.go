@@ -8,9 +8,9 @@ import (
 )
 
 type PushMessage struct {
-	UserID uuid.UUID `json:"user_id"`
-	Title  string    `json:"title"`
-	Body   string    `json:"body"`
+	UserID uuid.UUID         `json:"user_id"`
+	Title  string            `json:"title"`
+	Body   string            `json:"body"`
 	Data   map[string]string `json:"data,omitempty"`
 }
 

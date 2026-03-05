@@ -10,11 +10,11 @@ import (
 
 // MarkingInfo contains information about a marked product code.
 type MarkingInfo struct {
-	Code       string `json:"code"`
-	Valid      bool   `json:"valid"`
+	Code        string `json:"code"`
+	Valid       bool   `json:"valid"`
 	ProductName string `json:"product_name"`
-	Category   string `json:"category"` // tobacco, pharma, shoes, clothes, dairy
-	Status     string `json:"status"`   // introduced, in_circulation, retired
+	Category    string `json:"category"` // tobacco, pharma, shoes, clothes, dairy
+	Status      string `json:"status"`   // introduced, in_circulation, retired
 }
 
 // MarkingService defines the interface for product marking operations.
@@ -34,11 +34,11 @@ func NewStub() *Stub { return &Stub{} }
 func (s *Stub) VerifyCode(_ context.Context, code string) (*MarkingInfo, error) {
 	log.Debug().Str("code", code).Msg("chestnyznak stub: VerifyCode")
 	return &MarkingInfo{
-		Code:       code,
-		Valid:      true,
+		Code:        code,
+		Valid:       true,
 		ProductName: "Stub Product",
-		Category:   "unknown",
-		Status:     "in_circulation",
+		Category:    "unknown",
+		Status:      "in_circulation",
 	}, nil
 }
 

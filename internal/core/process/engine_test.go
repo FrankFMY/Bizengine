@@ -164,10 +164,10 @@ func TestStartProcess(t *testing.T) {
 	orgID := uuid.New()
 
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		EntityID:    &entityID,
-		Type:        "order.created",
+		EntityID:       &entityID,
+		Type:           "order.created",
 	}
 
 	err := engine.HandleEvent(ctx, ev)

@@ -33,7 +33,7 @@ func (h *FinanceHandler) ListAccounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,accounts)
+	respondOK(w, http.StatusOK, accounts)
 }
 
 // CreateAccount handles POST /api/v1/organizations/{orgID}/finance/accounts.
@@ -56,7 +56,7 @@ func (h *FinanceHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondCreated(w,acct)
+	respondCreated(w, acct)
 }
 
 // GetAccountBalance handles GET /api/v1/organizations/{orgID}/finance/accounts/{id}/balance.
@@ -92,7 +92,7 @@ func (h *FinanceHandler) GetAccountBalance(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	respondOK(w, http.StatusOK,bal)
+	respondOK(w, http.StatusOK, bal)
 }
 
 // CreateTransaction handles POST /api/v1/organizations/{orgID}/finance/transactions.
@@ -116,7 +116,7 @@ func (h *FinanceHandler) CreateTransaction(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	respondCreated(w,txn)
+	respondCreated(w, txn)
 }
 
 // GetTransaction handles GET /api/v1/organizations/{orgID}/finance/transactions/{id}.
@@ -138,7 +138,7 @@ func (h *FinanceHandler) GetTransaction(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	respondOK(w, http.StatusOK,txn)
+	respondOK(w, http.StatusOK, txn)
 }
 
 // ListTransactions handles GET /api/v1/organizations/{orgID}/finance/transactions.
@@ -171,7 +171,7 @@ func (h *FinanceHandler) ListTransactions(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	respondOK(w, http.StatusOK,map[string]any{
+	respondOK(w, http.StatusOK, map[string]any{
 		"items":  txns,
 		"total":  total,
 		"limit":  filter.Page.Limit,
@@ -225,7 +225,7 @@ func (h *FinanceHandler) GetTrialBalance(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	respondOK(w, http.StatusOK,rows)
+	respondOK(w, http.StatusOK, rows)
 }
 
 // CreateInvoice handles POST /api/v1/organizations/{orgID}/finance/invoices.
@@ -248,7 +248,7 @@ func (h *FinanceHandler) CreateInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondCreated(w,inv)
+	respondCreated(w, inv)
 }
 
 // ListInvoices handles GET /api/v1/organizations/{orgID}/finance/invoices.
@@ -271,7 +271,7 @@ func (h *FinanceHandler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,map[string]any{
+	respondOK(w, http.StatusOK, map[string]any{
 		"items":  invoices,
 		"total":  total,
 		"limit":  filter.Page.Limit,

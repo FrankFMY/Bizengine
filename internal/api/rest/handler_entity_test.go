@@ -171,9 +171,9 @@ func (m *mockEntityEventStore) GetByType(_ context.Context, _ uuid.UUID, _ strin
 type mockEntityBus struct{}
 
 func (m *mockEntityBus) Publish(_ context.Context, _ types.Event) error { return nil }
-func (m *mockEntityBus) Subscribe(_ string, _ event.Subscriber)        {}
-func (m *mockEntityBus) SubscribePattern(_ string, _ event.Subscriber) {}
-func (m *mockEntityBus) SubscribeAll(_ event.Subscriber)               {}
+func (m *mockEntityBus) Subscribe(_ string, _ event.Subscriber)         {}
+func (m *mockEntityBus) SubscribePattern(_ string, _ event.Subscriber)  {}
+func (m *mockEntityBus) SubscribeAll(_ event.Subscriber)                {}
 
 // --- helpers ---
 

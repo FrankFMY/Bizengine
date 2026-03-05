@@ -18,31 +18,31 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/FrankFMY/arcana"
+	"github.com/bizengine/engine/internal/analytics"
 	"github.com/bizengine/engine/internal/api/centrifugo"
 	"github.com/bizengine/engine/internal/api/rest"
 	"github.com/bizengine/engine/internal/core/auth"
-	"github.com/bizengine/engine/internal/graphs"
 	"github.com/bizengine/engine/internal/core/entity"
 	"github.com/bizengine/engine/internal/core/event"
 	"github.com/bizengine/engine/internal/core/process"
-	"github.com/bizengine/engine/internal/module/catalog"
-	"github.com/bizengine/engine/internal/module/finance"
-	"github.com/bizengine/engine/internal/module/hr"
-	"github.com/bizengine/engine/internal/module/logistics"
-	"github.com/bizengine/engine/internal/analytics"
 	"github.com/bizengine/engine/internal/export"
+	"github.com/bizengine/engine/internal/graphs"
 	"github.com/bizengine/engine/internal/integration/bank"
 	"github.com/bizengine/engine/internal/integration/chestnyznak"
 	"github.com/bizengine/engine/internal/integration/edo"
 	"github.com/bizengine/engine/internal/integration/fns"
-	"github.com/bizengine/engine/internal/notification"
-	"github.com/bizengine/engine/internal/webhook"
+	"github.com/bizengine/engine/internal/module/catalog"
 	"github.com/bizengine/engine/internal/module/file"
+	"github.com/bizengine/engine/internal/module/finance"
+	"github.com/bizengine/engine/internal/module/hr"
+	"github.com/bizengine/engine/internal/module/logistics"
 	"github.com/bizengine/engine/internal/module/order"
 	"github.com/bizengine/engine/internal/module/warehouse"
+	"github.com/bizengine/engine/internal/notification"
 	"github.com/bizengine/engine/internal/storage/postgres"
-	s3client "github.com/bizengine/engine/internal/storage/s3"
 	redisStore "github.com/bizengine/engine/internal/storage/redis"
+	s3client "github.com/bizengine/engine/internal/storage/s3"
+	"github.com/bizengine/engine/internal/webhook"
 	"github.com/bizengine/engine/pkg/config"
 	"github.com/bizengine/engine/pkg/dsl"
 	"github.com/bizengine/engine/pkg/types"
@@ -256,8 +256,8 @@ func main() {
 		CookieSecure:   cfg.Session.CookieSecure,
 		AllowedOrigins: cfg.Server.AllowedOrigins,
 		Disconnector:   centPub,
-		RedisClient:  redisClient,
-		Pool:         pool,
+		RedisClient:    redisClient,
+		Pool:           pool,
 		OnOrgCreated: []func(ctx context.Context, orgID uuid.UUID) error{
 			financeSvc.SeedDefaultAccounts,
 			func(ctx context.Context, orgID uuid.UUID) error {
@@ -267,8 +267,8 @@ func main() {
 				return err
 			},
 		},
-		EntityH:      rest.NewEntityHandler(entitySvc),
-		EventH:       rest.NewEventHandler(eventStore),
+		EntityH: rest.NewEntityHandler(entitySvc),
+		EventH:  rest.NewEventHandler(eventStore),
 		OrganizationH: rest.NewOrganizationHandler(authSvc, authRepo,
 			financeSvc.SeedDefaultAccounts,
 			func(ctx context.Context, orgID uuid.UUID) error {
@@ -278,21 +278,21 @@ func main() {
 				return err
 			},
 		),
-		CatalogH:   rest.NewCatalogHandler(catalogSvc),
-		WarehouseH: rest.NewWarehouseHandler(warehouseSvc),
-		OrderH:     rest.NewOrderHandler(orderSvc),
-		ProcessH:   rest.NewProcessHandler(processEngine),
-		HRH:        rest.NewHRHandler(hrSvc),
-		FinanceH:   rest.NewFinanceHandler(financeSvc),
-		LogisticsH: rest.NewLogisticsHandler(logisticsSvc),
-		FileH:      rest.NewFileHandler(fileSvc),
-		ExportH:    rest.NewExportHandler(exportSvc),
-		IntegrationH: rest.NewIntegrationHandler(fiscalSvc, edoSvc, markingSvc, bankingSvc),
-		AnalyticsH: rest.NewAnalyticsHandler(analyticsSvc),
-		WebhookH:       rest.NewWebhookHandler(webhookSvc),
-		NotificationH:  rest.NewNotificationHandler(notifSvc),
-		AdminH:     rest.NewAdminHandler(arcanaEngine, version),
-		HealthH:    rest.NewHealthHandler(pool, redisClient, arcanaEngine, cfg.Centrifugo.APIURL, version),
+		CatalogH:      rest.NewCatalogHandler(catalogSvc),
+		WarehouseH:    rest.NewWarehouseHandler(warehouseSvc),
+		OrderH:        rest.NewOrderHandler(orderSvc),
+		ProcessH:      rest.NewProcessHandler(processEngine),
+		HRH:           rest.NewHRHandler(hrSvc),
+		FinanceH:      rest.NewFinanceHandler(financeSvc),
+		LogisticsH:    rest.NewLogisticsHandler(logisticsSvc),
+		FileH:         rest.NewFileHandler(fileSvc),
+		ExportH:       rest.NewExportHandler(exportSvc),
+		IntegrationH:  rest.NewIntegrationHandler(fiscalSvc, edoSvc, markingSvc, bankingSvc),
+		AnalyticsH:    rest.NewAnalyticsHandler(analyticsSvc),
+		WebhookH:      rest.NewWebhookHandler(webhookSvc),
+		NotificationH: rest.NewNotificationHandler(notifSvc),
+		AdminH:        rest.NewAdminHandler(arcanaEngine, version),
+		HealthH:       rest.NewHealthHandler(pool, redisClient, arcanaEngine, cfg.Centrifugo.APIURL, version),
 	})
 
 	// Wrap router with internal endpoints for Centrifugo proxy
@@ -365,7 +365,7 @@ func setupEventSubscriptions(eventBus event.Bus, warehouseSvc *warehouse.Service
 	// Warehouse reacts to order events
 	eventBus.Subscribe("order.confirmed", event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
 		var data struct {
-			Items       []struct {
+			Items []struct {
 				ProductID uuid.UUID `json:"product_id"`
 				Quantity  float64   `json:"quantity"`
 			} `json:"items"`
@@ -393,7 +393,7 @@ func setupEventSubscriptions(eventBus event.Bus, warehouseSvc *warehouse.Service
 
 	eventBus.Subscribe("order.cancelled", event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
 		var data struct {
-			Items       []struct {
+			Items []struct {
 				ProductID uuid.UUID `json:"product_id"`
 				Quantity  float64   `json:"quantity"`
 			} `json:"items"`

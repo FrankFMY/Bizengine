@@ -105,16 +105,16 @@ func (e *Engine) GetDefinition(ctx context.Context, id string, orgID *uuid.UUID)
 func (e *Engine) startProcess(ctx context.Context, ev types.Event, def *dsl.ProcessDefinition) error {
 	now := time.Now()
 	inst := &Instance{
-		ID:           uuid.New(),
-		OrganizationID:  ev.OrganizationID,
-		DefinitionID: def.ID,
-		EntityID:     *ev.EntityID,
-		CurrentState: def.InitState,
-		Status:       "active",
-		Context:      json.RawMessage(`{}`),
-		History:      json.RawMessage(`[]`),
-		StartedAt:    now,
-		UpdatedAt:    now,
+		ID:             uuid.New(),
+		OrganizationID: ev.OrganizationID,
+		DefinitionID:   def.ID,
+		EntityID:       *ev.EntityID,
+		CurrentState:   def.InitState,
+		Status:         "active",
+		Context:        json.RawMessage(`{}`),
+		History:        json.RawMessage(`[]`),
+		StartedAt:      now,
+		UpdatedAt:      now,
 	}
 
 	if err := e.repo.CreateInstance(ctx, inst); err != nil {
@@ -228,12 +228,12 @@ func (e *Engine) executeEmitEvent(ctx context.Context, source types.Event, param
 	data, _ := params["data"].(map[string]any)
 
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: source.OrganizationID,
-		EntityID:    source.EntityID,
-		Type:        eventType,
-		Timestamp:   time.Now(),
-		Version:     1,
+		EntityID:       source.EntityID,
+		Type:           eventType,
+		Timestamp:      time.Now(),
+		Version:        1,
 	}
 	ev.Data, _ = json.Marshal(data)
 	e.eventBus.Publish(ctx, ev)
@@ -245,12 +245,12 @@ func (e *Engine) executeUpdateStatus(ctx context.Context, source types.Event, pa
 		return
 	}
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: source.OrganizationID,
-		EntityID:    source.EntityID,
-		Type:        "entity.status_update_requested",
-		Timestamp:   time.Now(),
-		Version:     1,
+		EntityID:       source.EntityID,
+		Type:           "entity.status_update_requested",
+		Timestamp:      time.Now(),
+		Version:        1,
 	}
 	ev.Data, _ = json.Marshal(map[string]any{"status": status})
 	e.eventBus.Publish(ctx, ev)
@@ -258,12 +258,12 @@ func (e *Engine) executeUpdateStatus(ctx context.Context, source types.Event, pa
 
 func (e *Engine) executeNotify(ctx context.Context, source types.Event, params map[string]any) {
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: source.OrganizationID,
-		EntityID:    source.EntityID,
-		Type:        "notification.created",
-		Timestamp:   time.Now(),
-		Version:     1,
+		EntityID:       source.EntityID,
+		Type:           "notification.created",
+		Timestamp:      time.Now(),
+		Version:        1,
 	}
 	ev.Data, _ = json.Marshal(params)
 	e.eventBus.Publish(ctx, ev)
@@ -300,13 +300,13 @@ func (e *Engine) DeleteDefinition(ctx context.Context, id string, orgID uuid.UUI
 // TriggerManual allows manual triggering of an event for process advancement.
 func (e *Engine) TriggerManual(ctx context.Context, orgID uuid.UUID, entityID uuid.UUID, eventType string, data json.RawMessage) error {
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		EntityID:    &entityID,
-		Type:        eventType,
-		Timestamp:   time.Now(),
-		Version:     1,
-		Data:        data,
+		EntityID:       &entityID,
+		Type:           eventType,
+		Timestamp:      time.Now(),
+		Version:        1,
+		Data:           data,
 	}
 	return e.HandleEvent(ctx, ev)
 }
@@ -378,4 +378,3 @@ func inSlice(val any, list any) bool {
 	}
 	return false
 }
-

@@ -39,10 +39,10 @@ func TestParseAndValidateYAMLFiles(t *testing.T) {
 func TestValidateRejectsInvalid(t *testing.T) {
 	t.Run("empty ID", func(t *testing.T) {
 		def := &ProcessDefinition{
-			Name:      "Test",
-			TriggerOn: "test.event",
+			Name:       "Test",
+			TriggerOn:  "test.event",
 			EntityKind: "test",
-			InitState: "start",
+			InitState:  "start",
 			States: map[string]State{
 				"start": {Name: "Start", Terminal: true},
 			},
@@ -53,11 +53,11 @@ func TestValidateRejectsInvalid(t *testing.T) {
 
 	t.Run("missing init state", func(t *testing.T) {
 		def := &ProcessDefinition{
-			ID:        "test",
-			Name:      "Test",
-			TriggerOn: "test.event",
+			ID:         "test",
+			Name:       "Test",
+			TriggerOn:  "test.event",
 			EntityKind: "test",
-			InitState: "nonexistent",
+			InitState:  "nonexistent",
 			States: map[string]State{
 				"start": {Name: "Start", Terminal: true},
 			},
@@ -68,11 +68,11 @@ func TestValidateRejectsInvalid(t *testing.T) {
 
 	t.Run("no terminal state", func(t *testing.T) {
 		def := &ProcessDefinition{
-			ID:        "test",
-			Name:      "Test",
-			TriggerOn: "test.event",
+			ID:         "test",
+			Name:       "Test",
+			TriggerOn:  "test.event",
 			EntityKind: "test",
-			InitState: "start",
+			InitState:  "start",
 			States: map[string]State{
 				"start": {Name: "Start"},
 			},
@@ -83,11 +83,11 @@ func TestValidateRejectsInvalid(t *testing.T) {
 
 	t.Run("invalid transition target", func(t *testing.T) {
 		def := &ProcessDefinition{
-			ID:        "test",
-			Name:      "Test",
-			TriggerOn: "test.event",
+			ID:         "test",
+			Name:       "Test",
+			TriggerOn:  "test.event",
 			EntityKind: "test",
-			InitState: "start",
+			InitState:  "start",
 			States: map[string]State{
 				"start": {
 					Name: "Start",
@@ -104,11 +104,11 @@ func TestValidateRejectsInvalid(t *testing.T) {
 
 	t.Run("invalid operator", func(t *testing.T) {
 		def := &ProcessDefinition{
-			ID:        "test",
-			Name:      "Test",
-			TriggerOn: "test.event",
+			ID:         "test",
+			Name:       "Test",
+			TriggerOn:  "test.event",
 			EntityKind: "test",
-			InitState: "start",
+			InitState:  "start",
 			States: map[string]State{
 				"start": {
 					Name: "Start",

@@ -40,7 +40,7 @@ func (h *LogisticsHandler) CreateRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondCreated(w,route)
+	respondCreated(w, route)
 }
 
 // ListRoutes handles GET /api/v1/organizations/{orgID}/logistics/routes.
@@ -63,7 +63,7 @@ func (h *LogisticsHandler) ListRoutes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,map[string]any{
+	respondOK(w, http.StatusOK, map[string]any{
 		"items":  routes,
 		"total":  total,
 		"limit":  filter.Page.Limit,
@@ -90,7 +90,7 @@ func (h *LogisticsHandler) GetRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,route)
+	respondOK(w, http.StatusOK, route)
 }
 
 // StartRoute handles POST /api/v1/organizations/{orgID}/logistics/routes/{id}/start.
@@ -113,7 +113,7 @@ func (h *LogisticsHandler) StartRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,route)
+	respondOK(w, http.StatusOK, route)
 }
 
 // CompleteRoute handles POST /api/v1/organizations/{orgID}/logistics/routes/{id}/complete.
@@ -136,7 +136,7 @@ func (h *LogisticsHandler) CompleteRoute(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	respondOK(w, http.StatusOK,route)
+	respondOK(w, http.StatusOK, route)
 }
 
 // ArriveAtStop handles POST /api/v1/organizations/{orgID}/logistics/routes/{id}/stops/{stopID}/arrive.
@@ -164,7 +164,7 @@ func (h *LogisticsHandler) ArriveAtStop(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	respondOK(w, http.StatusOK,stop)
+	respondOK(w, http.StatusOK, stop)
 }
 
 // CompleteStop handles POST /api/v1/organizations/{orgID}/logistics/routes/{id}/stops/{stopID}/complete.
@@ -192,7 +192,7 @@ func (h *LogisticsHandler) CompleteStop(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	respondOK(w, http.StatusOK,stop)
+	respondOK(w, http.StatusOK, stop)
 }
 
 // UpdateGeo handles POST /api/v1/organizations/{orgID}/logistics/geo.
@@ -205,12 +205,12 @@ func (h *LogisticsHandler) UpdateGeo(w http.ResponseWriter, r *http.Request) {
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
 	var body struct {
-		EntityID  string          `json:"entity_id"`
-		Latitude  float64         `json:"latitude"`
-		Longitude float64         `json:"longitude"`
-		Speed     float64         `json:"speed"`
-		Heading   float64         `json:"heading"`
-		RecordedAt *time.Time     `json:"recorded_at,omitempty"`
+		EntityID   string     `json:"entity_id"`
+		Latitude   float64    `json:"latitude"`
+		Longitude  float64    `json:"longitude"`
+		Speed      float64    `json:"speed"`
+		Heading    float64    `json:"heading"`
+		RecordedAt *time.Time `json:"recorded_at,omitempty"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		respondError(w, err)
@@ -278,5 +278,5 @@ func (h *LogisticsHandler) GetTrack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,points)
+	respondOK(w, http.StatusOK, points)
 }

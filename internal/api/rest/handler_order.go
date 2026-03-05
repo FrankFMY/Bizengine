@@ -48,7 +48,7 @@ func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondCreated(w,o)
+	respondCreated(w, o)
 }
 
 // List handles GET /api/v1/organizations/{orgID}/orders.
@@ -72,7 +72,7 @@ func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,result)
+	respondOK(w, http.StatusOK, result)
 }
 
 // Get handles GET /api/v1/organizations/{orgID}/orders/{id}.
@@ -95,7 +95,7 @@ func (h *OrderHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,o)
+	respondOK(w, http.StatusOK, o)
 }
 
 // Update handles PUT /api/v1/organizations/{orgID}/orders/{id}.
@@ -124,7 +124,7 @@ func (h *OrderHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,o)
+	respondOK(w, http.StatusOK, o)
 }
 
 // Confirm handles POST /api/v1/organizations/{orgID}/orders/{id}/confirm.
@@ -147,7 +147,7 @@ func (h *OrderHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,o)
+	respondOK(w, http.StatusOK, o)
 }
 
 // Pay handles POST /api/v1/organizations/{orgID}/orders/{id}/pay.
@@ -176,7 +176,7 @@ func (h *OrderHandler) Pay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,o)
+	respondOK(w, http.StatusOK, o)
 }
 
 // Ship handles POST /api/v1/organizations/{orgID}/orders/{id}/ship.
@@ -205,7 +205,7 @@ func (h *OrderHandler) Ship(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,o)
+	respondOK(w, http.StatusOK, o)
 }
 
 // Deliver handles POST /api/v1/organizations/{orgID}/orders/{id}/deliver.
@@ -228,7 +228,7 @@ func (h *OrderHandler) Deliver(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,o)
+	respondOK(w, http.StatusOK, o)
 }
 
 // Submit handles POST /api/v1/organizations/{orgID}/orders/{id}/submit.
@@ -282,5 +282,5 @@ func (h *OrderHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,o)
+	respondOK(w, http.StatusOK, o)
 }

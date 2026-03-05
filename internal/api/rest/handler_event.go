@@ -42,7 +42,7 @@ func (h *EventHandler) List(w http.ResponseWriter, r *http.Request) {
 			respondError(w, err)
 			return
 		}
-		respondOK(w, http.StatusOK,events)
+		respondOK(w, http.StatusOK, events)
 		return
 	}
 
@@ -52,7 +52,7 @@ func (h *EventHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,map[string]any{
+	respondOK(w, http.StatusOK, map[string]any{
 		"items":  events,
 		"total":  total,
 		"limit":  page.Limit,
@@ -88,5 +88,5 @@ func (h *EventHandler) GetByEntity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,events)
+	respondOK(w, http.StatusOK, events)
 }

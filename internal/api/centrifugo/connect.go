@@ -67,9 +67,9 @@ func (h *ConnectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.store.SlideSeance(ctx, seanceID, h.seanceTTL)
 
 	data, _ := json.Marshal(map[string]string{
-		"user_id":      sess.UserID.String(),
+		"user_id":         sess.UserID.String(),
 		"organization_id": sess.OrganizationID.String(),
-		"role":         sess.Role,
+		"role":            sess.Role,
 	})
 
 	resp := connectResponse{

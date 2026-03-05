@@ -121,8 +121,8 @@ func (m *mockEntityRepo) SetComponentTx(ctx context.Context, _ pgx.Tx, c *types.
 
 type mockEventStore struct{}
 
-func (m *mockEventStore) Append(context.Context, types.Event) error              { return nil }
-func (m *mockEventStore) AppendTx(context.Context, pgx.Tx, types.Event) error   { return nil }
+func (m *mockEventStore) Append(context.Context, types.Event) error           { return nil }
+func (m *mockEventStore) AppendTx(context.Context, pgx.Tx, types.Event) error { return nil }
 func (m *mockEventStore) GetByEntity(_ context.Context, _, _ uuid.UUID, _ *time.Time, _ int) ([]types.Event, error) {
 	return nil, nil
 }

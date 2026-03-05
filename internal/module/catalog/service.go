@@ -227,13 +227,13 @@ func (s *Service) UpdateProduct(ctx context.Context, orgID uuid.UUID, productID 
 
 	// Publish event
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		EntityID:    &productID,
-		Type:        "catalog.product.updated",
-		ActorID:     actorID,
-		Timestamp:   time.Now(),
-		Version:     1,
+		EntityID:       &productID,
+		Type:           "catalog.product.updated",
+		ActorID:        actorID,
+		Timestamp:      time.Now(),
+		Version:        1,
 	}
 	ev.Data, _ = json.Marshal(map[string]any{"id": productID})
 	s.eventBus.Publish(ctx, ev)
@@ -249,13 +249,13 @@ func (s *Service) ArchiveProduct(ctx context.Context, orgID uuid.UUID, productID
 	}
 
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		EntityID:    &productID,
-		Type:        "catalog.product.archived",
-		ActorID:     actorID,
-		Timestamp:   time.Now(),
-		Version:     1,
+		EntityID:       &productID,
+		Type:           "catalog.product.archived",
+		ActorID:        actorID,
+		Timestamp:      time.Now(),
+		Version:        1,
 	}
 	ev.Data, _ = json.Marshal(map[string]any{"id": productID})
 	s.eventBus.Publish(ctx, ev)

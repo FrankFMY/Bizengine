@@ -30,9 +30,9 @@ func TestIntegrationEntityCRUD(t *testing.T) {
 	// Create
 	e := &types.Entity{
 		OrganizationID: orgID,
-		Kind:        "product",
-		Name:        "Integration Widget",
-		Meta:        json.RawMessage(`{"color":"blue"}`),
+		Kind:           "product",
+		Name:           "Integration Widget",
+		Meta:           json.RawMessage(`{"color":"blue"}`),
 	}
 	err := repo.Create(ctx, e)
 	require.NoError(t, err)
@@ -103,10 +103,10 @@ func TestIntegrationComponents(t *testing.T) {
 
 	// SetComponent
 	c := &types.Component{
-		EntityID:    e.ID,
+		EntityID:       e.ID,
 		OrganizationID: orgID,
-		Type:        "geo",
-		Data:        json.RawMessage(`{"lat":55.75,"lng":37.62}`),
+		Type:           "geo",
+		Data:           json.RawMessage(`{"lat":55.75,"lng":37.62}`),
 	}
 	err := repo.SetComponent(ctx, c)
 	require.NoError(t, err)
@@ -120,10 +120,10 @@ func TestIntegrationComponents(t *testing.T) {
 
 	// Upsert — version increments
 	c2 := &types.Component{
-		EntityID:    e.ID,
+		EntityID:       e.ID,
 		OrganizationID: orgID,
-		Type:        "geo",
-		Data:        json.RawMessage(`{"lat":56.0,"lng":38.0}`),
+		Type:           "geo",
+		Data:           json.RawMessage(`{"lat":56.0,"lng":38.0}`),
 	}
 	err = repo.SetComponent(ctx, c2)
 	require.NoError(t, err)
@@ -131,10 +131,10 @@ func TestIntegrationComponents(t *testing.T) {
 
 	// ListComponents
 	c3 := &types.Component{
-		EntityID:    e.ID,
+		EntityID:       e.ID,
 		OrganizationID: orgID,
-		Type:        "speed",
-		Data:        json.RawMessage(`{"value":60}`),
+		Type:           "speed",
+		Data:           json.RawMessage(`{"value":60}`),
 	}
 	require.NoError(t, repo.SetComponent(ctx, c3))
 
@@ -167,26 +167,26 @@ func TestIntegrationEventStore(t *testing.T) {
 	// Append events
 	for i := 0; i < 5; i++ {
 		ev := types.Event{
-			ID:          uuid.New(),
+			ID:             uuid.New(),
 			OrganizationID: orgID,
-			EntityID:    &entityID,
-			Type:        "entity.updated",
-			Data:        json.RawMessage(`{"i":` + string(rune('0'+i)) + `}`),
-			Timestamp:   time.Now().Add(time.Duration(i) * time.Second),
-			Version:     1,
+			EntityID:       &entityID,
+			Type:           "entity.updated",
+			Data:           json.RawMessage(`{"i":` + string(rune('0'+i)) + `}`),
+			Timestamp:      time.Now().Add(time.Duration(i) * time.Second),
+			Version:        1,
 		}
 		require.NoError(t, store.Append(ctx, ev))
 	}
 
 	// Append event of different type
 	ev2 := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		EntityID:    &entityID,
-		Type:        "entity.created",
-		Data:        json.RawMessage(`{}`),
-		Timestamp:   time.Now(),
-		Version:     1,
+		EntityID:       &entityID,
+		Type:           "entity.created",
+		Data:           json.RawMessage(`{}`),
+		Timestamp:      time.Now(),
+		Version:        1,
 	}
 	require.NoError(t, store.Append(ctx, ev2))
 

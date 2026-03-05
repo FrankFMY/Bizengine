@@ -37,7 +37,9 @@ func (r *recorder) PushSendBulk(_ context.Context, msgs []PushMessage) error {
 
 type recorderEmail struct{ r *recorder }
 
-func (e *recorderEmail) Send(ctx context.Context, msg EmailMessage) error { return e.r.EmailSend(ctx, msg) }
+func (e *recorderEmail) Send(ctx context.Context, msg EmailMessage) error {
+	return e.r.EmailSend(ctx, msg)
+}
 
 type recorderSMS struct{ r *recorder }
 
@@ -45,7 +47,9 @@ func (s *recorderSMS) Send(ctx context.Context, msg SMSMessage) error { return s
 
 type recorderPush struct{ r *recorder }
 
-func (p *recorderPush) Send(ctx context.Context, msg PushMessage) error { return p.r.PushSend(ctx, msg) }
+func (p *recorderPush) Send(ctx context.Context, msg PushMessage) error {
+	return p.r.PushSend(ctx, msg)
+}
 func (p *recorderPush) SendBulk(ctx context.Context, msgs []PushMessage) error {
 	return p.r.PushSendBulk(ctx, msgs)
 }

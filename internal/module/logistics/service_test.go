@@ -131,9 +131,9 @@ func (m *mockBus) Publish(_ context.Context, ev types.Event) error {
 	m.published = append(m.published, ev)
 	return nil
 }
-func (m *mockBus) Subscribe(_ string, _ event.Subscriber)      {}
+func (m *mockBus) Subscribe(_ string, _ event.Subscriber)        {}
 func (m *mockBus) SubscribePattern(_ string, _ event.Subscriber) {}
-func (m *mockBus) SubscribeAll(_ event.Subscriber)              {}
+func (m *mockBus) SubscribeAll(_ event.Subscriber)               {}
 
 // --- helpers ---
 

@@ -84,12 +84,12 @@ func TestConnectHandler_Success(t *testing.T) {
 	seanceID := uuid.New().String()
 
 	store.sessions[sessID] = &auth.Session{
-		ID:          sessID,
-		UserID:      userID,
+		ID:             sessID,
+		UserID:         userID,
 		OrganizationID: orgID,
-		Role:        "owner",
-		Email:       "test@example.com",
-		FullName:    "Test User",
+		Role:           "owner",
+		Email:          "test@example.com",
+		FullName:       "Test User",
 	}
 	store.seances[seanceID] = &auth.Seance{
 		ID:        seanceID,

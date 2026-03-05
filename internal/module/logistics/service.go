@@ -30,15 +30,15 @@ func (s *Service) CreateRoute(ctx context.Context, orgID uuid.UUID, input Create
 	}
 
 	route := &Route{
-		ID:           uuid.New(),
-		OrganizationID:  orgID,
-		Name:         input.Name,
-		VehicleID:    input.VehicleID,
-		DriverID:     input.DriverID,
-		Status:       "planned",
-		PlannedStart: input.PlannedStart,
-		PlannedEnd:   input.PlannedEnd,
-		CreatedAt:    time.Now(),
+		ID:             uuid.New(),
+		OrganizationID: orgID,
+		Name:           input.Name,
+		VehicleID:      input.VehicleID,
+		DriverID:       input.DriverID,
+		Status:         "planned",
+		PlannedStart:   input.PlannedStart,
+		PlannedEnd:     input.PlannedEnd,
+		CreatedAt:      time.Now(),
 	}
 
 	if err := s.repo.CreateRoute(ctx, route); err != nil {
@@ -51,7 +51,7 @@ func (s *Service) CreateRoute(ctx context.Context, orgID uuid.UUID, input Create
 			stops[i] = RouteStop{
 				ID:             uuid.New(),
 				RouteID:        route.ID,
-				OrganizationID:    orgID,
+				OrganizationID: orgID,
 				LocationID:     stopInput.LocationID,
 				Address:        stopInput.Address,
 				Latitude:       stopInput.Latitude,
@@ -243,11 +243,11 @@ func (s *Service) GetTrack(ctx context.Context, orgID, entityID uuid.UUID, from,
 func (s *Service) publishEvent(ctx context.Context, orgID uuid.UUID, eventType string, data map[string]any, actorID *uuid.UUID) {
 	payload, _ := json.Marshal(data)
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		Type:        eventType,
-		Data:        payload,
-		Timestamp:   time.Now(),
+		Type:           eventType,
+		Data:           payload,
+		Timestamp:      time.Now(),
 	}
 	if actorID != nil {
 		ev.ActorID = actorID

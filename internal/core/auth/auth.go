@@ -47,10 +47,10 @@ type LoginInput struct {
 
 // LoginResult is the response for register/login.
 type LoginResult struct {
-	User       *types.User       `json:"user"`
+	User          *types.User          `json:"user"`
 	Organizations []types.Organization `json:"organizations,omitempty"`
-	Session    *Session          `json:"-"`
-	Seance     *Seance           `json:"-"`
+	Session       *Session             `json:"-"`
+	Seance        *Seance              `json:"-"`
 }
 
 // Register creates a new user account with a session.
@@ -143,10 +143,10 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*LoginResult, er
 	}
 
 	return &LoginResult{
-		User:       user,
+		User:          user,
 		Organizations: organizations,
-		Session:    sess,
-		Seance:     seance,
+		Session:       sess,
+		Seance:        seance,
 	}, nil
 }
 
@@ -239,9 +239,9 @@ func (s *Service) CreateOrganization(ctx context.Context, userID uuid.UUID, name
 
 	member := &types.Labor{
 		OrganizationID: org.ID,
-		UserID:      userID,
-		Role:        "owner",
-		Permissions: json.RawMessage(`[]`),
+		UserID:         userID,
+		Role:           "owner",
+		Permissions:    json.RawMessage(`[]`),
 	}
 	if err := s.repo.AddMember(ctx, member); err != nil {
 		return nil, err

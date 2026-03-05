@@ -29,14 +29,14 @@ func (s *Service) SeedDefaultAccounts(ctx context.Context, orgID uuid.UUID) erro
 	return s.repo.WithTx(ctx, func(tx pgx.Tx) error {
 		for _, input := range DefaultAccounts() {
 			acct := &Account{
-				ID:          uuid.New(),
+				ID:             uuid.New(),
 				OrganizationID: orgID,
-				Code:        input.Code,
-				Name:        input.Name,
-				Type:        input.Type,
-				IsSystem:    true,
-				Currency:    "RUB",
-				CreatedAt:   time.Now(),
+				Code:           input.Code,
+				Name:           input.Name,
+				Type:           input.Type,
+				IsSystem:       true,
+				Currency:       "RUB",
+				CreatedAt:      time.Now(),
 			}
 			if err := s.repo.CreateAccount(ctx, tx, acct); err != nil {
 				return err
@@ -64,14 +64,14 @@ func (s *Service) CreateAccount(ctx context.Context, orgID uuid.UUID, input Crea
 	}
 
 	acct := &Account{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		Code:        input.Code,
-		Name:        input.Name,
-		Type:        input.Type,
-		ParentID:    input.ParentID,
-		Currency:    input.Currency,
-		CreatedAt:   time.Now(),
+		Code:           input.Code,
+		Name:           input.Name,
+		Type:           input.Type,
+		ParentID:       input.ParentID,
+		Currency:       input.Currency,
+		CreatedAt:      time.Now(),
 	}
 
 	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
@@ -137,27 +137,27 @@ func (s *Service) CreateTransaction(ctx context.Context, orgID uuid.UUID, input 
 	}
 
 	txn := &Transaction{
-		ID:            uuid.New(),
-		OrganizationID:   orgID,
-		Date:          date,
-		Description:   input.Description,
-		ReferenceType: input.ReferenceType,
-		ReferenceID:   input.ReferenceID,
-		ActorID:       actorID,
-		CreatedAt:     time.Now(),
+		ID:             uuid.New(),
+		OrganizationID: orgID,
+		Date:           date,
+		Description:    input.Description,
+		ReferenceType:  input.ReferenceType,
+		ReferenceID:    input.ReferenceID,
+		ActorID:        actorID,
+		CreatedAt:      time.Now(),
 	}
 
 	var lines []TransactionLine
 	for _, lineInput := range input.Lines {
 		lines = append(lines, TransactionLine{
-			ID:            uuid.New(),
-			TransactionID: txn.ID,
-			OrganizationID:   orgID,
-			AccountID:     lineInput.AccountID,
-			Debit:         lineInput.Debit,
-			Credit:        lineInput.Credit,
-			Description:   lineInput.Description,
-			EntityID:      lineInput.EntityID,
+			ID:             uuid.New(),
+			TransactionID:  txn.ID,
+			OrganizationID: orgID,
+			AccountID:      lineInput.AccountID,
+			Debit:          lineInput.Debit,
+			Credit:         lineInput.Credit,
+			Description:    lineInput.Description,
+			EntityID:       lineInput.EntityID,
 		})
 	}
 
@@ -239,7 +239,7 @@ func (s *Service) CreateInvoice(ctx context.Context, orgID uuid.UUID, input Crea
 
 	inv := &Invoice{
 		ID:             uuid.New(),
-		OrganizationID:    orgID,
+		OrganizationID: orgID,
 		Number:         input.Number,
 		Type:           input.Type,
 		CounterpartyID: input.CounterpartyID,
@@ -319,11 +319,11 @@ func (s *Service) CreateAutoTransaction(ctx context.Context, orgID uuid.UUID, da
 func (s *Service) publishEvent(ctx context.Context, orgID uuid.UUID, eventType string, data map[string]any, actorID *uuid.UUID) {
 	payload, _ := json.Marshal(data)
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		Type:        eventType,
-		Data:        payload,
-		Timestamp:   time.Now(),
+		Type:           eventType,
+		Data:           payload,
+		Timestamp:      time.Now(),
 	}
 	if actorID != nil {
 		ev.ActorID = actorID

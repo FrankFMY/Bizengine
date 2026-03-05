@@ -38,22 +38,22 @@ type Repository interface {
 // StockLevel represents current stock for a product in a warehouse.
 type StockLevel struct {
 	OrganizationID uuid.UUID `json:"organization_id"`
-	ProductID   uuid.UUID `json:"product_id"`
-	WarehouseID uuid.UUID `json:"warehouse_id"`
-	Quantity    float64   `json:"quantity"`
-	Reserved    float64   `json:"reserved"`
-	Available   float64   `json:"available"`
-	Unit        string    `json:"unit"`
-	CostPerUnit *int64    `json:"cost_per_unit,omitempty"`
-	MinQuantity float64   `json:"min_quantity"`
-	MaxQuantity *float64  `json:"max_quantity,omitempty"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ProductID      uuid.UUID `json:"product_id"`
+	WarehouseID    uuid.UUID `json:"warehouse_id"`
+	Quantity       float64   `json:"quantity"`
+	Reserved       float64   `json:"reserved"`
+	Available      float64   `json:"available"`
+	Unit           string    `json:"unit"`
+	CostPerUnit    *int64    `json:"cost_per_unit,omitempty"`
+	MinQuantity    float64   `json:"min_quantity"`
+	MaxQuantity    *float64  `json:"max_quantity,omitempty"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // StockMovement represents a stock movement record.
 type StockMovement struct {
 	ID              uuid.UUID  `json:"id"`
-	OrganizationID     uuid.UUID  `json:"organization_id"`
+	OrganizationID  uuid.UUID  `json:"organization_id"`
 	ProductID       uuid.UUID  `json:"product_id"`
 	WarehouseID     uuid.UUID  `json:"warehouse_id"`
 	Type            string     `json:"type"`

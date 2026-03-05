@@ -39,30 +39,30 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, input CreateEntit
 	}
 
 	e := &types.Entity{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		Kind:        input.Kind,
-		Name:        input.Name,
-		ParentID:    input.ParentID,
-		Meta:        input.Meta,
+		Kind:           input.Kind,
+		Name:           input.Name,
+		ParentID:       input.ParentID,
+		Meta:           input.Meta,
 	}
 	if e.Meta == nil {
 		e.Meta = json.RawMessage(`{}`)
 	}
 
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		EntityID:    &e.ID,
-		Type:        "entity.created",
-		ActorID:     actorID,
-		Timestamp:   time.Now(),
-		Version:     1,
+		EntityID:       &e.ID,
+		Type:           "entity.created",
+		ActorID:        actorID,
+		Timestamp:      time.Now(),
+		Version:        1,
 	}
 	ev.Data, _ = json.Marshal(map[string]any{
-		"id":   e.ID,
-		"kind": e.Kind,
-		"name": e.Name,
+		"id":     e.ID,
+		"kind":   e.Kind,
+		"name":   e.Name,
 		"status": "active",
 	})
 
@@ -253,13 +253,13 @@ func (s *Service) Update(ctx context.Context, orgID, id uuid.UUID, input UpdateE
 	}
 
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		EntityID:    &id,
-		Type:        "entity.updated",
-		ActorID:     actorID,
-		Timestamp:   time.Now(),
-		Version:     1,
+		EntityID:       &id,
+		Type:           "entity.updated",
+		ActorID:        actorID,
+		Timestamp:      time.Now(),
+		Version:        1,
 	}
 	ev.Data, _ = json.Marshal(map[string]any{
 		"id":      id,
@@ -287,13 +287,13 @@ func (s *Service) Delete(ctx context.Context, orgID, id uuid.UUID, actorID *uuid
 	}
 
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		EntityID:    &id,
-		Type:        "entity.deleted",
-		ActorID:     actorID,
-		Timestamp:   time.Now(),
-		Version:     1,
+		EntityID:       &id,
+		Type:           "entity.deleted",
+		ActorID:        actorID,
+		Timestamp:      time.Now(),
+		Version:        1,
 	}
 	ev.Data, _ = json.Marshal(map[string]any{
 		"id":   id,
@@ -321,21 +321,21 @@ func (s *Service) SetComponent(ctx context.Context, orgID, entityID uuid.UUID, c
 	}
 
 	c := &types.Component{
-		ID:          uuid.New(),
-		EntityID:    entityID,
+		ID:             uuid.New(),
+		EntityID:       entityID,
 		OrganizationID: orgID,
-		Type:        compType,
-		Data:        data,
+		Type:           compType,
+		Data:           data,
 	}
 
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		EntityID:    &entityID,
-		Type:        "component.set",
-		ActorID:     actorID,
-		Timestamp:   time.Now(),
-		Version:     1,
+		EntityID:       &entityID,
+		Type:           "component.set",
+		ActorID:        actorID,
+		Timestamp:      time.Now(),
+		Version:        1,
 	}
 	ev.Data, _ = json.Marshal(map[string]any{
 		"entity_id": entityID,
@@ -379,13 +379,13 @@ func (s *Service) DeleteComponent(ctx context.Context, orgID, entityID uuid.UUID
 	}
 
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		EntityID:    &entityID,
-		Type:        "component.removed",
-		ActorID:     actorID,
-		Timestamp:   time.Now(),
-		Version:     1,
+		EntityID:       &entityID,
+		Type:           "component.removed",
+		ActorID:        actorID,
+		Timestamp:      time.Now(),
+		Version:        1,
 	}
 	ev.Data, _ = json.Marshal(map[string]any{
 		"entity_id": entityID,

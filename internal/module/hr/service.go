@@ -222,16 +222,16 @@ func (s *Service) CreateShift(ctx context.Context, orgID uuid.UUID, input Create
 	}
 
 	shift := &Shift{
-		ID:           uuid.New(),
-		OrganizationID:  orgID,
-		EmployeeID:   input.EmployeeID,
-		LocationID:   input.LocationID,
-		StartTime:    input.StartTime,
-		EndTime:      input.EndTime,
-		BreakMinutes: input.BreakMinutes,
-		Status:       "scheduled",
-		Notes:        input.Notes,
-		CreatedAt:    time.Now(),
+		ID:             uuid.New(),
+		OrganizationID: orgID,
+		EmployeeID:     input.EmployeeID,
+		LocationID:     input.LocationID,
+		StartTime:      input.StartTime,
+		EndTime:        input.EndTime,
+		BreakMinutes:   input.BreakMinutes,
+		Status:         "scheduled",
+		Notes:          input.Notes,
+		CreatedAt:      time.Now(),
 	}
 	if err := s.repo.CreateShift(ctx, shift); err != nil {
 		return nil, err
@@ -314,13 +314,13 @@ func (s *Service) ClockIn(ctx context.Context, orgID, employeeID uuid.UUID, shif
 	}
 
 	ts := &Timesheet{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		EmployeeID:  employeeID,
-		ShiftID:     shiftID,
-		ClockIn:     time.Now(),
-		Status:      "open",
-		CreatedAt:   time.Now(),
+		EmployeeID:     employeeID,
+		ShiftID:        shiftID,
+		ClockIn:        time.Now(),
+		Status:         "open",
+		CreatedAt:      time.Now(),
 	}
 	if err := s.repo.CreateTimesheet(ctx, ts); err != nil {
 		return nil, err
@@ -415,12 +415,12 @@ func (s *Service) ApproveTimesheet(ctx context.Context, orgID, tsID uuid.UUID, a
 func (s *Service) publishEvent(ctx context.Context, orgID uuid.UUID, entityID uuid.UUID, eventType string, data map[string]any, actorID *uuid.UUID) {
 	payload, _ := json.Marshal(data)
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		EntityID:    &entityID,
-		Type:        eventType,
-		Data:        payload,
-		Timestamp:   time.Now(),
+		EntityID:       &entityID,
+		Type:           eventType,
+		Data:           payload,
+		Timestamp:      time.Now(),
 	}
 	if actorID != nil {
 		ev.ActorID = actorID

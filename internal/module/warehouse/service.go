@@ -128,17 +128,17 @@ func (s *Service) Receive(ctx context.Context, orgID uuid.UUID, input ReceiveInp
 		}
 
 		m := &StockMovement{
-			ID:          uuid.New(),
+			ID:             uuid.New(),
 			OrganizationID: orgID,
-			ProductID:   input.ProductID,
-			WarehouseID: input.WarehouseID,
-			Type:        "receive",
-			Quantity:    input.Quantity,
-			Unit:        input.Unit,
-			CostPerUnit: input.CostPerUnit,
-			Reason:      input.Reason,
-			ActorID:     input.ActorID,
-			CreatedAt:   time.Now(),
+			ProductID:      input.ProductID,
+			WarehouseID:    input.WarehouseID,
+			Type:           "receive",
+			Quantity:       input.Quantity,
+			Unit:           input.Unit,
+			CostPerUnit:    input.CostPerUnit,
+			Reason:         input.Reason,
+			ActorID:        input.ActorID,
+			CreatedAt:      time.Now(),
 		}
 		if err := s.repo.InsertMovement(ctx, tx, m); err != nil {
 			return err
@@ -198,17 +198,17 @@ func (s *Service) Ship(ctx context.Context, orgID uuid.UUID, input ShipInput) (*
 		}
 
 		m := &StockMovement{
-			ID:            uuid.New(),
-			OrganizationID:   orgID,
-			ProductID:     input.ProductID,
-			WarehouseID:   input.WarehouseID,
-			Type:          "ship",
-			Quantity:      input.Quantity,
-			Unit:          input.Unit,
-			ReferenceType: input.ReferenceType,
-			ReferenceID:   input.ReferenceID,
-			ActorID:       input.ActorID,
-			CreatedAt:     time.Now(),
+			ID:             uuid.New(),
+			OrganizationID: orgID,
+			ProductID:      input.ProductID,
+			WarehouseID:    input.WarehouseID,
+			Type:           "ship",
+			Quantity:       input.Quantity,
+			Unit:           input.Unit,
+			ReferenceType:  input.ReferenceType,
+			ReferenceID:    input.ReferenceID,
+			ActorID:        input.ActorID,
+			CreatedAt:      time.Now(),
 		}
 		if err := s.repo.InsertMovement(ctx, tx, m); err != nil {
 			return err
@@ -279,7 +279,7 @@ func (s *Service) Transfer(ctx context.Context, orgID uuid.UUID, input TransferI
 
 		m := &StockMovement{
 			ID:              uuid.New(),
-			OrganizationID:     orgID,
+			OrganizationID:  orgID,
 			ProductID:       input.ProductID,
 			WarehouseID:     input.FromWarehouseID,
 			Type:            "transfer",
@@ -300,10 +300,10 @@ func (s *Service) Transfer(ctx context.Context, orgID uuid.UUID, input TransferI
 	}
 
 	s.publishEvent(ctx, orgID, input.ProductID, "warehouse.stock.transferred", input.ActorID, map[string]any{
-		"product_id":       input.ProductID,
-		"from_warehouse":   input.FromWarehouseID,
-		"to_warehouse":     input.ToWarehouseID,
-		"quantity":         input.Quantity,
+		"product_id":     input.ProductID,
+		"from_warehouse": input.FromWarehouseID,
+		"to_warehouse":   input.ToWarehouseID,
+		"quantity":       input.Quantity,
 	})
 
 	return &result, nil
@@ -335,16 +335,16 @@ func (s *Service) Adjust(ctx context.Context, orgID uuid.UUID, input AdjustInput
 		}
 
 		m := &StockMovement{
-			ID:          uuid.New(),
+			ID:             uuid.New(),
 			OrganizationID: orgID,
-			ProductID:   input.ProductID,
-			WarehouseID: input.WarehouseID,
-			Type:        "adjust",
-			Quantity:    diff,
-			Unit:        sl.Unit,
-			Reason:      input.Reason,
-			ActorID:     input.ActorID,
-			CreatedAt:   time.Now(),
+			ProductID:      input.ProductID,
+			WarehouseID:    input.WarehouseID,
+			Type:           "adjust",
+			Quantity:       diff,
+			Unit:           sl.Unit,
+			Reason:         input.Reason,
+			ActorID:        input.ActorID,
+			CreatedAt:      time.Now(),
 		}
 		if err := s.repo.InsertMovement(ctx, tx, m); err != nil {
 			return err
@@ -526,10 +526,10 @@ func (s *Service) getOrCreateStockLevel(ctx context.Context, tx pgx.Tx, orgID, p
 	if err != nil {
 		sl = &StockLevel{
 			OrganizationID: orgID,
-			ProductID:   productID,
-			WarehouseID: warehouseID,
-			Unit:        unit,
-			UpdatedAt:   time.Now(),
+			ProductID:      productID,
+			WarehouseID:    warehouseID,
+			Unit:           unit,
+			UpdatedAt:      time.Now(),
 		}
 	}
 	return sl, nil
@@ -537,13 +537,13 @@ func (s *Service) getOrCreateStockLevel(ctx context.Context, tx pgx.Tx, orgID, p
 
 func (s *Service) publishEvent(ctx context.Context, orgID uuid.UUID, productID uuid.UUID, eventType string, actorID *uuid.UUID, data map[string]any) {
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		EntityID:    &productID,
-		Type:        eventType,
-		ActorID:     actorID,
-		Timestamp:   time.Now(),
-		Version:     1,
+		EntityID:       &productID,
+		Type:           eventType,
+		ActorID:        actorID,
+		Timestamp:      time.Now(),
+		Version:        1,
 	}
 	ev.Data, _ = json.Marshal(data)
 	s.eventBus.Publish(ctx, ev)

@@ -26,8 +26,8 @@ type subscribeRequest struct {
 }
 
 type subscribeResponse struct {
-	Result     *subscribeResult `json:"result,omitempty"`
-	Error      *proxyError      `json:"error,omitempty"`
+	Result *subscribeResult `json:"result,omitempty"`
+	Error  *proxyError      `json:"error,omitempty"`
 }
 
 type subscribeResult struct{}

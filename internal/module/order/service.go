@@ -30,10 +30,10 @@ type CheckItem struct {
 
 // Service provides order business logic.
 type Service struct {
-	repo       Repository
-	entitySvc  *entity.Service
-	eventBus   event.Bus
-	warehouse  WarehouseChecker
+	repo      Repository
+	entitySvc *entity.Service
+	eventBus  event.Bus
+	warehouse WarehouseChecker
 }
 
 // NewService creates a new order service.
@@ -78,19 +78,19 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, input CreateOrder
 		for i, item := range input.Items {
 			itemTotal := int64(math.Round(float64(item.UnitPrice)*item.Quantity)) - item.Discount + item.Tax
 			items[i] = OrderItem{
-				ID:          uuid.New(),
-				OrderID:     uuid.Nil, // will be set after order creation
+				ID:             uuid.New(),
+				OrderID:        uuid.Nil, // will be set after order creation
 				OrganizationID: orgID,
-				ProductID:   item.ProductID,
-				Name:        "Product", // snapshot — in real scenario, look up product name
-				Quantity:    item.Quantity,
-				Unit:        "шт",
-				UnitPrice:   item.UnitPrice,
-				Discount:    item.Discount,
-				Tax:         item.Tax,
-				Total:       itemTotal,
-				SortOrder:   i,
-				CreatedAt:   now,
+				ProductID:      item.ProductID,
+				Name:           "Product", // snapshot — in real scenario, look up product name
+				Quantity:       item.Quantity,
+				Unit:           "шт",
+				UnitPrice:      item.UnitPrice,
+				Discount:       item.Discount,
+				Tax:            item.Tax,
+				Total:          itemTotal,
+				SortOrder:      i,
+				CreatedAt:      now,
 			}
 			subtotal += int64(math.Round(float64(item.UnitPrice) * item.Quantity))
 			totalDiscount += item.Discount
@@ -98,22 +98,22 @@ func (s *Service) Create(ctx context.Context, orgID uuid.UUID, input CreateOrder
 		}
 
 		order = &Order{
-			ID:          uuid.New(),
+			ID:             uuid.New(),
 			OrganizationID: orgID,
-			EntityID:    e.ID,
-			Number:      number,
-			CustomerID:  input.CustomerID,
-			Status:      "draft",
-			Subtotal:    subtotal,
-			Discount:    totalDiscount,
-			Tax:         totalTax,
-			Total:       subtotal - totalDiscount + totalTax,
-			Currency:    "RUB",
-			Notes:       input.Notes,
-			Source:      "manual",
-			WarehouseID: input.WarehouseID,
-			CreatedAt:   now,
-			UpdatedAt:   now,
+			EntityID:       e.ID,
+			Number:         number,
+			CustomerID:     input.CustomerID,
+			Status:         "draft",
+			Subtotal:       subtotal,
+			Discount:       totalDiscount,
+			Tax:            totalTax,
+			Total:          subtotal - totalDiscount + totalTax,
+			Currency:       "RUB",
+			Notes:          input.Notes,
+			Source:         "manual",
+			WarehouseID:    input.WarehouseID,
+			CreatedAt:      now,
+			UpdatedAt:      now,
 		}
 
 		if err := s.repo.CreateOrder(ctx, tx, order); err != nil {
@@ -424,19 +424,19 @@ func (s *Service) Update(ctx context.Context, orgID, orderID uuid.UUID, input Up
 		for i, item := range input.Items {
 			itemTotal := int64(math.Round(float64(item.UnitPrice)*item.Quantity)) - item.Discount + item.Tax
 			items[i] = OrderItem{
-				ID:          uuid.New(),
-				OrderID:     orderID,
+				ID:             uuid.New(),
+				OrderID:        orderID,
 				OrganizationID: orgID,
-				ProductID:   item.ProductID,
-				Name:        "Product",
-				Quantity:    item.Quantity,
-				Unit:        "шт",
-				UnitPrice:   item.UnitPrice,
-				Discount:    item.Discount,
-				Tax:         item.Tax,
-				Total:       itemTotal,
-				SortOrder:   i,
-				CreatedAt:   now,
+				ProductID:      item.ProductID,
+				Name:           "Product",
+				Quantity:       item.Quantity,
+				Unit:           "шт",
+				UnitPrice:      item.UnitPrice,
+				Discount:       item.Discount,
+				Tax:            item.Tax,
+				Total:          itemTotal,
+				SortOrder:      i,
+				CreatedAt:      now,
 			}
 			subtotal += int64(math.Round(float64(item.UnitPrice) * item.Quantity))
 			totalDiscount += item.Discount
@@ -492,13 +492,13 @@ func orgID(o *Order) uuid.UUID { return o.OrganizationID }
 
 func (s *Service) publishEvent(ctx context.Context, organizationID uuid.UUID, entityID uuid.UUID, eventType string, actorID *uuid.UUID, data map[string]any) {
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: organizationID,
-		EntityID:    &entityID,
-		Type:        eventType,
-		ActorID:     actorID,
-		Timestamp:   time.Now(),
-		Version:     1,
+		EntityID:       &entityID,
+		Type:           eventType,
+		ActorID:        actorID,
+		Timestamp:      time.Now(),
+		Version:        1,
 	}
 	ev.Data, _ = json.Marshal(data)
 	s.eventBus.Publish(ctx, ev)

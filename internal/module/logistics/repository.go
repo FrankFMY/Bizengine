@@ -30,25 +30,25 @@ type Repository interface {
 
 // Route represents a delivery route.
 type Route struct {
-	ID           uuid.UUID   `json:"id"`
-	OrganizationID  uuid.UUID   `json:"organization_id"`
-	Name         string      `json:"name"`
-	VehicleID    *uuid.UUID  `json:"vehicle_id,omitempty"`
-	DriverID     *uuid.UUID  `json:"driver_id,omitempty"`
-	Status       string      `json:"status"`
-	PlannedStart *time.Time  `json:"planned_start,omitempty"`
-	PlannedEnd   *time.Time  `json:"planned_end,omitempty"`
-	ActualStart  *time.Time  `json:"actual_start,omitempty"`
-	ActualEnd    *time.Time  `json:"actual_end,omitempty"`
-	CreatedAt    time.Time   `json:"created_at"`
-	Stops        []RouteStop `json:"stops,omitempty"`
+	ID             uuid.UUID   `json:"id"`
+	OrganizationID uuid.UUID   `json:"organization_id"`
+	Name           string      `json:"name"`
+	VehicleID      *uuid.UUID  `json:"vehicle_id,omitempty"`
+	DriverID       *uuid.UUID  `json:"driver_id,omitempty"`
+	Status         string      `json:"status"`
+	PlannedStart   *time.Time  `json:"planned_start,omitempty"`
+	PlannedEnd     *time.Time  `json:"planned_end,omitempty"`
+	ActualStart    *time.Time  `json:"actual_start,omitempty"`
+	ActualEnd      *time.Time  `json:"actual_end,omitempty"`
+	CreatedAt      time.Time   `json:"created_at"`
+	Stops          []RouteStop `json:"stops,omitempty"`
 }
 
 // RouteStop represents a stop on a route.
 type RouteStop struct {
 	ID             uuid.UUID   `json:"id"`
 	RouteID        uuid.UUID   `json:"route_id"`
-	OrganizationID    uuid.UUID   `json:"organization_id"`
+	OrganizationID uuid.UUID   `json:"organization_id"`
 	LocationID     *uuid.UUID  `json:"location_id,omitempty"`
 	Address        string      `json:"address"`
 	Latitude       *float64    `json:"latitude,omitempty"`
@@ -79,11 +79,11 @@ type RouteFilter struct {
 
 // CreateRouteInput is the input for creating a route.
 type CreateRouteInput struct {
-	Name         string           `json:"name"`
-	VehicleID    *uuid.UUID       `json:"vehicle_id"`
-	DriverID     *uuid.UUID       `json:"driver_id"`
-	PlannedStart *time.Time       `json:"planned_start"`
-	PlannedEnd   *time.Time       `json:"planned_end"`
+	Name         string            `json:"name"`
+	VehicleID    *uuid.UUID        `json:"vehicle_id"`
+	DriverID     *uuid.UUID        `json:"driver_id"`
+	PlannedStart *time.Time        `json:"planned_start"`
+	PlannedEnd   *time.Time        `json:"planned_end"`
 	Stops        []CreateStopInput `json:"stops"`
 }
 

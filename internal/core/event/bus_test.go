@@ -15,12 +15,12 @@ import (
 
 func newTestEvent(eventType string) types.Event {
 	return types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: uuid.New(),
-		Type:        eventType,
-		Data:        []byte(`{}`),
-		Timestamp:   time.Now(),
-		Version:     1,
+		Type:           eventType,
+		Data:           []byte(`{}`),
+		Timestamp:      time.Now(),
+		Version:        1,
 	}
 }
 

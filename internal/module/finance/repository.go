@@ -45,47 +45,47 @@ type Repository interface {
 
 // Account represents a chart of accounts entry.
 type Account struct {
-	ID          uuid.UUID  `json:"id"`
+	ID             uuid.UUID  `json:"id"`
 	OrganizationID uuid.UUID  `json:"organization_id"`
-	Code        string     `json:"code"`
-	Name        string     `json:"name"`
-	Type        string     `json:"type"`
-	ParentID    *uuid.UUID `json:"parent_id,omitempty"`
-	IsSystem    bool       `json:"is_system"`
-	Currency    string     `json:"currency"`
-	CreatedAt   time.Time  `json:"created_at"`
+	Code           string     `json:"code"`
+	Name           string     `json:"name"`
+	Type           string     `json:"type"`
+	ParentID       *uuid.UUID `json:"parent_id,omitempty"`
+	IsSystem       bool       `json:"is_system"`
+	Currency       string     `json:"currency"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 // Transaction represents a journal entry.
 type Transaction struct {
-	ID            uuid.UUID         `json:"id"`
-	OrganizationID   uuid.UUID         `json:"organization_id"`
-	Date          time.Time         `json:"date"`
-	Description   string            `json:"description"`
-	ReferenceType *string           `json:"reference_type,omitempty"`
-	ReferenceID   *uuid.UUID        `json:"reference_id,omitempty"`
-	IsPosted      bool              `json:"is_posted"`
-	ActorID       *uuid.UUID        `json:"actor_id,omitempty"`
-	CreatedAt     time.Time         `json:"created_at"`
-	Lines         []TransactionLine `json:"lines,omitempty"`
+	ID             uuid.UUID         `json:"id"`
+	OrganizationID uuid.UUID         `json:"organization_id"`
+	Date           time.Time         `json:"date"`
+	Description    string            `json:"description"`
+	ReferenceType  *string           `json:"reference_type,omitempty"`
+	ReferenceID    *uuid.UUID        `json:"reference_id,omitempty"`
+	IsPosted       bool              `json:"is_posted"`
+	ActorID        *uuid.UUID        `json:"actor_id,omitempty"`
+	CreatedAt      time.Time         `json:"created_at"`
+	Lines          []TransactionLine `json:"lines,omitempty"`
 }
 
 // TransactionLine represents a debit or credit line.
 type TransactionLine struct {
-	ID            uuid.UUID  `json:"id"`
-	TransactionID uuid.UUID  `json:"transaction_id"`
-	OrganizationID   uuid.UUID  `json:"organization_id"`
-	AccountID     uuid.UUID  `json:"account_id"`
-	Debit         int64      `json:"debit"`
-	Credit        int64      `json:"credit"`
-	Description   string     `json:"description"`
-	EntityID      *uuid.UUID `json:"entity_id,omitempty"`
+	ID             uuid.UUID  `json:"id"`
+	TransactionID  uuid.UUID  `json:"transaction_id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	AccountID      uuid.UUID  `json:"account_id"`
+	Debit          int64      `json:"debit"`
+	Credit         int64      `json:"credit"`
+	Description    string     `json:"description"`
+	EntityID       *uuid.UUID `json:"entity_id,omitempty"`
 }
 
 // Invoice represents an incoming or outgoing invoice.
 type Invoice struct {
 	ID             uuid.UUID  `json:"id"`
-	OrganizationID    uuid.UUID  `json:"organization_id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
 	Number         string     `json:"number"`
 	Type           string     `json:"type"`
 	CounterpartyID *uuid.UUID `json:"counterparty_id,omitempty"`
@@ -112,10 +112,10 @@ type TrialBalanceRow struct {
 
 // AccountBalance represents the balance of a single account.
 type AccountBalance struct {
-	AccountID  uuid.UUID `json:"account_id"`
-	DebitTotal int64     `json:"debit_total"`
-	CreditTotal int64   `json:"credit_total"`
-	Balance    int64     `json:"balance"`
+	AccountID   uuid.UUID `json:"account_id"`
+	DebitTotal  int64     `json:"debit_total"`
+	CreditTotal int64     `json:"credit_total"`
+	Balance     int64     `json:"balance"`
 }
 
 // TransactionFilter holds query params for listing transactions.
@@ -145,10 +145,10 @@ type CreateAccountInput struct {
 
 // CreateTransactionInput is the input for creating a transaction.
 type CreateTransactionInput struct {
-	Date          string                    `json:"date"`
-	Description   string                    `json:"description"`
-	ReferenceType *string                   `json:"reference_type"`
-	ReferenceID   *uuid.UUID                `json:"reference_id"`
+	Date          string                       `json:"date"`
+	Description   string                       `json:"description"`
+	ReferenceType *string                      `json:"reference_type"`
+	ReferenceID   *uuid.UUID                   `json:"reference_id"`
 	Lines         []CreateTransactionLineInput `json:"lines"`
 }
 

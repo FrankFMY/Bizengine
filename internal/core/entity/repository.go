@@ -43,17 +43,17 @@ type ListFilter struct {
 
 // CreateEntityInput is the input for creating an entity.
 type CreateEntityInput struct {
-	Kind     string           `json:"kind"`
-	Name     string           `json:"name"`
-	ParentID *uuid.UUID       `json:"parent_id,omitempty"`
-	Meta     json.RawMessage  `json:"meta,omitempty"`
+	Kind     string          `json:"kind"`
+	Name     string          `json:"name"`
+	ParentID *uuid.UUID      `json:"parent_id,omitempty"`
+	Meta     json.RawMessage `json:"meta,omitempty"`
 }
 
 // UpdateEntityInput is the input for updating an entity.
 type UpdateEntityInput struct {
-	Name      *string          `json:"name,omitempty"`
-	Status    *string          `json:"status,omitempty"`
-	ParentID  *uuid.UUID       `json:"parent_id,omitempty"`
-	Meta      json.RawMessage  `json:"meta,omitempty"`
-	SortOrder *int             `json:"sort_order,omitempty"`
+	Name      *string         `json:"name,omitempty"`
+	Status    *string         `json:"status,omitempty"`
+	ParentID  *uuid.UUID      `json:"parent_id,omitempty"`
+	Meta      json.RawMessage `json:"meta,omitempty"`
+	SortOrder *int            `json:"sort_order,omitempty"`
 }

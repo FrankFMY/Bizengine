@@ -36,7 +36,7 @@ func (h *ProcessHandler) ListDefinitions(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	respondOK(w, http.StatusOK,defs)
+	respondOK(w, http.StatusOK, defs)
 }
 
 // GetDefinition handles GET /api/v1/organizations/{orgID}/processes/definitions/{defID}.
@@ -54,7 +54,7 @@ func (h *ProcessHandler) GetDefinition(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,def)
+	respondOK(w, http.StatusOK, def)
 }
 
 // ListInstances handles GET /api/v1/organizations/{orgID}/processes/instances.
@@ -74,7 +74,7 @@ func (h *ProcessHandler) ListInstances(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,map[string]any{
+	respondOK(w, http.StatusOK, map[string]any{
 		"items":  instances,
 		"total":  total,
 		"limit":  page.Limit,
@@ -96,7 +96,7 @@ func (h *ProcessHandler) GetInstance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,inst)
+	respondOK(w, http.StatusOK, inst)
 }
 
 // GetByEntity handles GET /api/v1/organizations/{orgID}/processes/entity/{entityID}.
@@ -113,7 +113,7 @@ func (h *ProcessHandler) GetByEntity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,instances)
+	respondOK(w, http.StatusOK, instances)
 }
 
 // Trigger handles POST /api/v1/organizations/{orgID}/processes/trigger.
@@ -156,8 +156,8 @@ func (h *ProcessHandler) CreateDefinition(w http.ResponseWriter, r *http.Request
 	}
 
 	var input struct {
-		Name        string              `json:"name"`
-		Description string              `json:"description"`
+		Name        string                `json:"name"`
+		Description string                `json:"description"`
 		Definition  dsl.ProcessDefinition `json:"definition"`
 	}
 	if err := decodeJSON(r, &input); err != nil {

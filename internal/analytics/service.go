@@ -17,11 +17,11 @@ func NewService(pool *pgxpool.Pool) *Service {
 }
 
 type DashboardData struct {
-	Revenue      RevenueData      `json:"revenue"`
-	Orders       OrdersData       `json:"orders"`
-	TopProducts  []ProductStat    `json:"top_products"`
-	LowStock     []StockAlert     `json:"low_stock"`
-	RecentOrders []RecentOrder    `json:"recent_orders"`
+	Revenue      RevenueData   `json:"revenue"`
+	Orders       OrdersData    `json:"orders"`
+	TopProducts  []ProductStat `json:"top_products"`
+	LowStock     []StockAlert  `json:"low_stock"`
+	RecentOrders []RecentOrder `json:"recent_orders"`
 }
 
 type RevenueData struct {

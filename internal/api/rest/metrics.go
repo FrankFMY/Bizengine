@@ -13,9 +13,9 @@ type Metrics struct {
 	errorCount     atomic.Int64
 	totalLatencyMs atomic.Int64
 
-	mu             sync.RWMutex
-	pathCounts     map[string]*atomic.Int64
-	statusCounts   map[int]*atomic.Int64
+	mu           sync.RWMutex
+	pathCounts   map[string]*atomic.Int64
+	statusCounts map[int]*atomic.Int64
 }
 
 var globalMetrics = &Metrics{
@@ -50,11 +50,11 @@ func (m *Metrics) Snapshot() map[string]any {
 	}
 
 	return map[string]any{
-		"requests_total":   total,
-		"errors_total":     m.errorCount.Load(),
-		"avg_latency_ms":   avgLatency,
-		"by_path":          paths,
-		"by_status":        statuses,
+		"requests_total": total,
+		"errors_total":   m.errorCount.Load(),
+		"avg_latency_ms": avgLatency,
+		"by_path":        paths,
+		"by_status":      statuses,
 	}
 }
 

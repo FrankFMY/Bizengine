@@ -67,7 +67,7 @@ func (h *EntityHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,e)
+	respondOK(w, http.StatusOK, e)
 }
 
 // List handles GET /api/v1/organizations/{orgID}/entities.
@@ -93,7 +93,7 @@ func (h *EntityHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,result)
+	respondOK(w, http.StatusOK, result)
 }
 
 // Update handles PUT /api/v1/organizations/{orgID}/entities/{id}.
@@ -122,7 +122,7 @@ func (h *EntityHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,e)
+	respondOK(w, http.StatusOK, e)
 }
 
 // Delete handles DELETE /api/v1/organizations/{orgID}/entities/{id}.
@@ -270,7 +270,7 @@ func (h *EntityHandler) GetComponent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,c)
+	respondOK(w, http.StatusOK, c)
 }
 
 // ListComponents handles GET /api/v1/organizations/{orgID}/entities/{entityID}/components.
@@ -292,7 +292,7 @@ func (h *EntityHandler) ListComponents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,comps)
+	respondOK(w, http.StatusOK, comps)
 }
 
 // DeleteComponent handles DELETE /api/v1/organizations/{orgID}/entities/{entityID}/components/{type}.

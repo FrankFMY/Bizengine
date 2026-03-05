@@ -36,7 +36,7 @@ var rolePermissions = map[string]map[string]bool{
 		"catalog.view": true, "catalog.manage": true,
 		"warehouse.receive": true, "warehouse.ship": true, "warehouse.transfer": true, "warehouse.adjust": true,
 		"order.create": true, "order.update": true, "order.cancel": true, "order.view": true,
-		"finance.view": true,
+		"finance.view":     true,
 		"logistics.manage": true, "logistics.view": true,
 	},
 	"operator": {

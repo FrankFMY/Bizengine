@@ -35,11 +35,11 @@ func TestPublisher_HandleEvent(t *testing.T) {
 	orgID := uuid.New()
 	entityID := uuid.New()
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: orgID,
-		EntityID:    &entityID,
-		Type:        "entity.created",
-		Data:        json.RawMessage(`{"name":"Widget"}`),
+		EntityID:       &entityID,
+		Type:           "entity.created",
+		Data:           json.RawMessage(`{"name":"Widget"}`),
 	}
 
 	err := pub.HandleEvent(context.Background(), ev)
@@ -58,10 +58,10 @@ func TestPublisher_ServerError(t *testing.T) {
 	pub := NewPublisher(srv.URL, "test-key")
 
 	ev := types.Event{
-		ID:          uuid.New(),
+		ID:             uuid.New(),
 		OrganizationID: uuid.New(),
-		Type:        "test.event",
-		Data:        json.RawMessage(`{}`),
+		Type:           "test.event",
+		Data:           json.RawMessage(`{}`),
 	}
 
 	// Should not return error (logs instead)

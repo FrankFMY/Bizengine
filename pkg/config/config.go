@@ -10,15 +10,15 @@ import (
 
 // Config holds all application configuration.
 type Config struct {
-	Server      ServerConfig      `env:", prefix=SERVER_"`
-	DB          DBConfig          `env:", prefix=DB_"`
-	Redis       RedisConfig       `env:", prefix=REDIS_"`
-	NATS        NATSConfig        `env:", prefix=NATS_"`
-	Session     SessionConfig     `env:", prefix=SESSION_"`
-	Centrifugo  CentrifugoConfig  `env:", prefix=CENTRIFUGO_"`
-	S3          S3Config          `env:", prefix=S3_"`
-	LogLevel    string            `env:"LOG_LEVEL, default=info"`
-	Env         string            `env:"ENV, default=development"`
+	Server     ServerConfig     `env:", prefix=SERVER_"`
+	DB         DBConfig         `env:", prefix=DB_"`
+	Redis      RedisConfig      `env:", prefix=REDIS_"`
+	NATS       NATSConfig       `env:", prefix=NATS_"`
+	Session    SessionConfig    `env:", prefix=SESSION_"`
+	Centrifugo CentrifugoConfig `env:", prefix=CENTRIFUGO_"`
+	S3         S3Config         `env:", prefix=S3_"`
+	LogLevel   string           `env:"LOG_LEVEL, default=info"`
+	Env        string           `env:"ENV, default=development"`
 }
 
 // ServerConfig holds HTTP server settings.

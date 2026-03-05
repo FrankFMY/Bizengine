@@ -16,8 +16,8 @@ type rateLimiter struct {
 }
 
 type visitor struct {
-	count    int
-	resetAt  time.Time
+	count   int
+	resetAt time.Time
 }
 
 func newRateLimiter(rate int, window time.Duration) *rateLimiter {

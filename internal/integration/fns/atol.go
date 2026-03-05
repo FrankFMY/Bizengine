@@ -116,7 +116,7 @@ func (c *ATOLClient) SendReceipt(ctx context.Context, orgID uuid.UUID, receipt R
 				"email": receipt.CustomerContact,
 			},
 			"company": map[string]any{
-				"inn":            c.cfg.INN,
+				"inn":             c.cfg.INN,
 				"payment_address": "online",
 			},
 			"items":    items,
@@ -190,8 +190,8 @@ func (c *ATOLClient) GetReceiptStatus(ctx context.Context, _ uuid.UUID, receiptI
 	defer resp.Body.Close()
 
 	var result struct {
-		UUID   string `json:"uuid"`
-		Status string `json:"status"`
+		UUID    string `json:"uuid"`
+		Status  string `json:"status"`
 		Payload struct {
 			FiscalDocumentNumber int `json:"fiscal_document_number"`
 		} `json:"payload"`

@@ -41,7 +41,7 @@ func (h *HRHandler) HireEmployee(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondCreated(w,emp)
+	respondCreated(w, emp)
 }
 
 // ListEmployees handles GET /api/v1/organizations/{orgID}/hr/employees.
@@ -64,7 +64,7 @@ func (h *HRHandler) ListEmployees(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,map[string]any{
+	respondOK(w, http.StatusOK, map[string]any{
 		"items":  employees,
 		"total":  total,
 		"limit":  filter.Page.Limit,
@@ -91,7 +91,7 @@ func (h *HRHandler) GetEmployee(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,emp)
+	respondOK(w, http.StatusOK, emp)
 }
 
 // UpdateEmployee handles PUT /api/v1/organizations/{orgID}/hr/employees/{id}.
@@ -120,7 +120,7 @@ func (h *HRHandler) UpdateEmployee(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,emp)
+	respondOK(w, http.StatusOK, emp)
 }
 
 // TerminateEmployee handles POST /api/v1/organizations/{orgID}/hr/employees/{id}/terminate.
@@ -174,7 +174,7 @@ func (h *HRHandler) CreateShift(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondCreated(w,shift)
+	respondCreated(w, shift)
 }
 
 // ListShifts handles GET /api/v1/organizations/{orgID}/hr/shifts.
@@ -212,7 +212,7 @@ func (h *HRHandler) ListShifts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,map[string]any{
+	respondOK(w, http.StatusOK, map[string]any{
 		"items":  shifts,
 		"total":  total,
 		"limit":  filter.Page.Limit,
@@ -246,7 +246,7 @@ func (h *HRHandler) UpdateShift(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,shift)
+	respondOK(w, http.StatusOK, shift)
 }
 
 // DeleteShift handles DELETE /api/v1/organizations/{orgID}/hr/shifts/{id}.
@@ -310,7 +310,7 @@ func (h *HRHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondCreated(w,ts)
+	respondCreated(w, ts)
 }
 
 // ClockOut handles POST /api/v1/organizations/{orgID}/hr/timesheets/{id}/clock-out.
@@ -333,7 +333,7 @@ func (h *HRHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,ts)
+	respondOK(w, http.StatusOK, ts)
 }
 
 // ListTimesheets handles GET /api/v1/organizations/{orgID}/hr/timesheets.
@@ -371,7 +371,7 @@ func (h *HRHandler) ListTimesheets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,map[string]any{
+	respondOK(w, http.StatusOK, map[string]any{
 		"items":  timesheets,
 		"total":  total,
 		"limit":  filter.Page.Limit,

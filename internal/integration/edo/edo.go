@@ -11,15 +11,15 @@ import (
 
 // EDODocument represents an electronic document (invoice, act, waybill).
 type EDODocument struct {
-	ID            string    `json:"id"`
-	Type          string    `json:"type"` // invoice, act, waybill
-	Number        string    `json:"number"`
-	Date          string    `json:"date"`
-	CounterpartyINN string  `json:"counterparty_inn"`
-	Amount        int64     `json:"amount"`
-	Content       []byte    `json:"content,omitempty"`
-	Status        string    `json:"status"` // sent, delivered, accepted, rejected
-	CreatedAt     time.Time `json:"created_at"`
+	ID              string    `json:"id"`
+	Type            string    `json:"type"` // invoice, act, waybill
+	Number          string    `json:"number"`
+	Date            string    `json:"date"`
+	CounterpartyINN string    `json:"counterparty_inn"`
+	Amount          int64     `json:"amount"`
+	Content         []byte    `json:"content,omitempty"`
+	Status          string    `json:"status"` // sent, delivered, accepted, rejected
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // SendResult is the result of sending an EDO document.

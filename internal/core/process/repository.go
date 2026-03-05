@@ -29,30 +29,30 @@ type Repository interface {
 
 // DefinitionRecord is the DB representation of a process definition.
 type DefinitionRecord struct {
-	ID         string                `json:"id"`
-	OrganizationID *uuid.UUID           `json:"organization_id,omitempty"`
-	Name       string                `json:"name"`
-	Description string               `json:"description"`
-	Definition dsl.ProcessDefinition `json:"definition"`
-	IsActive   bool                  `json:"is_active"`
-	Version    int                   `json:"version"`
-	CreatedAt  time.Time             `json:"created_at"`
-	UpdatedAt  time.Time             `json:"updated_at"`
+	ID             string                `json:"id"`
+	OrganizationID *uuid.UUID            `json:"organization_id,omitempty"`
+	Name           string                `json:"name"`
+	Description    string                `json:"description"`
+	Definition     dsl.ProcessDefinition `json:"definition"`
+	IsActive       bool                  `json:"is_active"`
+	Version        int                   `json:"version"`
+	CreatedAt      time.Time             `json:"created_at"`
+	UpdatedAt      time.Time             `json:"updated_at"`
 }
 
 // Instance represents a running process instance.
 type Instance struct {
-	ID           uuid.UUID       `json:"id"`
-	OrganizationID  uuid.UUID       `json:"organization_id"`
-	DefinitionID string          `json:"definition_id"`
-	EntityID     uuid.UUID       `json:"entity_id"`
-	CurrentState string          `json:"current_state"`
-	Status       string          `json:"status"`
-	Context      json.RawMessage `json:"context"`
-	History      json.RawMessage `json:"history"`
-	StartedAt    time.Time       `json:"started_at"`
-	UpdatedAt    time.Time       `json:"updated_at"`
-	CompletedAt  *time.Time      `json:"completed_at,omitempty"`
+	ID             uuid.UUID       `json:"id"`
+	OrganizationID uuid.UUID       `json:"organization_id"`
+	DefinitionID   string          `json:"definition_id"`
+	EntityID       uuid.UUID       `json:"entity_id"`
+	CurrentState   string          `json:"current_state"`
+	Status         string          `json:"status"`
+	Context        json.RawMessage `json:"context"`
+	History        json.RawMessage `json:"history"`
+	StartedAt      time.Time       `json:"started_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
+	CompletedAt    *time.Time      `json:"completed_at,omitempty"`
 }
 
 // HistoryEntry records a single state transition.

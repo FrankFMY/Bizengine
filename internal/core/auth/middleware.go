@@ -21,9 +21,9 @@ const (
 
 // Exported context keys for testing.
 var (
-	ExportedCtxKeyUserID      = ctxKeyUserID
+	ExportedCtxKeyUserID         = ctxKeyUserID
 	ExportedCtxKeyOrganizationID = ctxKeyOrganizationID
-	ExportedCtxKeyRole        = ctxKeyRole
+	ExportedCtxKeyRole           = ctxKeyRole
 )
 
 // ExportedCtxKeySeanceID returns the seance context key for testing.

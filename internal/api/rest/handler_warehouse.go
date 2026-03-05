@@ -41,7 +41,7 @@ func (h *WarehouseHandler) Receive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,result)
+	respondOK(w, http.StatusOK, result)
 }
 
 // Ship handles POST /api/v1/organizations/{orgID}/warehouse/ship.
@@ -66,7 +66,7 @@ func (h *WarehouseHandler) Ship(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,result)
+	respondOK(w, http.StatusOK, result)
 }
 
 // Transfer handles POST /api/v1/organizations/{orgID}/warehouse/transfer.
@@ -91,7 +91,7 @@ func (h *WarehouseHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,result)
+	respondOK(w, http.StatusOK, result)
 }
 
 // Adjust handles POST /api/v1/organizations/{orgID}/warehouse/adjust.
@@ -116,7 +116,7 @@ func (h *WarehouseHandler) Adjust(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,result)
+	respondOK(w, http.StatusOK, result)
 }
 
 // ListStock handles GET /api/v1/organizations/{orgID}/warehouse/{warehouseID}/stock.
@@ -144,7 +144,7 @@ func (h *WarehouseHandler) ListStock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,result)
+	respondOK(w, http.StatusOK, result)
 }
 
 // GetStockLevel handles GET /api/v1/organizations/{orgID}/warehouse/{warehouseID}/stock/{productID}.
@@ -171,7 +171,7 @@ func (h *WarehouseHandler) GetStockLevel(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	respondOK(w, http.StatusOK,sl)
+	respondOK(w, http.StatusOK, sl)
 }
 
 // GetLowStock handles GET /api/v1/organizations/{orgID}/warehouse/low-stock.
@@ -188,7 +188,7 @@ func (h *WarehouseHandler) GetLowStock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,items)
+	respondOK(w, http.StatusOK, items)
 }
 
 // ListMovements handles GET /api/v1/organizations/{orgID}/warehouse/movements.
@@ -224,5 +224,5 @@ func (h *WarehouseHandler) ListMovements(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	respondOK(w, http.StatusOK,result)
+	respondOK(w, http.StatusOK, result)
 }

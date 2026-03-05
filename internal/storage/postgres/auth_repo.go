@@ -271,7 +271,6 @@ func (r *AuthRepo) RemoveMember(ctx context.Context, orgID, userID uuid.UUID) er
 	return nil
 }
 
-
 func isDuplicateKey(err error) bool {
 	if err == nil {
 		return false

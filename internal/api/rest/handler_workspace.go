@@ -57,7 +57,7 @@ func (h *OrganizationHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	respondCreated(w,org)
+	respondCreated(w, org)
 }
 
 // List handles GET /api/v1/organizations.
@@ -78,7 +78,7 @@ func (h *OrganizationHandler) List(w http.ResponseWriter, r *http.Request) {
 		organizations = []types.Organization{}
 	}
 
-	respondOK(w, http.StatusOK,organizations)
+	respondOK(w, http.StatusOK, organizations)
 }
 
 // Get handles GET /api/v1/organizations/{orgID}.
@@ -95,7 +95,7 @@ func (h *OrganizationHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,org)
+	respondOK(w, http.StatusOK, org)
 }
 
 // Update handles PUT /api/v1/organizations/{orgID}.
@@ -133,7 +133,7 @@ func (h *OrganizationHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,org)
+	respondOK(w, http.StatusOK, org)
 }
 
 // AddMember handles POST /api/v1/organizations/{orgID}/members.
@@ -161,15 +161,15 @@ func (h *OrganizationHandler) AddMember(w http.ResponseWriter, r *http.Request) 
 
 	member := &types.Labor{
 		OrganizationID: orgID,
-		UserID:      user.ID,
-		Role:        input.Role,
+		UserID:         user.ID,
+		Role:           input.Role,
 	}
 	if err := h.repo.AddMember(r.Context(), member); err != nil {
 		respondError(w, err)
 		return
 	}
 
-	respondCreated(w,member)
+	respondCreated(w, member)
 }
 
 // ListMembers handles GET /api/v1/organizations/{orgID}/members.
@@ -186,7 +186,7 @@ func (h *OrganizationHandler) ListMembers(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	respondOK(w, http.StatusOK,members)
+	respondOK(w, http.StatusOK, members)
 }
 
 // UpdateMember handles PUT /api/v1/organizations/{orgID}/members/{userID}.
@@ -216,7 +216,7 @@ func (h *OrganizationHandler) UpdateMember(w http.ResponseWriter, r *http.Reques
 	}
 
 	member, _ := h.repo.GetMember(r.Context(), orgID, userID)
-	respondOK(w, http.StatusOK,member)
+	respondOK(w, http.StatusOK, member)
 }
 
 // RemoveMember handles DELETE /api/v1/organizations/{orgID}/members/{userID}.

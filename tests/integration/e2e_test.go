@@ -1052,10 +1052,10 @@ func (n *noopQuerier) QueryRow(_ context.Context, _ string, _ ...any) arcana.Row
 
 type noopRows struct{}
 
-func (r *noopRows) Next() bool        { return false }
+func (r *noopRows) Next() bool          { return false }
 func (r *noopRows) Scan(_ ...any) error { return nil }
-func (r *noopRows) Close()            {}
-func (r *noopRows) Err() error        { return nil }
+func (r *noopRows) Close()              {}
+func (r *noopRows) Err() error          { return nil }
 
 type noopRow struct{}
 

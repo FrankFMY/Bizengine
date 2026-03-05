@@ -28,16 +28,16 @@ type RouterDeps struct {
 	RedisClient    *redis.Client
 	Pool           *pgxpool.Pool
 	OnOrgCreated   []func(ctx context.Context, orgID uuid.UUID) error
-	EntityH       *EntityHandler
-	EventH        *EventHandler
-	OrganizationH *OrganizationHandler
-	CatalogH      *CatalogHandler
-	WarehouseH    *WarehouseHandler
-	OrderH        *OrderHandler
-	ProcessH      *ProcessHandler
-	HRH           *HRHandler
-	FinanceH      *FinanceHandler
-	LogisticsH    *LogisticsHandler
+	EntityH        *EntityHandler
+	EventH         *EventHandler
+	OrganizationH  *OrganizationHandler
+	CatalogH       *CatalogHandler
+	WarehouseH     *WarehouseHandler
+	OrderH         *OrderHandler
+	ProcessH       *ProcessHandler
+	HRH            *HRHandler
+	FinanceH       *FinanceHandler
+	LogisticsH     *LogisticsHandler
 	FileH          *FileHandler
 	ExportH        *ExportHandler
 	IntegrationH   *IntegrationHandler

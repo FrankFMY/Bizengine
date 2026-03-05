@@ -40,7 +40,7 @@ func (h *CatalogHandler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondCreated(w,p)
+	respondCreated(w, p)
 }
 
 // ListProducts handles GET /api/v1/organizations/{orgID}/catalog/products.
@@ -65,7 +65,7 @@ func (h *CatalogHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,result)
+	respondOK(w, http.StatusOK, result)
 }
 
 // GetProduct handles GET /api/v1/organizations/{orgID}/catalog/products/{id}.
@@ -87,7 +87,7 @@ func (h *CatalogHandler) GetProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,p)
+	respondOK(w, http.StatusOK, p)
 }
 
 // UpdateProduct handles PUT /api/v1/organizations/{orgID}/catalog/products/{id}.
@@ -116,7 +116,7 @@ func (h *CatalogHandler) UpdateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK,p)
+	respondOK(w, http.StatusOK, p)
 }
 
 // ArchiveProduct handles POST /api/v1/organizations/{orgID}/catalog/products/{id}/archive.
@@ -162,7 +162,7 @@ func (h *CatalogHandler) CreateCategory(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	respondCreated(w,c)
+	respondCreated(w, c)
 }
 
 // ListCategories handles GET /api/v1/organizations/{orgID}/catalog/categories.
@@ -181,7 +181,7 @@ func (h *CatalogHandler) ListCategories(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	respondOK(w, http.StatusOK,categories)
+	respondOK(w, http.StatusOK, categories)
 }
 
 // UpdateCategory handles PUT /api/v1/organizations/{orgID}/catalog/categories/{id}.
@@ -223,7 +223,7 @@ func (h *CatalogHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	respondOK(w, http.StatusOK,c)
+	respondOK(w, http.StatusOK, c)
 }
 
 // DeleteCategory handles DELETE /api/v1/organizations/{orgID}/catalog/categories/{id}.

@@ -27,8 +27,8 @@ func (e *OutOfBoundsError) Error() string {
 
 // Placement represents an object with an ID and bounding box.
 type Placement struct {
-	ID   string
-	Box  AABB
+	ID  string
+	Box AABB
 }
 
 // ValidatePlacement checks that newObj fits within parentBounds and does not

@@ -16,18 +16,18 @@ import (
 // --- mock repo ---
 
 type mockRepo struct {
-	users      map[string]*types.User
-	usersById  map[uuid.UUID]*types.User
+	users         map[string]*types.User
+	usersById     map[uuid.UUID]*types.User
 	organizations map[uuid.UUID]*types.Organization
-	members    map[string]*types.Labor
+	members       map[string]*types.Labor
 }
 
 func newMockRepo() *mockRepo {
 	return &mockRepo{
-		users:      make(map[string]*types.User),
-		usersById:  make(map[uuid.UUID]*types.User),
+		users:         make(map[string]*types.User),
+		usersById:     make(map[uuid.UUID]*types.User),
 		organizations: make(map[uuid.UUID]*types.Organization),
-		members:    make(map[string]*types.Labor),
+		members:       make(map[string]*types.Labor),
 	}
 }
 

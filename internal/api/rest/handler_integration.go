@@ -14,10 +14,10 @@ import (
 )
 
 type IntegrationHandler struct {
-	fiscal   fns.FiscalService
-	edo      edo.EDOService
-	marking  chestnyznak.MarkingService
-	banking  bank.BankService
+	fiscal  fns.FiscalService
+	edo     edo.EDOService
+	marking chestnyznak.MarkingService
+	banking bank.BankService
 }
 
 func NewIntegrationHandler(

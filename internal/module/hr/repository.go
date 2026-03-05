@@ -29,29 +29,29 @@ type Repository interface {
 
 // Shift represents a planned work shift.
 type Shift struct {
-	ID           uuid.UUID  `json:"id"`
-	OrganizationID  uuid.UUID  `json:"organization_id"`
-	EmployeeID   uuid.UUID  `json:"employee_id"`
-	LocationID   *uuid.UUID `json:"location_id,omitempty"`
-	StartTime    time.Time  `json:"start_time"`
-	EndTime      time.Time  `json:"end_time"`
-	BreakMinutes int        `json:"break_minutes"`
-	Status       string     `json:"status"`
-	Notes        string     `json:"notes"`
-	CreatedAt    time.Time  `json:"created_at"`
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	EmployeeID     uuid.UUID  `json:"employee_id"`
+	LocationID     *uuid.UUID `json:"location_id,omitempty"`
+	StartTime      time.Time  `json:"start_time"`
+	EndTime        time.Time  `json:"end_time"`
+	BreakMinutes   int        `json:"break_minutes"`
+	Status         string     `json:"status"`
+	Notes          string     `json:"notes"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 // Timesheet represents an employee time entry.
 type Timesheet struct {
-	ID          uuid.UUID  `json:"id"`
+	ID             uuid.UUID  `json:"id"`
 	OrganizationID uuid.UUID  `json:"organization_id"`
-	EmployeeID  uuid.UUID  `json:"employee_id"`
-	ShiftID     *uuid.UUID `json:"shift_id,omitempty"`
-	ClockIn     time.Time  `json:"clock_in"`
-	ClockOut    *time.Time `json:"clock_out,omitempty"`
-	HoursWorked *float64   `json:"hours_worked,omitempty"`
-	Status      string     `json:"status"`
-	CreatedAt   time.Time  `json:"created_at"`
+	EmployeeID     uuid.UUID  `json:"employee_id"`
+	ShiftID        *uuid.UUID `json:"shift_id,omitempty"`
+	ClockIn        time.Time  `json:"clock_in"`
+	ClockOut       *time.Time `json:"clock_out,omitempty"`
+	HoursWorked    *float64   `json:"hours_worked,omitempty"`
+	Status         string     `json:"status"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 // Employee wraps an entity with HR-specific components.
