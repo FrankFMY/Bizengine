@@ -4,15 +4,16 @@ Server engine for creating digital twins of businesses. Turns any business — f
 
 ## What it does
 
-BizEngine provides a unified backend for managing business operations through an Entity-Component-System (ECS) architecture combined with Event Sourcing. Every business object (product, order, warehouse, employee, vehicle, point of sale) is an **Entity** with attached **Components** (typed JSONB data). Every mutation produces an **Event** in an append-only log. Business workflows are **state machines** defined in YAML. Real-time UI updates are delivered through a **Reactive Views Engine** powered by Centrifugo.
+BizEngine provides a unified backend for managing business operations through an Entity-Component-System (ECS) architecture combined with Event Sourcing. Every business object (product, order, warehouse, employee, vehicle, point of sale) is an **Entity** with attached **Components** (typed JSONB data). Every mutation produces an **Event** in an append-only log. Business workflows are **state machines** defined in YAML. Real-time UI updates are delivered through **Arcana** (reactive data sync engine) and a legacy **Views Engine**, both powered by Centrifugo.
 
 ### Core capabilities
 
 - **Universal entity model** — any business object is an Entity with flexible Components, no schema migrations needed for new object types
 - **Event sourcing** — full audit trail, reactive views via Centrifugo, replay to any point in time
 - **Process engine** — YAML-defined state machines for order fulfillment, stock replenishment, delivery tracking, employee onboarding
+- **Arcana integration** — reactive data sync engine with 20 graph definitions, JSON Patch diffs, and Centrifugo delivery (mounted at `/arcana`)
 - **Reactive views** — normalized refs/tables architecture with automatic diff computation and real-time delivery via Centrifugo
-- **Multi-tenancy** — workspace-based isolation, every query scoped by `workspace_id`
+- **Multi-tenancy** — organization-based isolation, every query scoped by `organization_id`
 - **Double-entry accounting** — financial module with proper debit/credit bookkeeping (int64 kopeks, no floats)
 - **Modular monolith** — strict module boundaries, modules communicate only via events, zero circular imports
 
@@ -39,20 +40,20 @@ BizEngine provides a unified backend for managing business operations through an
 ```
 ┌─────────────────────────────────────────────────┐
 │                   API Layer                      │
-│             REST (Chi) + Views API               │
+│     REST (Chi) + Arcana (/arcana) + Views API    │
 ├─────────────────────────────────────────────────┤
 │                 Auth / RBAC                      │
-│    Cookie Sessions + Permissions + Workspace     │
+│  Cookie Sessions (argon2id) + Permissions + Org  │
 ├─────────────────────────────────────────────────┤
 │              Module Layer (Systems)              │
 │  Catalog │ Warehouse │ Order │ HR │ Finance │ …  │
 ├─────────────────────────────────────────────────┤
 │                  Core Layer                      │
 │      Entity │ Event Bus │ Process Engine         │
-├────────────────────┬────────────────────────────┤
-│  Reactive Views    │       Storage Layer         │
-│  Engine + Triggers │  PostgreSQL │ Redis │ NATS  │
-├────────────────────┴────────────────────────────┤
+├───────────────┬─────────────────────────────────┤
+│  Arcana +     │       Storage Layer              │
+│  Views Engine │  PostgreSQL │ Redis │ NATS       │
+├───────────────┴─────────────────────────────────┤
 │               Real-time Layer                    │
 │   Centrifugo v6 (connect/subscribe proxy)        │
 └─────────────────────────────────────────────────┘
@@ -70,7 +71,8 @@ Dependency direction: API → Module → Core → Storage. Never reversed.
 | Real-time | Centrifugo v6 | Scalable WebSocket delivery, connect/subscribe proxy |
 | Messaging | NATS 2.10 | JetStream for distributed events (future) |
 | HTTP Router | chi/v5 | Lightweight, net/http compatible |
-| Auth | Cookie sessions | HttpOnly cookies + Redis session store |
+| Auth | Cookie sessions + argon2id | HttpOnly cookies + Redis session store, argon2id password hashing |
+| Reactive Sync | Arcana | Graph-based subscriptions, JSON Patch diffs, Centrifugo delivery |
 | SQL Driver | pgx/v5 | Native PostgreSQL, no ORM |
 | Logging | zerolog | Structured JSON logs |
 | Config | go-envconfig | Env-based configuration |
@@ -97,7 +99,17 @@ bizengine/
 │   ├── api/
 │   │   ├── rest/                # Chi router, all HTTP handlers
 │   │   └── centrifugo/          # Connect/subscribe proxy, publisher
-│   ├── views/                   # Reactive views engine
+│   ├── graphs/                  # Arcana graph definitions (20 graphs)
+│   │   ├── register.go          # RegisterAll into Arcana engine
+│   │   ├── events.go            # Event → Change mapping
+│   │   ├── catalog.go           # Catalog graphs
+│   │   ├── warehouse.go         # Warehouse graphs
+│   │   ├── orders.go            # Order graphs
+│   │   ├── hr.go                # HR graphs
+│   │   ├── finance.go           # Finance graphs
+│   │   ├── logistics.go         # Logistics graphs
+│   │   └── dashboard.go         # Dashboard graphs
+│   ├── views/                   # Legacy reactive views engine
 │   │   ├── defs/                # 20 view definitions
 │   │   ├── manager.go           # Subscribe, invalidate, sync
 │   │   ├── diff.go              # Refs diff computation
@@ -116,7 +128,7 @@ bizengine/
 │   ├── errs/                    # Typed errors (NotFound, Conflict, etc.)
 │   ├── money/                   # Financial arithmetic (int64 kopeks)
 │   └── dsl/                     # YAML process definition parser
-├── migrations/                  # 8 numbered up/down SQL migrations
+├── migrations/                  # 9 numbered up/down SQL migrations
 ├── processes/                   # YAML business process definitions
 ├── deploy/                      # Dockerfile, docker-compose, centrifugo.json
 └── docs/                        # Full technical specification
@@ -131,129 +143,144 @@ Base URL: `/api/v1` | Auth: Cookie sessions (`credentials: 'include'`) | Format:
 POST /api/v1/auth/register          # Create account (sets cookies)
 POST /api/v1/auth/login             # Login (sets cookies)
 POST /api/v1/auth/logout            # Clear session
-POST /api/v1/auth/unlock            # Refresh expired seance
-POST /api/v1/auth/switch            # Switch active workspace
-GET  /api/v1/auth/check             # Current session info
+POST /api/v1/auth/unlock            # Refresh expired seance (requires password)
+POST /api/v1/auth/switch            # Switch active organization
+GET  /api/v1/auth/check             # Current session info (user_id, org_id, admin flag)
+POST /api/v1/pass/temp              # Dev-only: create user+org in one call (no auth)
 ```
+
+Auth model: phones -> users -> labors -> organizations. Password hashing: argon2id. See `docs/AUTH_RBAC.md`.
 
 ### Entities (universal CRUD)
 ```
-POST   /api/v1/workspaces/{wsID}/entities
-GET    /api/v1/workspaces/{wsID}/entities?kind=product&search=...
-GET    /api/v1/workspaces/{wsID}/entities/{id}?include=components
-PUT    /api/v1/workspaces/{wsID}/entities/{id}
-DELETE /api/v1/workspaces/{wsID}/entities/{id}
+POST   /api/v1/organizations/{orgID}/entities
+GET    /api/v1/organizations/{orgID}/entities?kind=product&search=...
+GET    /api/v1/organizations/{orgID}/entities/{id}?include=components
+PUT    /api/v1/organizations/{orgID}/entities/{id}
+DELETE /api/v1/organizations/{orgID}/entities/{id}
 ```
 
 ### Components
 ```
-PUT    /api/v1/workspaces/{wsID}/entities/{id}/components/{type}
-GET    /api/v1/workspaces/{wsID}/entities/{id}/components/{type}
-GET    /api/v1/workspaces/{wsID}/entities/{id}/components
-DELETE /api/v1/workspaces/{wsID}/entities/{id}/components/{type}
+PUT    /api/v1/organizations/{orgID}/entities/{id}/components/{type}
+GET    /api/v1/organizations/{orgID}/entities/{id}/components/{type}
+GET    /api/v1/organizations/{orgID}/entities/{id}/components
+DELETE /api/v1/organizations/{orgID}/entities/{id}/components/{type}
 ```
 
 ### Catalog
 ```
-POST   /api/v1/workspaces/{wsID}/catalog/products
-GET    /api/v1/workspaces/{wsID}/catalog/products?category_id=...&in_stock=true
-GET    /api/v1/workspaces/{wsID}/catalog/products/{id}
-PUT    /api/v1/workspaces/{wsID}/catalog/products/{id}
-POST   /api/v1/workspaces/{wsID}/catalog/products/{id}/archive
-POST   /api/v1/workspaces/{wsID}/catalog/categories
-GET    /api/v1/workspaces/{wsID}/catalog/categories
-PUT    /api/v1/workspaces/{wsID}/catalog/categories/{id}
-DELETE /api/v1/workspaces/{wsID}/catalog/categories/{id}
+POST   /api/v1/organizations/{orgID}/catalog/products
+GET    /api/v1/organizations/{orgID}/catalog/products?category_id=...&in_stock=true
+GET    /api/v1/organizations/{orgID}/catalog/products/{id}
+PUT    /api/v1/organizations/{orgID}/catalog/products/{id}
+POST   /api/v1/organizations/{orgID}/catalog/products/{id}/archive
+POST   /api/v1/organizations/{orgID}/catalog/categories
+GET    /api/v1/organizations/{orgID}/catalog/categories
+PUT    /api/v1/organizations/{orgID}/catalog/categories/{id}
+DELETE /api/v1/organizations/{orgID}/catalog/categories/{id}
 ```
 
 ### Warehouse
 ```
-POST   /api/v1/workspaces/{wsID}/warehouse/receive
-POST   /api/v1/workspaces/{wsID}/warehouse/ship
-POST   /api/v1/workspaces/{wsID}/warehouse/transfer
-POST   /api/v1/workspaces/{wsID}/warehouse/adjust
-GET    /api/v1/workspaces/{wsID}/warehouse/{id}/stock
-GET    /api/v1/workspaces/{wsID}/warehouse/low-stock
-GET    /api/v1/workspaces/{wsID}/warehouse/movements
+POST   /api/v1/organizations/{orgID}/warehouse/receive
+POST   /api/v1/organizations/{orgID}/warehouse/ship
+POST   /api/v1/organizations/{orgID}/warehouse/transfer
+POST   /api/v1/organizations/{orgID}/warehouse/adjust
+GET    /api/v1/organizations/{orgID}/warehouse/{id}/stock
+GET    /api/v1/organizations/{orgID}/warehouse/low-stock
+GET    /api/v1/organizations/{orgID}/warehouse/movements
 ```
 
 ### Orders
 ```
-POST   /api/v1/workspaces/{wsID}/orders
-GET    /api/v1/workspaces/{wsID}/orders?status=active&include=items
-GET    /api/v1/workspaces/{wsID}/orders/{id}
-PUT    /api/v1/workspaces/{wsID}/orders/{id}
-POST   /api/v1/workspaces/{wsID}/orders/{id}/confirm
-POST   /api/v1/workspaces/{wsID}/orders/{id}/pay
-POST   /api/v1/workspaces/{wsID}/orders/{id}/ship
-POST   /api/v1/workspaces/{wsID}/orders/{id}/deliver
-POST   /api/v1/workspaces/{wsID}/orders/{id}/cancel
+POST   /api/v1/organizations/{orgID}/orders
+GET    /api/v1/organizations/{orgID}/orders?status=active&include=items
+GET    /api/v1/organizations/{orgID}/orders/{id}
+PUT    /api/v1/organizations/{orgID}/orders/{id}
+POST   /api/v1/organizations/{orgID}/orders/{id}/confirm
+POST   /api/v1/organizations/{orgID}/orders/{id}/pay
+POST   /api/v1/organizations/{orgID}/orders/{id}/ship
+POST   /api/v1/organizations/{orgID}/orders/{id}/deliver
+POST   /api/v1/organizations/{orgID}/orders/{id}/cancel
 ```
 
 ### HR
 ```
-POST   /api/v1/workspaces/{wsID}/hr/employees
-GET    /api/v1/workspaces/{wsID}/hr/employees
-GET    /api/v1/workspaces/{wsID}/hr/employees/{id}
-PUT    /api/v1/workspaces/{wsID}/hr/employees/{id}
-POST   /api/v1/workspaces/{wsID}/hr/employees/{id}/terminate
-POST   /api/v1/workspaces/{wsID}/hr/shifts
-GET    /api/v1/workspaces/{wsID}/hr/shifts
-PUT    /api/v1/workspaces/{wsID}/hr/shifts/{id}
-DELETE /api/v1/workspaces/{wsID}/hr/shifts/{id}
-POST   /api/v1/workspaces/{wsID}/hr/timesheets/clock-in
-POST   /api/v1/workspaces/{wsID}/hr/timesheets/{id}/clock-out
-GET    /api/v1/workspaces/{wsID}/hr/timesheets
-POST   /api/v1/workspaces/{wsID}/hr/timesheets/{id}/approve
+POST   /api/v1/organizations/{orgID}/hr/employees
+GET    /api/v1/organizations/{orgID}/hr/employees
+GET    /api/v1/organizations/{orgID}/hr/employees/{id}
+PUT    /api/v1/organizations/{orgID}/hr/employees/{id}
+POST   /api/v1/organizations/{orgID}/hr/employees/{id}/terminate
+POST   /api/v1/organizations/{orgID}/hr/shifts
+GET    /api/v1/organizations/{orgID}/hr/shifts
+PUT    /api/v1/organizations/{orgID}/hr/shifts/{id}
+DELETE /api/v1/organizations/{orgID}/hr/shifts/{id}
+POST   /api/v1/organizations/{orgID}/hr/timesheets/clock-in
+POST   /api/v1/organizations/{orgID}/hr/timesheets/{id}/clock-out
+GET    /api/v1/organizations/{orgID}/hr/timesheets
+POST   /api/v1/organizations/{orgID}/hr/timesheets/{id}/approve
 ```
 
 ### Finance
 ```
-POST   /api/v1/workspaces/{wsID}/finance/accounts
-GET    /api/v1/workspaces/{wsID}/finance/accounts
-GET    /api/v1/workspaces/{wsID}/finance/accounts/{id}/balance
-POST   /api/v1/workspaces/{wsID}/finance/transactions
-GET    /api/v1/workspaces/{wsID}/finance/transactions
-GET    /api/v1/workspaces/{wsID}/finance/transactions/{id}
-POST   /api/v1/workspaces/{wsID}/finance/transactions/{id}/post
-POST   /api/v1/workspaces/{wsID}/finance/invoices
-GET    /api/v1/workspaces/{wsID}/finance/invoices
-POST   /api/v1/workspaces/{wsID}/finance/invoices/{id}/pay
-GET    /api/v1/workspaces/{wsID}/finance/reports/trial-balance
+POST   /api/v1/organizations/{orgID}/finance/accounts
+GET    /api/v1/organizations/{orgID}/finance/accounts
+GET    /api/v1/organizations/{orgID}/finance/accounts/{id}/balance
+POST   /api/v1/organizations/{orgID}/finance/transactions
+GET    /api/v1/organizations/{orgID}/finance/transactions
+GET    /api/v1/organizations/{orgID}/finance/transactions/{id}
+POST   /api/v1/organizations/{orgID}/finance/transactions/{id}/post
+POST   /api/v1/organizations/{orgID}/finance/invoices
+GET    /api/v1/organizations/{orgID}/finance/invoices
+POST   /api/v1/organizations/{orgID}/finance/invoices/{id}/pay
+GET    /api/v1/organizations/{orgID}/finance/reports/trial-balance
 ```
 
 ### Logistics
 ```
-POST   /api/v1/workspaces/{wsID}/logistics/routes
-GET    /api/v1/workspaces/{wsID}/logistics/routes
-GET    /api/v1/workspaces/{wsID}/logistics/routes/{id}
-POST   /api/v1/workspaces/{wsID}/logistics/routes/{id}/start
-POST   /api/v1/workspaces/{wsID}/logistics/routes/{id}/complete
-POST   /api/v1/workspaces/{wsID}/logistics/routes/{id}/stops/{stopID}/arrive
-POST   /api/v1/workspaces/{wsID}/logistics/routes/{id}/stops/{stopID}/complete
-POST   /api/v1/workspaces/{wsID}/logistics/geo
-GET    /api/v1/workspaces/{wsID}/logistics/geo/{entityID}/track
+POST   /api/v1/organizations/{orgID}/logistics/routes
+GET    /api/v1/organizations/{orgID}/logistics/routes
+GET    /api/v1/organizations/{orgID}/logistics/routes/{id}
+POST   /api/v1/organizations/{orgID}/logistics/routes/{id}/start
+POST   /api/v1/organizations/{orgID}/logistics/routes/{id}/complete
+POST   /api/v1/organizations/{orgID}/logistics/routes/{id}/stops/{stopID}/arrive
+POST   /api/v1/organizations/{orgID}/logistics/routes/{id}/stops/{stopID}/complete
+POST   /api/v1/organizations/{orgID}/logistics/geo
+GET    /api/v1/organizations/{orgID}/logistics/geo/{entityID}/track
 ```
 
 ### Events & Processes
 ```
-GET    /api/v1/workspaces/{wsID}/events
-GET    /api/v1/workspaces/{wsID}/events/entity/{entityID}
-GET    /api/v1/workspaces/{wsID}/processes/definitions
-GET    /api/v1/workspaces/{wsID}/processes/definitions/{defID}
-GET    /api/v1/workspaces/{wsID}/processes/instances
-GET    /api/v1/workspaces/{wsID}/processes/instances/{id}
-GET    /api/v1/workspaces/{wsID}/processes/entity/{entityID}
-POST   /api/v1/workspaces/{wsID}/processes/trigger
+GET    /api/v1/organizations/{orgID}/events
+GET    /api/v1/organizations/{orgID}/events/entity/{entityID}
+GET    /api/v1/organizations/{orgID}/processes/definitions
+GET    /api/v1/organizations/{orgID}/processes/definitions/{defID}
+GET    /api/v1/organizations/{orgID}/processes/instances
+GET    /api/v1/organizations/{orgID}/processes/instances/{id}
+GET    /api/v1/organizations/{orgID}/processes/entity/{entityID}
+POST   /api/v1/organizations/{orgID}/processes/trigger
 ```
 
-### Reactive Views
+### Reactive Views (legacy)
 ```
-POST   /api/v1/workspaces/{wsID}/views/subscribe
-POST   /api/v1/workspaces/{wsID}/views/unsubscribe
-GET    /api/v1/workspaces/{wsID}/views/active
-POST   /api/v1/workspaces/{wsID}/views/sync
+POST   /api/v1/organizations/{orgID}/views/subscribe
+POST   /api/v1/organizations/{orgID}/views/unsubscribe
+GET    /api/v1/organizations/{orgID}/views/active
+POST   /api/v1/organizations/{orgID}/views/sync
 ```
+
+### Arcana (reactive data sync)
+```
+POST   /arcana/subscribe             # Subscribe to a graph (20 available)
+POST   /arcana/unsubscribe           # Unsubscribe by params_hash
+POST   /arcana/sync                  # Reconnect sync
+GET    /arcana/active                # List active subscriptions
+GET    /arcana/schema                # Graph definitions registry
+GET    /arcana/health                # Engine health
+```
+
+See `docs/ARCANA_INTEGRATION.md` and `SDK_README.md` for frontend integration details.
 
 ### Health
 ```
@@ -355,12 +382,12 @@ All configuration via environment variables (see `.env.example`):
 
 ## Codebase stats
 
-- **~22,500 lines** of Go code
-- **294 unit tests** across 18 test suites
-- **8 database migrations** (16 files with up/down)
+- **~24,000 lines** of Go code
+- **294+ unit tests** across 18+ test suites
+- **9 database migrations** (18 files with up/down)
 - **4 YAML process definitions**
-- **20 reactive view definitions**
-- **95+ REST API endpoints**
+- **20 Arcana graph definitions** + 20 legacy view definitions
+- **95+ REST API endpoints** + 6 Arcana endpoints
 - **0 TODO/FIXME/HACK markers** in Go code
 - **TypeScript SDK**: 2 files (views.d.ts + client.ts)
 
