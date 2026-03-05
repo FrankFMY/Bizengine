@@ -27,7 +27,7 @@ func (r *DocumentRepo) GetOrderForDocument(ctx context.Context, orgID, orderID u
 	var order documents.OrderData
 	var customerID *uuid.UUID
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, COALESCE(meta->>'number', id::text), iat, status, total, customer_id
+		`SELECT id, number, created_at, status, total, customer_id
 		 FROM orders WHERE organization_id = $1 AND id = $2`,
 		orgID, orderID,
 	).Scan(&order.ID, &order.Number, &order.Date, &order.Status, &order.Total, &customerID)
@@ -47,12 +47,12 @@ func (r *DocumentRepo) GetOrderForDocument(ctx context.Context, orgID, orderID u
 	order.TotalFormatted = fmt.Sprintf("%d.%02d", order.Total/100, order.Total%100)
 
 	rows, err := r.pool.Query(ctx,
-		`SELECT oi.id, COALESCE(e.name, ''), COALESCE(oi.sku, ''), oi.quantity, oi.unit_price, oi.total
+		`SELECT oi.id, COALESCE(e.name, oi.name), oi.sku, oi.quantity, oi.unit_price, oi.total
 		 FROM order_items oi
 		 LEFT JOIN entities e ON e.id = oi.product_id
-		 WHERE oi.order_id = $1
-		 ORDER BY oi.iat`,
-		orderID,
+		 WHERE oi.order_id = $1 AND oi.organization_id = $2
+		 ORDER BY oi.sort_order`,
+		orderID, orgID,
 	)
 	if err != nil {
 		return &order, nil
@@ -64,7 +64,7 @@ func (r *DocumentRepo) GetOrderForDocument(ctx context.Context, orgID, orderID u
 		idx++
 		var itemID uuid.UUID
 		var name, sku string
-		var qty int
+		var qty float64
 		var unitPrice, total int64
 		if err := rows.Scan(&itemID, &name, &sku, &qty, &unitPrice, &total); err != nil {
 			continue
@@ -73,7 +73,7 @@ func (r *DocumentRepo) GetOrderForDocument(ctx context.Context, orgID, orderID u
 			Index:     idx,
 			Name:      name,
 			SKU:       sku,
-			Quantity:  qty,
+			Quantity:  int(qty),
 			UnitPrice: fmt.Sprintf("%d.%02d", unitPrice/100, unitPrice%100),
 			Total:     fmt.Sprintf("%d.%02d", total/100, total%100),
 			VATRate:   20,

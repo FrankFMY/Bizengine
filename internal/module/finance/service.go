@@ -312,7 +312,7 @@ func (s *Service) CreateAutoTransaction(ctx context.Context, orgID uuid.UUID, da
 		return err
 	}
 
-	_, err = s.CreateTransaction(ctx, orgID, CreateTransactionInput{
+	txn, err := s.CreateTransaction(ctx, orgID, CreateTransactionInput{
 		Date:          date,
 		Description:   description,
 		ReferenceType: refType,
@@ -322,7 +322,10 @@ func (s *Service) CreateAutoTransaction(ctx context.Context, orgID uuid.UUID, da
 			{AccountID: creditAcct.ID, Credit: amount},
 		},
 	}, nil)
-	return err
+	if err != nil {
+		return err
+	}
+	return s.PostTransaction(ctx, orgID, txn.ID, nil)
 }
 
 // ClosePeriod closes a monthly accounting period, preventing new transactions.
