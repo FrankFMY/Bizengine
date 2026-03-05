@@ -46,6 +46,7 @@ type RouterDeps struct {
 	NotificationH  *NotificationHandler
 	AdminH         *AdminHandler
 	CRMH           *CRMHandler
+	SettingsH      *SettingsHandler
 	HealthH        *HealthHandler
 }
 
@@ -296,6 +297,17 @@ func NewRouter(deps RouterDeps) http.Handler {
 						r.Put("/customers/{id}", deps.CRMH.UpdateCustomer)
 						r.Post("/customers/{id}/tags", deps.CRMH.UpdateCustomerTags)
 						r.Post("/suppliers", deps.CRMH.CreateSupplier)
+					})
+				})
+
+				// Settings
+				r.Route("/settings", func(r chi.Router) {
+					r.Get("/", deps.SettingsH.GetSettings)
+					r.Group(func(r chi.Router) {
+						r.Use(auth.RequirePermission("settings.manage"))
+						r.Put("/", deps.SettingsH.UpdateSettings)
+						r.Put("/integrations", deps.SettingsH.UpdateIntegrations)
+						r.Put("/logo", deps.SettingsH.SetLogo)
 					})
 				})
 

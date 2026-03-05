@@ -36,6 +36,7 @@ import (
 	"github.com/bizengine/engine/internal/module/finance"
 	"github.com/bizengine/engine/internal/module/crm"
 	"github.com/bizengine/engine/internal/module/hr"
+	"github.com/bizengine/engine/internal/module/settings"
 	"github.com/bizengine/engine/internal/module/logistics"
 	"github.com/bizengine/engine/internal/module/order"
 	"github.com/bizengine/engine/internal/module/warehouse"
@@ -115,6 +116,10 @@ func main() {
 	// Modules: CRM
 	crmRepo := postgres.NewCRMRepo(pool)
 	crmSvc := crm.NewService(crmRepo, entitySvc, eventBus)
+
+	// Modules: Settings
+	settingsRepo := postgres.NewSettingsRepo(pool)
+	settingsSvc := settings.NewService(settingsRepo, eventBus)
 
 	// Modules: Finance
 	financeRepo := postgres.NewFinanceRepo(pool)
@@ -289,6 +294,7 @@ func main() {
 		ProcessH:      rest.NewProcessHandler(processEngine),
 		HRH:           rest.NewHRHandler(hrSvc),
 		CRMH:          rest.NewCRMHandler(crmSvc),
+		SettingsH:     rest.NewSettingsHandler(settingsSvc),
 		FinanceH:      rest.NewFinanceHandler(financeSvc),
 		LogisticsH:    rest.NewLogisticsHandler(logisticsSvc),
 		FileH:         rest.NewFileHandler(fileSvc),
