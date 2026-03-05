@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Акт {{.Order.Number}}</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 12px; margin: 20px; }
+  table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+  th, td { border: 1px solid #000; padding: 4px 8px; }
+  th { background: #f0f0f0; }
+  .signatures { margin-top: 50px; display: flex; justify-content: space-between; }
+  .sig-block { width: 45%; text-align: center; }
+  .sig-line { border-top: 1px solid #000; margin-top: 40px; padding-top: 5px; }
+  td.right { text-align: right; }
+</style>
+</head>
+<body>
+<h2>АКТ ВЫПОЛНЕННЫХ РАБОТ № {{.Order.Number}}</h2>
+<p>от {{.Order.Date.Format "02.01.2006"}}</p>
+{{if .Org}}<p>Исполнитель: {{.Org.Name}}, ИНН {{.Org.INN}}</p>{{end}}
+{{if .Order.CustomerName}}<p>Заказчик: {{.Order.CustomerName}}</p>{{end}}
+<table>
+  <thead><tr><th>№</th><th>Наименование</th><th>Кол-во</th><th>Цена</th><th>Сумма</th></tr></thead>
+  <tbody>
+    {{range .Order.Items}}
+    <tr><td>{{.Index}}</td><td>{{.Name}}</td><td>{{.Quantity}}</td><td class="right">{{.UnitPrice}}</td><td class="right">{{.Total}}</td></tr>
+    {{end}}
+  </tbody>
+</table>
+<p style="text-align:right;font-weight:bold;">Итого: {{kopecksToRubles .Order.Total}} руб.</p>
+<p>Вышеперечисленные работы выполнены полностью и в срок. Заказчик претензий по объёму и качеству не имеет.</p>
+<div class="signatures">
+  <div class="sig-block"><div class="sig-line">Исполнитель</div></div>
+  <div class="sig-block"><div class="sig-line">Заказчик</div></div>
+</div>
+</body>
+</html>
