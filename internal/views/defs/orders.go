@@ -23,7 +23,7 @@ var OrdersList = &views.ViewDef{
 	Factory: ordersListFactory,
 }
 
-func ordersListFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
+func ordersListFactory(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
 	limit := intParam(params, "limit", 50)
 	offset := intParam(params, "offset", 0)
 	status, _ := params["status"].(string)
@@ -32,10 +32,10 @@ func ordersListFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, 
 		SELECT o.id, o.number, COALESCE(c.name,'') AS customer_name,
 		       o.status, o.total, o.created_at, COUNT(*) OVER() AS total_count
 		FROM orders o
-		LEFT JOIN entities c ON c.id = o.customer_id AND c.workspace_id = $1
-		WHERE o.workspace_id = $1
+		LEFT JOIN entities c ON c.id = o.customer_id AND c.organization_id = $1
+		WHERE o.organization_id = $1
 	`
-	args := []any{wsID}
+	args := []any{orgID}
 	argIdx := 2
 
 	if status != "" {
@@ -96,7 +96,7 @@ var OrderDetail = &views.ViewDef{
 	Factory: orderDetailFactory,
 }
 
-func orderDetailFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
+func orderDetailFactory(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
 	orderID, _ := params["order_id"].(string)
 
 	tables := map[string]map[string]any{"orders": {}, "order_items": {}}
@@ -111,9 +111,9 @@ func orderDetailFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID,
 		SELECT o.id, o.number, c.name, o.status, o.subtotal, o.discount, o.tax, o.total,
 		       o.paid_at, o.shipped_at, o.delivered_at, o.created_at
 		FROM orders o
-		LEFT JOIN entities c ON c.id = o.customer_id AND c.workspace_id = $1
-		WHERE o.workspace_id = $1 AND o.id = $2
-	`, wsID, orderID).Scan(&id, &number, &customerName, &status, &subtotal, &discount, &tax, &total,
+		LEFT JOIN entities c ON c.id = o.customer_id AND c.organization_id = $1
+		WHERE o.organization_id = $1 AND o.id = $2
+	`, orgID, orderID).Scan(&id, &number, &customerName, &status, &subtotal, &discount, &tax, &total,
 		&paidAt, &shippedAt, &deliveredAt, &createdAt)
 	if err != nil {
 		return nil, err
@@ -142,9 +142,9 @@ func orderDetailFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID,
 	itemRows, err := pool.Query(ctx, `
 		SELECT oi.id, oi.name, oi.sku, oi.quantity, oi.unit_price, oi.discount, oi.tax, oi.total
 		FROM order_items oi
-		WHERE oi.workspace_id = $1 AND oi.order_id = $2
+		WHERE oi.organization_id = $1 AND oi.order_id = $2
 		ORDER BY oi.sort_order
-	`, wsID, orderID)
+	`, orgID, orderID)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +184,7 @@ var OrdersDashboard = &views.ViewDef{
 	Factory: ordersDashboardFactory,
 }
 
-func ordersDashboardFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, _ map[string]any) (*views.ViewResult, error) {
+func ordersDashboardFactory(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, _ map[string]any) (*views.ViewResult, error) {
 	tables := map[string]map[string]any{"orders": {}}
 
 	var totalToday, totalWeek int64
@@ -195,8 +195,8 @@ func ordersDashboardFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.U
 			COALESCE(SUM(CASE WHEN created_at >= CURRENT_DATE THEN total ELSE 0 END), 0),
 			COALESCE(SUM(CASE WHEN created_at >= CURRENT_DATE - INTERVAL '7 days' THEN total ELSE 0 END), 0)
 		FROM orders
-		WHERE workspace_id = $1 AND cancelled_at IS NULL
-	`, wsID)
+		WHERE organization_id = $1 AND cancelled_at IS NULL
+	`, orgID)
 	if err := row.Scan(&totalToday, &totalWeek); err != nil {
 		return nil, err
 	}
@@ -205,9 +205,9 @@ func ordersDashboardFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.U
 	rows, err := pool.Query(ctx, `
 		SELECT status, COUNT(*)
 		FROM orders
-		WHERE workspace_id = $1 AND cancelled_at IS NULL
+		WHERE organization_id = $1 AND cancelled_at IS NULL
 		GROUP BY status
-	`, wsID)
+	`, orgID)
 	if err != nil {
 		return nil, err
 	}

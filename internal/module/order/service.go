@@ -18,7 +18,7 @@ import (
 
 // WarehouseChecker checks stock availability (provided by warehouse module).
 type WarehouseChecker interface {
-	CheckAvailability(ctx context.Context, wsID uuid.UUID, items []CheckItem) error
+	CheckAvailability(ctx context.Context, orgID uuid.UUID, items []CheckItem) error
 }
 
 // CheckItem mirrors warehouse.CheckItem to avoid import.
@@ -47,7 +47,7 @@ func NewService(repo Repository, entitySvc *entity.Service, eventBus event.Bus, 
 }
 
 // Create creates a new order with items.
-func (s *Service) Create(ctx context.Context, wsID uuid.UUID, input CreateOrderInput, actorID *uuid.UUID) (*Order, error) {
+func (s *Service) Create(ctx context.Context, orgID uuid.UUID, input CreateOrderInput, actorID *uuid.UUID) (*Order, error) {
 	if len(input.Items) == 0 {
 		return nil, errs.NewBadRequest("items are required")
 	}
@@ -55,7 +55,7 @@ func (s *Service) Create(ctx context.Context, wsID uuid.UUID, input CreateOrderI
 	var order *Order
 	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
 		// Create entity
-		e, err := s.entitySvc.Create(ctx, wsID, entity.CreateEntityInput{
+		e, err := s.entitySvc.Create(ctx, orgID, entity.CreateEntityInput{
 			Kind: "order",
 			Name: "Order",
 		}, actorID)
@@ -64,7 +64,7 @@ func (s *Service) Create(ctx context.Context, wsID uuid.UUID, input CreateOrderI
 		}
 
 		// Generate number
-		seq, err := s.repo.NextOrderNumber(ctx, tx, wsID)
+		seq, err := s.repo.NextOrderNumber(ctx, tx, orgID)
 		if err != nil {
 			return err
 		}
@@ -80,7 +80,7 @@ func (s *Service) Create(ctx context.Context, wsID uuid.UUID, input CreateOrderI
 			items[i] = OrderItem{
 				ID:          uuid.New(),
 				OrderID:     uuid.Nil, // will be set after order creation
-				WorkspaceID: wsID,
+				OrganizationID: orgID,
 				ProductID:   item.ProductID,
 				Name:        "Product", // snapshot — in real scenario, look up product name
 				Quantity:    item.Quantity,
@@ -99,7 +99,7 @@ func (s *Service) Create(ctx context.Context, wsID uuid.UUID, input CreateOrderI
 
 		order = &Order{
 			ID:          uuid.New(),
-			WorkspaceID: wsID,
+			OrganizationID: orgID,
 			EntityID:    e.ID,
 			Number:      number,
 			CustomerID:  input.CustomerID,
@@ -133,7 +133,7 @@ func (s *Service) Create(ctx context.Context, wsID uuid.UUID, input CreateOrderI
 		return nil, err
 	}
 
-	s.publishEvent(ctx, wsID, order.EntityID, "order.created", actorID, map[string]any{
+	s.publishEvent(ctx, orgID, order.EntityID, "order.created", actorID, map[string]any{
 		"order_id": order.ID,
 		"number":   order.Number,
 		"total":    order.Total,
@@ -143,8 +143,8 @@ func (s *Service) Create(ctx context.Context, wsID uuid.UUID, input CreateOrderI
 }
 
 // Get returns an order with optional items.
-func (s *Service) Get(ctx context.Context, wsID, orderID uuid.UUID, includeItems bool) (*Order, error) {
-	o, err := s.repo.GetOrder(ctx, wsID, orderID)
+func (s *Service) Get(ctx context.Context, orgID, orderID uuid.UUID, includeItems bool) (*Order, error) {
+	o, err := s.repo.GetOrder(ctx, orgID, orderID)
 	if err != nil {
 		return nil, err
 	}
@@ -159,10 +159,10 @@ func (s *Service) Get(ctx context.Context, wsID, orderID uuid.UUID, includeItems
 }
 
 // List returns orders matching the filter.
-func (s *Service) List(ctx context.Context, wsID uuid.UUID, filter OrderFilter) (*types.PageResponse[Order], error) {
+func (s *Service) List(ctx context.Context, orgID uuid.UUID, filter OrderFilter) (*types.PageResponse[Order], error) {
 	filter.Page.Normalize()
 
-	orders, total, err := s.repo.ListOrders(ctx, wsID, filter)
+	orders, total, err := s.repo.ListOrders(ctx, orgID, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -179,8 +179,8 @@ func (s *Service) List(ctx context.Context, wsID uuid.UUID, filter OrderFilter) 
 }
 
 // Confirm transitions order to confirmed status.
-func (s *Service) Confirm(ctx context.Context, wsID, orderID uuid.UUID, actorID *uuid.UUID) (*Order, error) {
-	o, err := s.repo.GetOrder(ctx, wsID, orderID)
+func (s *Service) Confirm(ctx context.Context, orgID, orderID uuid.UUID, actorID *uuid.UUID) (*Order, error) {
+	o, err := s.repo.GetOrder(ctx, orgID, orderID)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +203,7 @@ func (s *Service) Confirm(ctx context.Context, wsID, orderID uuid.UUID, actorID 
 				Quantity:    item.Quantity,
 			}
 		}
-		if err := s.warehouse.CheckAvailability(ctx, wsID, checkItems); err != nil {
+		if err := s.warehouse.CheckAvailability(ctx, orgID, checkItems); err != nil {
 			return nil, err
 		}
 	}
@@ -234,14 +234,14 @@ func (s *Service) Confirm(ctx context.Context, wsID, orderID uuid.UUID, actorID 
 	if o.WarehouseID != nil {
 		eventData["warehouse_id"] = *o.WarehouseID
 	}
-	s.publishEvent(ctx, wsID, o.EntityID, "order.confirmed", actorID, eventData)
+	s.publishEvent(ctx, orgID, o.EntityID, "order.confirmed", actorID, eventData)
 
 	return o, nil
 }
 
 // Pay records payment on an order.
-func (s *Service) Pay(ctx context.Context, wsID, orderID uuid.UUID, input PayInput, actorID *uuid.UUID) (*Order, error) {
-	o, err := s.repo.GetOrder(ctx, wsID, orderID)
+func (s *Service) Pay(ctx context.Context, orgID, orderID uuid.UUID, input PayInput, actorID *uuid.UUID) (*Order, error) {
+	o, err := s.repo.GetOrder(ctx, orgID, orderID)
 	if err != nil {
 		return nil, err
 	}
@@ -260,7 +260,7 @@ func (s *Service) Pay(ctx context.Context, wsID, orderID uuid.UUID, input PayInp
 		return nil, err
 	}
 
-	s.publishEvent(ctx, wsID, o.EntityID, "order.paid", actorID, map[string]any{
+	s.publishEvent(ctx, orgID, o.EntityID, "order.paid", actorID, map[string]any{
 		"order_id": o.ID,
 		"amount":   input.Amount,
 		"method":   input.Method,
@@ -270,8 +270,8 @@ func (s *Service) Pay(ctx context.Context, wsID, orderID uuid.UUID, input PayInp
 }
 
 // Ship records shipment on an order.
-func (s *Service) Ship(ctx context.Context, wsID, orderID uuid.UUID, input ShipInput, actorID *uuid.UUID) (*Order, error) {
-	o, err := s.repo.GetOrder(ctx, wsID, orderID)
+func (s *Service) Ship(ctx context.Context, orgID, orderID uuid.UUID, input ShipInput, actorID *uuid.UUID) (*Order, error) {
+	o, err := s.repo.GetOrder(ctx, orgID, orderID)
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +290,7 @@ func (s *Service) Ship(ctx context.Context, wsID, orderID uuid.UUID, input ShipI
 		return nil, err
 	}
 
-	s.publishEvent(ctx, wsID, o.EntityID, "order.shipped", actorID, map[string]any{
+	s.publishEvent(ctx, orgID, o.EntityID, "order.shipped", actorID, map[string]any{
 		"order_id": o.ID,
 		"tracking": input.Tracking,
 	})
@@ -299,8 +299,8 @@ func (s *Service) Ship(ctx context.Context, wsID, orderID uuid.UUID, input ShipI
 }
 
 // Deliver marks order as delivered.
-func (s *Service) Deliver(ctx context.Context, wsID, orderID uuid.UUID, actorID *uuid.UUID) (*Order, error) {
-	o, err := s.repo.GetOrder(ctx, wsID, orderID)
+func (s *Service) Deliver(ctx context.Context, orgID, orderID uuid.UUID, actorID *uuid.UUID) (*Order, error) {
+	o, err := s.repo.GetOrder(ctx, orgID, orderID)
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +319,7 @@ func (s *Service) Deliver(ctx context.Context, wsID, orderID uuid.UUID, actorID 
 		return nil, err
 	}
 
-	s.publishEvent(ctx, wsID, o.EntityID, "order.delivered", actorID, map[string]any{
+	s.publishEvent(ctx, orgID, o.EntityID, "order.delivered", actorID, map[string]any{
 		"order_id": o.ID,
 	})
 
@@ -327,8 +327,8 @@ func (s *Service) Deliver(ctx context.Context, wsID, orderID uuid.UUID, actorID 
 }
 
 // Cancel cancels an order.
-func (s *Service) Cancel(ctx context.Context, wsID, orderID uuid.UUID, reason string, actorID *uuid.UUID) (*Order, error) {
-	o, err := s.repo.GetOrder(ctx, wsID, orderID)
+func (s *Service) Cancel(ctx context.Context, orgID, orderID uuid.UUID, reason string, actorID *uuid.UUID) (*Order, error) {
+	o, err := s.repo.GetOrder(ctx, orgID, orderID)
 	if err != nil {
 		return nil, err
 	}
@@ -369,14 +369,14 @@ func (s *Service) Cancel(ctx context.Context, wsID, orderID uuid.UUID, reason st
 	if o.WarehouseID != nil {
 		eventData["warehouse_id"] = *o.WarehouseID
 	}
-	s.publishEvent(ctx, wsID, o.EntityID, "order.cancelled", actorID, eventData)
+	s.publishEvent(ctx, orgID, o.EntityID, "order.cancelled", actorID, eventData)
 
 	return o, nil
 }
 
 // Update modifies a draft/new order.
-func (s *Service) Update(ctx context.Context, wsID, orderID uuid.UUID, input UpdateOrderInput, actorID *uuid.UUID) (*Order, error) {
-	o, err := s.repo.GetOrder(ctx, wsID, orderID)
+func (s *Service) Update(ctx context.Context, orgID, orderID uuid.UUID, input UpdateOrderInput, actorID *uuid.UUID) (*Order, error) {
+	o, err := s.repo.GetOrder(ctx, orgID, orderID)
 	if err != nil {
 		return nil, err
 	}
@@ -398,7 +398,7 @@ func (s *Service) Update(ctx context.Context, wsID, orderID uuid.UUID, input Upd
 			items[i] = OrderItem{
 				ID:          uuid.New(),
 				OrderID:     orderID,
-				WorkspaceID: wsID,
+				OrganizationID: orgID,
 				ProductID:   item.ProductID,
 				Name:        "Product",
 				Quantity:    item.Quantity,
@@ -452,7 +452,7 @@ func (s *Service) updateStatus(ctx context.Context, o *Order, status string, act
 		return nil, err
 	}
 
-	s.publishEvent(ctx, wsID(o), o.EntityID, "order."+status, actorID, map[string]any{
+	s.publishEvent(ctx, orgID(o), o.EntityID, "order."+status, actorID, map[string]any{
 		"order_id": o.ID,
 		"status":   status,
 	})
@@ -460,12 +460,12 @@ func (s *Service) updateStatus(ctx context.Context, o *Order, status string, act
 	return o, nil
 }
 
-func wsID(o *Order) uuid.UUID { return o.WorkspaceID }
+func orgID(o *Order) uuid.UUID { return o.OrganizationID }
 
-func (s *Service) publishEvent(ctx context.Context, workspaceID uuid.UUID, entityID uuid.UUID, eventType string, actorID *uuid.UUID, data map[string]any) {
+func (s *Service) publishEvent(ctx context.Context, organizationID uuid.UUID, entityID uuid.UUID, eventType string, actorID *uuid.UUID, data map[string]any) {
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: workspaceID,
+		OrganizationID: organizationID,
 		EntityID:    &entityID,
 		Type:        eventType,
 		ActorID:     actorID,

@@ -13,10 +13,10 @@ import (
 
 // ViewManager is the interface consumed by the views handler.
 type ViewManager interface {
-	Subscribe(ctx context.Context, seanceID string, wsID, userID uuid.UUID, viewKey string, params map[string]any) (*views.SubscribeResult, error)
+	Subscribe(ctx context.Context, seanceID string, orgID, userID uuid.UUID, viewKey string, params map[string]any) (*views.SubscribeResult, error)
 	Unsubscribe(seanceID, paramsHash string)
 	ActiveSubscriptions(seanceID string) []views.ActiveSub
-	Sync(ctx context.Context, seanceID string, wsID uuid.UUID, req views.SyncRequest) error
+	Sync(ctx context.Context, seanceID string, orgID uuid.UUID, req views.SyncRequest) error
 }
 
 // ViewsHandler handles view subscription REST endpoints.
@@ -29,9 +29,9 @@ func NewViewsHandler(mgr ViewManager) *ViewsHandler {
 	return &ViewsHandler{mgr: mgr}
 }
 
-// Subscribe handles POST /api/v1/workspaces/{wsID}/views/subscribe.
+// Subscribe handles POST /api/v1/organizations/{orgID}/views/subscribe.
 func (h *ViewsHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -59,7 +59,7 @@ func (h *ViewsHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.mgr.Subscribe(r.Context(), seanceID, wsID, userID, input.View, input.Params)
+	result, err := h.mgr.Subscribe(r.Context(), seanceID, orgID, userID, input.View, input.Params)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -68,7 +68,7 @@ func (h *ViewsHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK, result)
 }
 
-// Unsubscribe handles POST /api/v1/workspaces/{wsID}/views/unsubscribe.
+// Unsubscribe handles POST /api/v1/organizations/{orgID}/views/unsubscribe.
 func (h *ViewsHandler) Unsubscribe(w http.ResponseWriter, r *http.Request) {
 	seanceID, ok := auth.SeanceIDFromCtx(r.Context())
 	if !ok {
@@ -94,7 +94,7 @@ func (h *ViewsHandler) Unsubscribe(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK, nil)
 }
 
-// Active handles GET /api/v1/workspaces/{wsID}/views/active.
+// Active handles GET /api/v1/organizations/{orgID}/views/active.
 func (h *ViewsHandler) Active(w http.ResponseWriter, r *http.Request) {
 	seanceID, ok := auth.SeanceIDFromCtx(r.Context())
 	if !ok {
@@ -106,9 +106,9 @@ func (h *ViewsHandler) Active(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK, map[string]any{"views": subs})
 }
 
-// Sync handles POST /api/v1/workspaces/{wsID}/views/sync.
+// Sync handles POST /api/v1/organizations/{orgID}/views/sync.
 func (h *ViewsHandler) Sync(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -126,7 +126,7 @@ func (h *ViewsHandler) Sync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.mgr.Sync(r.Context(), seanceID, wsID, input); err != nil {
+	if err := h.mgr.Sync(r.Context(), seanceID, orgID, input); err != nil {
 		respondError(w, err)
 		return
 	}

@@ -23,7 +23,7 @@ var LogisticsRoutesList = &views.ViewDef{
 	Factory: logisticsRoutesListFactory,
 }
 
-func logisticsRoutesListFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
+func logisticsRoutesListFactory(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
 	limit := intParam(params, "limit", 50)
 	offset := intParam(params, "offset", 0)
 	status, _ := params["status"].(string)
@@ -36,11 +36,11 @@ func logisticsRoutesListFactory(ctx context.Context, pool *pgxpool.Pool, wsID uu
 		       (SELECT COUNT(*) FROM route_stops rs WHERE rs.route_id = r.id) AS stop_count,
 		       COUNT(*) OVER() AS total_count
 		FROM routes r
-		LEFT JOIN entities v ON v.id = r.vehicle_id AND v.workspace_id = $1
-		LEFT JOIN entities d ON d.id = r.driver_id AND d.workspace_id = $1
-		WHERE r.workspace_id = $1
+		LEFT JOIN entities v ON v.id = r.vehicle_id AND v.organization_id = $1
+		LEFT JOIN entities d ON d.id = r.driver_id AND d.organization_id = $1
+		WHERE r.organization_id = $1
 	`
-	args := []any{wsID}
+	args := []any{orgID}
 	argIdx := 2
 
 	if status != "" {
@@ -99,7 +99,7 @@ var LogisticsRouteDetail = &views.ViewDef{
 	Factory: logisticsRouteDetailFactory,
 }
 
-func logisticsRouteDetailFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
+func logisticsRouteDetailFactory(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
 	routeID, _ := params["route_id"].(string)
 
 	tables := map[string]map[string]any{"routes": {}, "route_stops": {}}
@@ -114,10 +114,10 @@ func logisticsRouteDetailFactory(ctx context.Context, pool *pgxpool.Pool, wsID u
 		       v.name, d.name,
 		       r.planned_start, r.planned_end, r.actual_start, r.actual_end
 		FROM routes r
-		LEFT JOIN entities v ON v.id = r.vehicle_id AND v.workspace_id = $1
-		LEFT JOIN entities d ON d.id = r.driver_id AND d.workspace_id = $1
-		WHERE r.workspace_id = $1 AND r.id = $2
-	`, wsID, routeID).Scan(&id, &name, &status, &vehicleName, &driverName,
+		LEFT JOIN entities v ON v.id = r.vehicle_id AND v.organization_id = $1
+		LEFT JOIN entities d ON d.id = r.driver_id AND d.organization_id = $1
+		WHERE r.organization_id = $1 AND r.id = $2
+	`, orgID, routeID).Scan(&id, &name, &status, &vehicleName, &driverName,
 		&plannedStart, &plannedEnd, &actualStart, &actualEnd)
 	if err != nil {
 		return nil, err
@@ -146,9 +146,9 @@ func logisticsRouteDetailFactory(ctx context.Context, pool *pgxpool.Pool, wsID u
 		SELECT id, address, latitude, longitude, sort_order,
 		       planned_arrival, actual_arrival, status, notes
 		FROM route_stops
-		WHERE workspace_id = $1 AND route_id = $2
+		WHERE organization_id = $1 AND route_id = $2
 		ORDER BY sort_order
-	`, wsID, routeID)
+	`, orgID, routeID)
 	if err != nil {
 		return nil, err
 	}
@@ -196,15 +196,15 @@ var LogisticsVehiclesMap = &views.ViewDef{
 	Factory: logisticsVehiclesMapFactory,
 }
 
-func logisticsVehiclesMapFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, _ map[string]any) (*views.ViewResult, error) {
+func logisticsVehiclesMapFactory(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, _ map[string]any) (*views.ViewResult, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT DISTINCT ON (gt.entity_id)
 		       gt.entity_id, e.name, gt.latitude, gt.longitude, gt.speed, gt.recorded_at
 		FROM geo_tracks gt
-		JOIN entities e ON e.id = gt.entity_id AND e.workspace_id = $1 AND e.kind = 'vehicle'
-		WHERE gt.workspace_id = $1
+		JOIN entities e ON e.id = gt.entity_id AND e.organization_id = $1 AND e.kind = 'vehicle'
+		WHERE gt.organization_id = $1
 		ORDER BY gt.entity_id, gt.recorded_at DESC
-	`, wsID)
+	`, orgID)
 	if err != nil {
 		return nil, err
 	}

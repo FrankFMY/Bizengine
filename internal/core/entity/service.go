@@ -30,7 +30,7 @@ func NewService(repo Repository, eventStore event.Store, eventBus event.Bus) *Se
 }
 
 // Create creates a new entity and publishes entity.created.
-func (s *Service) Create(ctx context.Context, wsID uuid.UUID, input CreateEntityInput, actorID *uuid.UUID) (*types.Entity, error) {
+func (s *Service) Create(ctx context.Context, orgID uuid.UUID, input CreateEntityInput, actorID *uuid.UUID) (*types.Entity, error) {
 	if input.Kind == "" {
 		return nil, errs.NewBadRequest("kind is required")
 	}
@@ -40,7 +40,7 @@ func (s *Service) Create(ctx context.Context, wsID uuid.UUID, input CreateEntity
 
 	e := &types.Entity{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		Kind:        input.Kind,
 		Name:        input.Name,
 		ParentID:    input.ParentID,
@@ -52,7 +52,7 @@ func (s *Service) Create(ctx context.Context, wsID uuid.UUID, input CreateEntity
 
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		EntityID:    &e.ID,
 		Type:        "entity.created",
 		ActorID:     actorID,
@@ -80,13 +80,13 @@ func (s *Service) Create(ctx context.Context, wsID uuid.UUID, input CreateEntity
 }
 
 // Get returns an entity by ID with optional components.
-func (s *Service) Get(ctx context.Context, wsID, id uuid.UUID, includeComponents bool) (*types.Entity, error) {
-	e, err := s.repo.GetByID(ctx, wsID, id)
+func (s *Service) Get(ctx context.Context, orgID, id uuid.UUID, includeComponents bool) (*types.Entity, error) {
+	e, err := s.repo.GetByID(ctx, orgID, id)
 	if err != nil {
 		return nil, err
 	}
 	if includeComponents {
-		comps, err := s.repo.ListComponents(ctx, wsID, id)
+		comps, err := s.repo.ListComponents(ctx, orgID, id)
 		if err != nil {
 			return nil, err
 		}
@@ -96,16 +96,16 @@ func (s *Service) Get(ctx context.Context, wsID, id uuid.UUID, includeComponents
 }
 
 // List returns entities matching the filter.
-func (s *Service) List(ctx context.Context, wsID uuid.UUID, filter ListFilter, includeComponents bool) (*types.PageResponse[types.Entity], error) {
+func (s *Service) List(ctx context.Context, orgID uuid.UUID, filter ListFilter, includeComponents bool) (*types.PageResponse[types.Entity], error) {
 	filter.Page.Normalize()
-	entities, total, err := s.repo.List(ctx, wsID, filter)
+	entities, total, err := s.repo.List(ctx, orgID, filter)
 	if err != nil {
 		return nil, err
 	}
 
 	if includeComponents && len(entities) > 0 {
 		for i := range entities {
-			comps, err := s.repo.ListComponents(ctx, wsID, entities[i].ID)
+			comps, err := s.repo.ListComponents(ctx, orgID, entities[i].ID)
 			if err != nil {
 				return nil, err
 			}
@@ -126,8 +126,8 @@ func (s *Service) List(ctx context.Context, wsID uuid.UUID, filter ListFilter, i
 }
 
 // Update modifies an entity and publishes entity.updated.
-func (s *Service) Update(ctx context.Context, wsID, id uuid.UUID, input UpdateEntityInput, actorID *uuid.UUID) (*types.Entity, error) {
-	e, err := s.repo.GetByID(ctx, wsID, id)
+func (s *Service) Update(ctx context.Context, orgID, id uuid.UUID, input UpdateEntityInput, actorID *uuid.UUID) (*types.Entity, error) {
+	e, err := s.repo.GetByID(ctx, orgID, id)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,7 @@ func (s *Service) Update(ctx context.Context, wsID, id uuid.UUID, input UpdateEn
 
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		EntityID:    &id,
 		Type:        "entity.updated",
 		ActorID:     actorID,
@@ -186,15 +186,15 @@ func (s *Service) Update(ctx context.Context, wsID, id uuid.UUID, input UpdateEn
 }
 
 // Delete soft-deletes an entity and publishes entity.deleted.
-func (s *Service) Delete(ctx context.Context, wsID, id uuid.UUID, actorID *uuid.UUID) error {
-	e, err := s.repo.GetByID(ctx, wsID, id)
+func (s *Service) Delete(ctx context.Context, orgID, id uuid.UUID, actorID *uuid.UUID) error {
+	e, err := s.repo.GetByID(ctx, orgID, id)
 	if err != nil {
 		return err
 	}
 
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		EntityID:    &id,
 		Type:        "entity.deleted",
 		ActorID:     actorID,
@@ -207,7 +207,7 @@ func (s *Service) Delete(ctx context.Context, wsID, id uuid.UUID, actorID *uuid.
 	})
 
 	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
-		if err := s.repo.SoftDelete(ctx, wsID, id); err != nil {
+		if err := s.repo.SoftDelete(ctx, orgID, id); err != nil {
 			return err
 		}
 		return s.eventStore.AppendTx(ctx, tx, ev)
@@ -220,23 +220,23 @@ func (s *Service) Delete(ctx context.Context, wsID, id uuid.UUID, actorID *uuid.
 }
 
 // SetComponent sets a component on an entity and publishes component.set.
-func (s *Service) SetComponent(ctx context.Context, wsID, entityID uuid.UUID, compType string, data json.RawMessage, actorID *uuid.UUID) (*types.Component, error) {
+func (s *Service) SetComponent(ctx context.Context, orgID, entityID uuid.UUID, compType string, data json.RawMessage, actorID *uuid.UUID) (*types.Component, error) {
 	// Verify entity exists
-	if _, err := s.repo.GetByID(ctx, wsID, entityID); err != nil {
+	if _, err := s.repo.GetByID(ctx, orgID, entityID); err != nil {
 		return nil, err
 	}
 
 	c := &types.Component{
 		ID:          uuid.New(),
 		EntityID:    entityID,
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		Type:        compType,
 		Data:        data,
 	}
 
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		EntityID:    &entityID,
 		Type:        "component.set",
 		ActorID:     actorID,
@@ -269,24 +269,24 @@ func (s *Service) SetComponent(ctx context.Context, wsID, entityID uuid.UUID, co
 }
 
 // GetComponent returns a specific component.
-func (s *Service) GetComponent(ctx context.Context, wsID, entityID uuid.UUID, compType string) (*types.Component, error) {
-	return s.repo.GetComponent(ctx, wsID, entityID, compType)
+func (s *Service) GetComponent(ctx context.Context, orgID, entityID uuid.UUID, compType string) (*types.Component, error) {
+	return s.repo.GetComponent(ctx, orgID, entityID, compType)
 }
 
 // ListComponents returns all components for an entity.
-func (s *Service) ListComponents(ctx context.Context, wsID, entityID uuid.UUID) ([]types.Component, error) {
-	return s.repo.ListComponents(ctx, wsID, entityID)
+func (s *Service) ListComponents(ctx context.Context, orgID, entityID uuid.UUID) ([]types.Component, error) {
+	return s.repo.ListComponents(ctx, orgID, entityID)
 }
 
 // DeleteComponent removes a component and publishes component.removed.
-func (s *Service) DeleteComponent(ctx context.Context, wsID, entityID uuid.UUID, compType string, actorID *uuid.UUID) error {
-	if _, err := s.repo.GetByID(ctx, wsID, entityID); err != nil {
+func (s *Service) DeleteComponent(ctx context.Context, orgID, entityID uuid.UUID, compType string, actorID *uuid.UUID) error {
+	if _, err := s.repo.GetByID(ctx, orgID, entityID); err != nil {
 		return err
 	}
 
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		EntityID:    &entityID,
 		Type:        "component.removed",
 		ActorID:     actorID,
@@ -298,7 +298,7 @@ func (s *Service) DeleteComponent(ctx context.Context, wsID, entityID uuid.UUID,
 		"type":      compType,
 	})
 
-	if err := s.repo.DeleteComponent(ctx, wsID, entityID, compType); err != nil {
+	if err := s.repo.DeleteComponent(ctx, orgID, entityID, compType); err != nil {
 		return err
 	}
 

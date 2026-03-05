@@ -45,9 +45,9 @@ func (m *mockOrderRepo) CreateOrderItems(_ context.Context, _ pgx.Tx, items []Or
 	return nil
 }
 
-func (m *mockOrderRepo) GetOrder(_ context.Context, wsID, orderID uuid.UUID) (*Order, error) {
+func (m *mockOrderRepo) GetOrder(_ context.Context, orgID, orderID uuid.UUID) (*Order, error) {
 	o, ok := m.orders[orderID]
-	if !ok || o.WorkspaceID != wsID {
+	if !ok || o.OrganizationID != orgID {
 		return nil, pgx.ErrNoRows
 	}
 	cp := *o
@@ -58,10 +58,10 @@ func (m *mockOrderRepo) GetOrderItems(_ context.Context, orderID uuid.UUID) ([]O
 	return m.items[orderID], nil
 }
 
-func (m *mockOrderRepo) ListOrders(_ context.Context, wsID uuid.UUID, _ OrderFilter) ([]Order, int, error) {
+func (m *mockOrderRepo) ListOrders(_ context.Context, orgID uuid.UUID, _ OrderFilter) ([]Order, int, error) {
 	var result []Order
 	for _, o := range m.orders {
-		if o.WorkspaceID == wsID {
+		if o.OrganizationID == orgID {
 			result = append(result, *o)
 		}
 	}
@@ -147,7 +147,7 @@ func (m *mockEventStore) AppendTx(context.Context, pgx.Tx, types.Event) error   
 func (m *mockEventStore) GetByEntity(_ context.Context, _, _ uuid.UUID, _ *time.Time, _ int) ([]types.Event, error) {
 	return nil, nil
 }
-func (m *mockEventStore) GetByWorkspace(_ context.Context, _ uuid.UUID, _, _ int) ([]types.Event, int, error) {
+func (m *mockEventStore) GetByOrganization(_ context.Context, _ uuid.UUID, _, _ int) ([]types.Event, int, error) {
 	return nil, 0, nil
 }
 func (m *mockEventStore) GetByType(_ context.Context, _ uuid.UUID, _ string, _ *time.Time, _ int) ([]types.Event, error) {
@@ -192,7 +192,7 @@ func setupOrderService(wh WarehouseChecker) (*Service, *mockOrderRepo, *mockBus)
 // --- tests ---
 
 func TestCreateOrder(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 	productID := uuid.New()
@@ -200,7 +200,7 @@ func TestCreateOrder(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		svc, repo, bus := setupOrderService(nil)
 
-		o, err := svc.Create(ctx, wsID, CreateOrderInput{
+		o, err := svc.Create(ctx, orgID, CreateOrderInput{
 			Items: []CreateItemInput{
 				{ProductID: productID, Quantity: 2, UnitPrice: 10000},
 				{ProductID: uuid.New(), Quantity: 1, UnitPrice: 5000},
@@ -227,7 +227,7 @@ func TestCreateOrder(t *testing.T) {
 	t.Run("no items rejected", func(t *testing.T) {
 		svc, _, _ := setupOrderService(nil)
 
-		_, err := svc.Create(ctx, wsID, CreateOrderInput{}, &actorID)
+		_, err := svc.Create(ctx, orgID, CreateOrderInput{}, &actorID)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "items are required")
 	})
@@ -235,10 +235,10 @@ func TestCreateOrder(t *testing.T) {
 	t.Run("sequential numbers", func(t *testing.T) {
 		svc, _, _ := setupOrderService(nil)
 
-		o1, _ := svc.Create(ctx, wsID, CreateOrderInput{
+		o1, _ := svc.Create(ctx, orgID, CreateOrderInput{
 			Items: []CreateItemInput{{ProductID: productID, Quantity: 1, UnitPrice: 1000}},
 		}, &actorID)
-		o2, _ := svc.Create(ctx, wsID, CreateOrderInput{
+		o2, _ := svc.Create(ctx, orgID, CreateOrderInput{
 			Items: []CreateItemInput{{ProductID: productID, Quantity: 1, UnitPrice: 1000}},
 		}, &actorID)
 
@@ -248,13 +248,13 @@ func TestCreateOrder(t *testing.T) {
 }
 
 func TestOrderLifecycle(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 
 	svc, _, bus := setupOrderService(&mockWarehouse{available: true})
 
-	o, err := svc.Create(ctx, wsID, CreateOrderInput{
+	o, err := svc.Create(ctx, orgID, CreateOrderInput{
 		Items: []CreateItemInput{
 			{ProductID: uuid.New(), Quantity: 1, UnitPrice: 50000},
 		},
@@ -262,24 +262,24 @@ func TestOrderLifecycle(t *testing.T) {
 	require.NoError(t, err)
 
 	// Confirm
-	o, err = svc.Confirm(ctx, wsID, o.ID, &actorID)
+	o, err = svc.Confirm(ctx, orgID, o.ID, &actorID)
 	require.NoError(t, err)
 	assert.Equal(t, "confirmed", o.Status)
 
 	// Pay
-	o, err = svc.Pay(ctx, wsID, o.ID, PayInput{Amount: 50000, Method: "card"}, &actorID)
+	o, err = svc.Pay(ctx, orgID, o.ID, PayInput{Amount: 50000, Method: "card"}, &actorID)
 	require.NoError(t, err)
 	assert.Equal(t, "paid", o.Status)
 	assert.NotNil(t, o.PaidAt)
 
 	// Ship
-	o, err = svc.Ship(ctx, wsID, o.ID, ShipInput{Tracking: "TRACK-123"}, &actorID)
+	o, err = svc.Ship(ctx, orgID, o.ID, ShipInput{Tracking: "TRACK-123"}, &actorID)
 	require.NoError(t, err)
 	assert.Equal(t, "shipped", o.Status)
 	assert.NotNil(t, o.ShippedAt)
 
 	// Deliver
-	o, err = svc.Deliver(ctx, wsID, o.ID, &actorID)
+	o, err = svc.Deliver(ctx, orgID, o.ID, &actorID)
 	require.NoError(t, err)
 	assert.Equal(t, "delivered", o.Status)
 	assert.NotNil(t, o.DeliveredAt)
@@ -297,18 +297,18 @@ func TestOrderLifecycle(t *testing.T) {
 }
 
 func TestCancelOrder(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 
 	t.Run("cancel from new", func(t *testing.T) {
 		svc, _, _ := setupOrderService(nil)
 
-		o, _ := svc.Create(ctx, wsID, CreateOrderInput{
+		o, _ := svc.Create(ctx, orgID, CreateOrderInput{
 			Items: []CreateItemInput{{ProductID: uuid.New(), Quantity: 1, UnitPrice: 1000}},
 		}, &actorID)
 
-		o, err := svc.Cancel(ctx, wsID, o.ID, "changed mind", &actorID)
+		o, err := svc.Cancel(ctx, orgID, o.ID, "changed mind", &actorID)
 		require.NoError(t, err)
 		assert.Equal(t, "cancelled", o.Status)
 		assert.NotNil(t, o.CancelledAt)
@@ -317,21 +317,21 @@ func TestCancelOrder(t *testing.T) {
 	t.Run("cannot cancel shipped", func(t *testing.T) {
 		svc, _, _ := setupOrderService(&mockWarehouse{available: true})
 
-		o, _ := svc.Create(ctx, wsID, CreateOrderInput{
+		o, _ := svc.Create(ctx, orgID, CreateOrderInput{
 			Items: []CreateItemInput{{ProductID: uuid.New(), Quantity: 1, UnitPrice: 1000}},
 		}, &actorID)
-		svc.Confirm(ctx, wsID, o.ID, &actorID)
-		svc.Pay(ctx, wsID, o.ID, PayInput{Amount: 1000, Method: "cash"}, &actorID)
-		svc.Ship(ctx, wsID, o.ID, ShipInput{}, &actorID)
+		svc.Confirm(ctx, orgID, o.ID, &actorID)
+		svc.Pay(ctx, orgID, o.ID, PayInput{Amount: 1000, Method: "cash"}, &actorID)
+		svc.Ship(ctx, orgID, o.ID, ShipInput{}, &actorID)
 
-		_, err := svc.Cancel(ctx, wsID, o.ID, "test", &actorID)
+		_, err := svc.Cancel(ctx, orgID, o.ID, "test", &actorID)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "can only be cancelled from new, confirmed, or paid")
 	})
 }
 
 func TestConfirmCheckAvailability(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 	warehouseID := uuid.New()
@@ -339,30 +339,30 @@ func TestConfirmCheckAvailability(t *testing.T) {
 	t.Run("insufficient stock blocks confirm", func(t *testing.T) {
 		svc, _, _ := setupOrderService(&mockWarehouse{available: false})
 
-		o, _ := svc.Create(ctx, wsID, CreateOrderInput{
+		o, _ := svc.Create(ctx, orgID, CreateOrderInput{
 			WarehouseID: &warehouseID,
 			Items:       []CreateItemInput{{ProductID: uuid.New(), Quantity: 100, UnitPrice: 1000}},
 		}, &actorID)
 
-		_, err := svc.Confirm(ctx, wsID, o.ID, &actorID)
+		_, err := svc.Confirm(ctx, orgID, o.ID, &actorID)
 		require.Error(t, err)
 	})
 }
 
 func TestUpdateDraftOrder(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 
 	svc, _, _ := setupOrderService(nil)
 
-	o, _ := svc.Create(ctx, wsID, CreateOrderInput{
+	o, _ := svc.Create(ctx, orgID, CreateOrderInput{
 		Items: []CreateItemInput{{ProductID: uuid.New(), Quantity: 1, UnitPrice: 1000}},
 		Notes: "original",
 	}, &actorID)
 
 	newNotes := "updated notes"
-	o, err := svc.Update(ctx, wsID, o.ID, UpdateOrderInput{
+	o, err := svc.Update(ctx, orgID, o.ID, UpdateOrderInput{
 		Notes: &newNotes,
 		Items: []CreateItemInput{
 			{ProductID: uuid.New(), Quantity: 3, UnitPrice: 2000},
@@ -375,18 +375,18 @@ func TestUpdateDraftOrder(t *testing.T) {
 }
 
 func TestCannotUpdateConfirmedOrder(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 
 	svc, _, _ := setupOrderService(&mockWarehouse{available: true})
 
-	o, _ := svc.Create(ctx, wsID, CreateOrderInput{
+	o, _ := svc.Create(ctx, orgID, CreateOrderInput{
 		Items: []CreateItemInput{{ProductID: uuid.New(), Quantity: 1, UnitPrice: 1000}},
 	}, &actorID)
-	svc.Confirm(ctx, wsID, o.ID, &actorID)
+	svc.Confirm(ctx, orgID, o.ID, &actorID)
 
-	_, err := svc.Update(ctx, wsID, o.ID, UpdateOrderInput{
+	_, err := svc.Update(ctx, orgID, o.ID, UpdateOrderInput{
 		Items: []CreateItemInput{{ProductID: uuid.New(), Quantity: 5, UnitPrice: 3000}},
 	}, &actorID)
 
@@ -395,13 +395,13 @@ func TestCannotUpdateConfirmedOrder(t *testing.T) {
 }
 
 func TestOrderItemTotalCalculation(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 
 	svc, _, _ := setupOrderService(nil)
 
-	o, err := svc.Create(ctx, wsID, CreateOrderInput{
+	o, err := svc.Create(ctx, orgID, CreateOrderInput{
 		Items: []CreateItemInput{
 			{ProductID: uuid.New(), Quantity: 2, UnitPrice: 10000, Discount: 500, Tax: 1800},
 			{ProductID: uuid.New(), Quantity: 1, UnitPrice: 5000, Discount: 0, Tax: 900},

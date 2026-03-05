@@ -10,17 +10,19 @@ import (
 
 // Entity represents a core business object in the ECS model.
 type Entity struct {
-	ID          uuid.UUID       `json:"id"`
-	WorkspaceID uuid.UUID      `json:"workspace_id"`
-	Kind        string          `json:"kind"`
-	Name        string          `json:"name"`
-	Status      string          `json:"status"`
-	ParentID    *uuid.UUID      `json:"parent_id,omitempty"`
-	Meta        json.RawMessage `json:"meta"`
-	SortOrder   int             `json:"sort_order"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
-	DeletedAt   *time.Time      `json:"deleted_at,omitempty"`
+	ID             uuid.UUID       `json:"id"`
+	OrganizationID uuid.UUID       `json:"organization_id"`
+	Kind           string          `json:"kind"`
+	Name           string          `json:"name"`
+	Status         string          `json:"status"`
+	ParentID       *uuid.UUID      `json:"parent_id,omitempty"`
+	Meta           json.RawMessage `json:"meta"`
+	SortOrder      int             `json:"sort_order"`
+	Ver            int             `json:"ver"`
+	Upd            time.Time       `json:"upd"`
+	CreatedAt      time.Time       `json:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
+	DeletedAt      *time.Time      `json:"deleted_at,omitempty"`
 
 	// Loaded via include=components
 	Components []Component `json:"components,omitempty"`
@@ -28,26 +30,28 @@ type Entity struct {
 
 // Component represents a data packet attached to an entity.
 type Component struct {
-	ID          uuid.UUID       `json:"id"`
-	EntityID    uuid.UUID       `json:"entity_id"`
-	WorkspaceID uuid.UUID      `json:"workspace_id"`
-	Type        string          `json:"type"`
-	Data        json.RawMessage `json:"data"`
-	Version     int64           `json:"version"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
+	ID             uuid.UUID       `json:"id"`
+	EntityID       uuid.UUID       `json:"entity_id"`
+	OrganizationID uuid.UUID       `json:"organization_id"`
+	Type           string          `json:"type"`
+	Data           json.RawMessage `json:"data"`
+	Version        int64           `json:"version"`
+	Ver            int             `json:"ver"`
+	Upd            time.Time       `json:"upd"`
+	CreatedAt      time.Time       `json:"created_at"`
+	UpdatedAt      time.Time       `json:"updated_at"`
 }
 
 // Event represents something that happened in the system.
 type Event struct {
-	ID          uuid.UUID       `json:"id"`
-	WorkspaceID uuid.UUID      `json:"workspace_id"`
-	EntityID    *uuid.UUID      `json:"entity_id,omitempty"`
-	Type        string          `json:"type"`
-	Data        json.RawMessage `json:"data"`
-	ActorID     *uuid.UUID      `json:"actor_id,omitempty"`
-	Timestamp   time.Time       `json:"timestamp"`
-	Version     int64           `json:"version"`
+	ID             uuid.UUID       `json:"id"`
+	OrganizationID uuid.UUID       `json:"organization_id"`
+	EntityID       *uuid.UUID      `json:"entity_id,omitempty"`
+	Type           string          `json:"type"`
+	Data           json.RawMessage `json:"data"`
+	ActorID        *uuid.UUID      `json:"actor_id,omitempty"`
+	Timestamp      time.Time       `json:"timestamp"`
+	Version        int64           `json:"version"`
 }
 
 // User represents an authenticated user.
@@ -58,29 +62,55 @@ type User struct {
 	FullName     string     `json:"full_name"`
 	Phone        *string    `json:"phone,omitempty"`
 	IsActive     bool       `json:"is_active"`
+	Name         *string    `json:"name,omitempty"`
+	Secret       string     `json:"-"`
+	AAT          *time.Time `json:"aat,omitempty"`
+	Ver          int        `json:"ver"`
+	Upd          time.Time  `json:"upd"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 }
 
-// Workspace represents a tenant.
-type Workspace struct {
+// Organization represents a tenant (formerly Workspace).
+type Organization struct {
 	ID        uuid.UUID       `json:"id"`
 	Name      string          `json:"name"`
 	Slug      string          `json:"slug"`
 	OwnerID   uuid.UUID       `json:"owner_id"`
 	Plan      string          `json:"plan"`
 	Settings  json.RawMessage `json:"settings"`
+	INN       *string         `json:"inn,omitempty"`
+	Ver       int             `json:"ver"`
+	Upd       time.Time       `json:"upd"`
 	CreatedAt time.Time       `json:"created_at"`
 	UpdatedAt time.Time       `json:"updated_at"`
 }
 
-// WorkspaceMember represents a user's membership in a workspace.
-type WorkspaceMember struct {
-	WorkspaceID uuid.UUID       `json:"workspace_id"`
-	UserID      uuid.UUID       `json:"user_id"`
-	Role        string          `json:"role"`
-	Permissions json.RawMessage `json:"permissions"`
-	JoinedAt    time.Time       `json:"joined_at"`
+// Labor represents a user's membership in an organization (formerly WorkspaceMember).
+// Keeps Role and Permissions for RBAC.
+type Labor struct {
+	ID             uuid.UUID       `json:"id"`
+	OrganizationID uuid.UUID       `json:"organization_id"`
+	UserID         uuid.UUID       `json:"user_id"`
+	Role           string          `json:"role"`
+	Permissions    json.RawMessage `json:"permissions"`
+	Admin          bool            `json:"admin"`
+	Ver            int             `json:"ver"`
+	Upd            time.Time       `json:"upd"`
+	IAT            time.Time       `json:"iat"`
+	JoinedAt       time.Time       `json:"joined_at"`
+}
+
+// Phone represents a phone number linked to a user.
+type Phone struct {
+	ID       uuid.UUID `json:"id"`
+	Ver      int       `json:"ver"`
+	Upd      time.Time `json:"upd"`
+	IAT      time.Time `json:"iat"`
+	UserID   uuid.UUID `json:"user_id"`
+	Unformat string    `json:"unformat"`
+	Format   string    `json:"format"`
+	Country  string    `json:"country"`
 }
 
 // PageRequest holds pagination parameters.

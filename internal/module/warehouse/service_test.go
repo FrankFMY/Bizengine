@@ -31,30 +31,30 @@ func stockKey(productID, warehouseID uuid.UUID) string {
 	return productID.String() + ":" + warehouseID.String()
 }
 
-func (m *mockWarehouseRepo) GetStockLevel(_ context.Context, wsID, productID, warehouseID uuid.UUID) (*StockLevel, error) {
+func (m *mockWarehouseRepo) GetStockLevel(_ context.Context, orgID, productID, warehouseID uuid.UUID) (*StockLevel, error) {
 	key := stockKey(productID, warehouseID)
 	sl, ok := m.stockLevels[key]
-	if !ok || sl.WorkspaceID != wsID {
+	if !ok || sl.OrganizationID != orgID {
 		return nil, pgx.ErrNoRows
 	}
 	cp := *sl
 	return &cp, nil
 }
 
-func (m *mockWarehouseRepo) ListStock(_ context.Context, wsID, warehouseID uuid.UUID, _ StockFilter) ([]StockLevel, int, error) {
+func (m *mockWarehouseRepo) ListStock(_ context.Context, orgID, warehouseID uuid.UUID, _ StockFilter) ([]StockLevel, int, error) {
 	var result []StockLevel
 	for _, sl := range m.stockLevels {
-		if sl.WorkspaceID == wsID && sl.WarehouseID == warehouseID {
+		if sl.OrganizationID == orgID && sl.WarehouseID == warehouseID {
 			result = append(result, *sl)
 		}
 	}
 	return result, len(result), nil
 }
 
-func (m *mockWarehouseRepo) GetLowStock(_ context.Context, wsID uuid.UUID) ([]StockLevel, error) {
+func (m *mockWarehouseRepo) GetLowStock(_ context.Context, orgID uuid.UUID) ([]StockLevel, error) {
 	var result []StockLevel
 	for _, sl := range m.stockLevels {
-		if sl.WorkspaceID == wsID && sl.MinQuantity > 0 && sl.Quantity-sl.Reserved <= sl.MinQuantity {
+		if sl.OrganizationID == orgID && sl.MinQuantity > 0 && sl.Quantity-sl.Reserved <= sl.MinQuantity {
 			result = append(result, *sl)
 		}
 	}
@@ -73,10 +73,10 @@ func (m *mockWarehouseRepo) InsertMovement(_ context.Context, _ pgx.Tx, mv *Stoc
 	return nil
 }
 
-func (m *mockWarehouseRepo) ListMovements(_ context.Context, wsID uuid.UUID, _ MovementFilter) ([]StockMovement, int, error) {
+func (m *mockWarehouseRepo) ListMovements(_ context.Context, orgID uuid.UUID, _ MovementFilter) ([]StockMovement, int, error) {
 	var result []StockMovement
 	for _, mv := range m.movements {
-		if mv.WorkspaceID == wsID {
+		if mv.OrganizationID == orgID {
 			result = append(result, mv)
 		}
 	}
@@ -108,7 +108,7 @@ func setupSvc() (*Service, *mockWarehouseRepo, *mockBus) {
 // --- tests ---
 
 func TestReceive(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	productID := uuid.New()
 	warehouseID := uuid.New()
 	actorID := uuid.New()
@@ -117,7 +117,7 @@ func TestReceive(t *testing.T) {
 	t.Run("new stock", func(t *testing.T) {
 		svc, repo, bus := setupSvc()
 
-		result, err := svc.Receive(ctx, wsID, ReceiveInput{
+		result, err := svc.Receive(ctx, orgID, ReceiveInput{
 			ProductID:   productID,
 			WarehouseID: warehouseID,
 			Quantity:    100,
@@ -135,11 +135,11 @@ func TestReceive(t *testing.T) {
 	t.Run("add to existing", func(t *testing.T) {
 		svc, repo, _ := setupSvc()
 		repo.stockLevels[stockKey(productID, warehouseID)] = &StockLevel{
-			WorkspaceID: wsID, ProductID: productID, WarehouseID: warehouseID,
+			OrganizationID: orgID, ProductID: productID, WarehouseID: warehouseID,
 			Quantity: 50, Unit: "шт", UpdatedAt: time.Now(),
 		}
 
-		result, err := svc.Receive(ctx, wsID, ReceiveInput{
+		result, err := svc.Receive(ctx, orgID, ReceiveInput{
 			ProductID:   productID,
 			WarehouseID: warehouseID,
 			Quantity:    30,
@@ -152,7 +152,7 @@ func TestReceive(t *testing.T) {
 	t.Run("zero quantity rejected", func(t *testing.T) {
 		svc, _, _ := setupSvc()
 
-		_, err := svc.Receive(ctx, wsID, ReceiveInput{
+		_, err := svc.Receive(ctx, orgID, ReceiveInput{
 			ProductID:   productID,
 			WarehouseID: warehouseID,
 			Quantity:    0,
@@ -164,7 +164,7 @@ func TestReceive(t *testing.T) {
 }
 
 func TestShip(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	productID := uuid.New()
 	warehouseID := uuid.New()
 	actorID := uuid.New()
@@ -173,11 +173,11 @@ func TestShip(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		svc, repo, _ := setupSvc()
 		repo.stockLevels[stockKey(productID, warehouseID)] = &StockLevel{
-			WorkspaceID: wsID, ProductID: productID, WarehouseID: warehouseID,
+			OrganizationID: orgID, ProductID: productID, WarehouseID: warehouseID,
 			Quantity: 100, Reserved: 20, Unit: "шт", UpdatedAt: time.Now(),
 		}
 
-		result, err := svc.Ship(ctx, wsID, ShipInput{
+		result, err := svc.Ship(ctx, orgID, ShipInput{
 			ProductID:   productID,
 			WarehouseID: warehouseID,
 			Quantity:    10,
@@ -195,11 +195,11 @@ func TestShip(t *testing.T) {
 	t.Run("insufficient stock", func(t *testing.T) {
 		svc, repo, _ := setupSvc()
 		repo.stockLevels[stockKey(productID, warehouseID)] = &StockLevel{
-			WorkspaceID: wsID, ProductID: productID, WarehouseID: warehouseID,
+			OrganizationID: orgID, ProductID: productID, WarehouseID: warehouseID,
 			Quantity: 10, Reserved: 8, Unit: "шт", UpdatedAt: time.Now(),
 		}
 
-		_, err := svc.Ship(ctx, wsID, ShipInput{
+		_, err := svc.Ship(ctx, orgID, ShipInput{
 			ProductID:   productID,
 			WarehouseID: warehouseID,
 			Quantity:    5,
@@ -211,7 +211,7 @@ func TestShip(t *testing.T) {
 }
 
 func TestTransfer(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	productID := uuid.New()
 	fromWH := uuid.New()
 	toWH := uuid.New()
@@ -221,11 +221,11 @@ func TestTransfer(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		svc, repo, _ := setupSvc()
 		repo.stockLevels[stockKey(productID, fromWH)] = &StockLevel{
-			WorkspaceID: wsID, ProductID: productID, WarehouseID: fromWH,
+			OrganizationID: orgID, ProductID: productID, WarehouseID: fromWH,
 			Quantity: 100, Unit: "шт", UpdatedAt: time.Now(),
 		}
 
-		result, err := svc.Transfer(ctx, wsID, TransferInput{
+		result, err := svc.Transfer(ctx, orgID, TransferInput{
 			ProductID:       productID,
 			FromWarehouseID: fromWH,
 			ToWarehouseID:   toWH,
@@ -246,7 +246,7 @@ func TestTransfer(t *testing.T) {
 	t.Run("same warehouse rejected", func(t *testing.T) {
 		svc, _, _ := setupSvc()
 
-		_, err := svc.Transfer(ctx, wsID, TransferInput{
+		_, err := svc.Transfer(ctx, orgID, TransferInput{
 			ProductID:       productID,
 			FromWarehouseID: fromWH,
 			ToWarehouseID:   fromWH,
@@ -259,7 +259,7 @@ func TestTransfer(t *testing.T) {
 }
 
 func TestAdjust(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	productID := uuid.New()
 	warehouseID := uuid.New()
 	actorID := uuid.New()
@@ -268,11 +268,11 @@ func TestAdjust(t *testing.T) {
 	t.Run("adjust up", func(t *testing.T) {
 		svc, repo, _ := setupSvc()
 		repo.stockLevels[stockKey(productID, warehouseID)] = &StockLevel{
-			WorkspaceID: wsID, ProductID: productID, WarehouseID: warehouseID,
+			OrganizationID: orgID, ProductID: productID, WarehouseID: warehouseID,
 			Quantity: 95, Unit: "шт", UpdatedAt: time.Now(),
 		}
 
-		result, err := svc.Adjust(ctx, wsID, AdjustInput{
+		result, err := svc.Adjust(ctx, orgID, AdjustInput{
 			ProductID:   productID,
 			WarehouseID: warehouseID,
 			NewQuantity: 100,
@@ -291,7 +291,7 @@ func TestAdjust(t *testing.T) {
 	t.Run("missing reason rejected", func(t *testing.T) {
 		svc, _, _ := setupSvc()
 
-		_, err := svc.Adjust(ctx, wsID, AdjustInput{
+		_, err := svc.Adjust(ctx, orgID, AdjustInput{
 			ProductID:   productID,
 			WarehouseID: warehouseID,
 			NewQuantity: 100,
@@ -303,7 +303,7 @@ func TestAdjust(t *testing.T) {
 }
 
 func TestReserveUnreserve(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	productID := uuid.New()
 	warehouseID := uuid.New()
 	ctx := context.Background()
@@ -311,11 +311,11 @@ func TestReserveUnreserve(t *testing.T) {
 	t.Run("reserve success", func(t *testing.T) {
 		svc, repo, _ := setupSvc()
 		repo.stockLevels[stockKey(productID, warehouseID)] = &StockLevel{
-			WorkspaceID: wsID, ProductID: productID, WarehouseID: warehouseID,
+			OrganizationID: orgID, ProductID: productID, WarehouseID: warehouseID,
 			Quantity: 100, Reserved: 0, Unit: "шт", UpdatedAt: time.Now(),
 		}
 
-		err := svc.Reserve(ctx, wsID, ReserveInput{
+		err := svc.Reserve(ctx, orgID, ReserveInput{
 			ProductID:   productID,
 			WarehouseID: warehouseID,
 			Quantity:    10,
@@ -329,11 +329,11 @@ func TestReserveUnreserve(t *testing.T) {
 	t.Run("reserve insufficient", func(t *testing.T) {
 		svc, repo, _ := setupSvc()
 		repo.stockLevels[stockKey(productID, warehouseID)] = &StockLevel{
-			WorkspaceID: wsID, ProductID: productID, WarehouseID: warehouseID,
+			OrganizationID: orgID, ProductID: productID, WarehouseID: warehouseID,
 			Quantity: 10, Reserved: 8, Unit: "шт", UpdatedAt: time.Now(),
 		}
 
-		err := svc.Reserve(ctx, wsID, ReserveInput{
+		err := svc.Reserve(ctx, orgID, ReserveInput{
 			ProductID:   productID,
 			WarehouseID: warehouseID,
 			Quantity:    5,
@@ -346,11 +346,11 @@ func TestReserveUnreserve(t *testing.T) {
 	t.Run("unreserve success", func(t *testing.T) {
 		svc, repo, _ := setupSvc()
 		repo.stockLevels[stockKey(productID, warehouseID)] = &StockLevel{
-			WorkspaceID: wsID, ProductID: productID, WarehouseID: warehouseID,
+			OrganizationID: orgID, ProductID: productID, WarehouseID: warehouseID,
 			Quantity: 100, Reserved: 20, Unit: "шт", UpdatedAt: time.Now(),
 		}
 
-		err := svc.Unreserve(ctx, wsID, UnreserveInput{
+		err := svc.Unreserve(ctx, orgID, UnreserveInput{
 			ProductID:   productID,
 			WarehouseID: warehouseID,
 			Quantity:    10,
@@ -363,7 +363,7 @@ func TestReserveUnreserve(t *testing.T) {
 }
 
 func TestCheckAvailability(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	productA := uuid.New()
 	productB := uuid.New()
 	warehouseID := uuid.New()
@@ -371,16 +371,16 @@ func TestCheckAvailability(t *testing.T) {
 
 	svc, repo, _ := setupSvc()
 	repo.stockLevels[stockKey(productA, warehouseID)] = &StockLevel{
-		WorkspaceID: wsID, ProductID: productA, WarehouseID: warehouseID,
+		OrganizationID: orgID, ProductID: productA, WarehouseID: warehouseID,
 		Quantity: 100, Reserved: 0, Unit: "шт", UpdatedAt: time.Now(),
 	}
 	repo.stockLevels[stockKey(productB, warehouseID)] = &StockLevel{
-		WorkspaceID: wsID, ProductID: productB, WarehouseID: warehouseID,
+		OrganizationID: orgID, ProductID: productB, WarehouseID: warehouseID,
 		Quantity: 5, Reserved: 3, Unit: "шт", UpdatedAt: time.Now(),
 	}
 
 	t.Run("all available", func(t *testing.T) {
-		err := svc.CheckAvailability(ctx, wsID, []CheckItem{
+		err := svc.CheckAvailability(ctx, orgID, []CheckItem{
 			{ProductID: productA, WarehouseID: warehouseID, Quantity: 50},
 			{ProductID: productB, WarehouseID: warehouseID, Quantity: 2},
 		})
@@ -388,7 +388,7 @@ func TestCheckAvailability(t *testing.T) {
 	})
 
 	t.Run("insufficient for one", func(t *testing.T) {
-		err := svc.CheckAvailability(ctx, wsID, []CheckItem{
+		err := svc.CheckAvailability(ctx, orgID, []CheckItem{
 			{ProductID: productA, WarehouseID: warehouseID, Quantity: 50},
 			{ProductID: productB, WarehouseID: warehouseID, Quantity: 5},
 		})

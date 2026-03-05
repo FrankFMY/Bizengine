@@ -15,17 +15,17 @@ type Repository interface {
 	GetUserByEmail(ctx context.Context, email string) (*types.User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*types.User, error)
 
-	// Workspaces
-	CreateWorkspace(ctx context.Context, ws *types.Workspace) error
-	GetWorkspace(ctx context.Context, id uuid.UUID) (*types.Workspace, error)
-	GetWorkspaceBySlug(ctx context.Context, slug string) (*types.Workspace, error)
-	ListUserWorkspaces(ctx context.Context, userID uuid.UUID) ([]types.Workspace, error)
-	UpdateWorkspace(ctx context.Context, ws *types.Workspace) error
+	// Organizations
+	CreateOrganization(ctx context.Context, org *types.Organization) error
+	GetOrganization(ctx context.Context, id uuid.UUID) (*types.Organization, error)
+	GetOrganizationBySlug(ctx context.Context, slug string) (*types.Organization, error)
+	ListUserOrganizations(ctx context.Context, userID uuid.UUID) ([]types.Organization, error)
+	UpdateOrganization(ctx context.Context, org *types.Organization) error
 
 	// Members
-	AddMember(ctx context.Context, m *types.WorkspaceMember) error
-	GetMember(ctx context.Context, wsID, userID uuid.UUID) (*types.WorkspaceMember, error)
-	ListMembers(ctx context.Context, wsID uuid.UUID) ([]types.WorkspaceMember, error)
-	UpdateMemberRole(ctx context.Context, wsID, userID uuid.UUID, role string) error
-	RemoveMember(ctx context.Context, wsID, userID uuid.UUID) error
+	AddMember(ctx context.Context, m *types.Labor) error
+	GetMember(ctx context.Context, orgID, userID uuid.UUID) (*types.Labor, error)
+	ListMembers(ctx context.Context, orgID uuid.UUID) ([]types.Labor, error)
+	UpdateMemberRole(ctx context.Context, orgID, userID uuid.UUID, role string) error
+	RemoveMember(ctx context.Context, orgID, userID uuid.UUID) error
 }

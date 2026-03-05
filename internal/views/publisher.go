@@ -14,7 +14,7 @@ import (
 // ViewPublisher abstracts sending view updates to clients.
 type ViewPublisher interface {
 	SendSnapshot(ctx context.Context, seanceID string, msg ViewSnapshotMsg) error
-	SendTableDiff(ctx context.Context, wsID uuid.UUID, msg TableDiffMsg) error
+	SendTableDiff(ctx context.Context, orgID uuid.UUID, msg TableDiffMsg) error
 	SendViewDiff(ctx context.Context, seanceID string, msg ViewDiffMsg) error
 }
 
@@ -28,7 +28,7 @@ type ViewSnapshotMsg struct {
 	Tables     map[string]map[string]any `json:"tables"`
 }
 
-// TableDiffMsg is sent when a row's data changes (workspace-wide).
+// TableDiffMsg is sent when a row's data changes (organization-wide).
 type TableDiffMsg struct {
 	Type  string    `json:"type"`
 	Table string    `json:"table"`
@@ -69,10 +69,10 @@ func (p *CentrifugoViewPublisher) SendSnapshot(ctx context.Context, seanceID str
 	return p.publish(ctx, "views:"+seanceID, msg)
 }
 
-// SendTableDiff publishes a table_diff to the workspace channel.
-func (p *CentrifugoViewPublisher) SendTableDiff(ctx context.Context, wsID uuid.UUID, msg TableDiffMsg) error {
+// SendTableDiff publishes a table_diff to the organization channel.
+func (p *CentrifugoViewPublisher) SendTableDiff(ctx context.Context, orgID uuid.UUID, msg TableDiffMsg) error {
 	msg.Type = "table_diff"
-	return p.publish(ctx, "workspace:"+wsID.String(), msg)
+	return p.publish(ctx, "org:"+orgID.String(), msg)
 }
 
 // SendViewDiff publishes a view_diff to the seance's views channel.

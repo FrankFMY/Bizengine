@@ -18,16 +18,16 @@ import (
 type mockRepo struct {
 	users      map[string]*types.User
 	usersById  map[uuid.UUID]*types.User
-	workspaces map[uuid.UUID]*types.Workspace
-	members    map[string]*types.WorkspaceMember
+	organizations map[uuid.UUID]*types.Organization
+	members    map[string]*types.Labor
 }
 
 func newMockRepo() *mockRepo {
 	return &mockRepo{
 		users:      make(map[string]*types.User),
 		usersById:  make(map[uuid.UUID]*types.User),
-		workspaces: make(map[uuid.UUID]*types.Workspace),
-		members:    make(map[string]*types.WorkspaceMember),
+		organizations: make(map[uuid.UUID]*types.Organization),
+		members:    make(map[string]*types.Labor),
 	}
 }
 
@@ -59,57 +59,57 @@ func (m *mockRepo) GetUserByID(_ context.Context, id uuid.UUID) (*types.User, er
 	return &cp, nil
 }
 
-func (m *mockRepo) CreateWorkspace(_ context.Context, ws *types.Workspace) error {
-	cp := *ws
-	m.workspaces[ws.ID] = &cp
+func (m *mockRepo) CreateOrganization(_ context.Context, org *types.Organization) error {
+	cp := *org
+	m.organizations[org.ID] = &cp
 	return nil
 }
 
-func (m *mockRepo) GetWorkspace(_ context.Context, id uuid.UUID) (*types.Workspace, error) {
-	ws, ok := m.workspaces[id]
+func (m *mockRepo) GetOrganization(_ context.Context, id uuid.UUID) (*types.Organization, error) {
+	org, ok := m.organizations[id]
 	if !ok {
 		return nil, errs.NewNotFound("not found")
 	}
-	cp := *ws
+	cp := *org
 	return &cp, nil
 }
 
-func (m *mockRepo) GetWorkspaceBySlug(_ context.Context, slug string) (*types.Workspace, error) {
-	for _, ws := range m.workspaces {
-		if ws.Slug == slug {
-			cp := *ws
+func (m *mockRepo) GetOrganizationBySlug(_ context.Context, slug string) (*types.Organization, error) {
+	for _, org := range m.organizations {
+		if org.Slug == slug {
+			cp := *org
 			return &cp, nil
 		}
 	}
 	return nil, errs.NewNotFound("not found")
 }
 
-func (m *mockRepo) ListUserWorkspaces(_ context.Context, userID uuid.UUID) ([]types.Workspace, error) {
-	var result []types.Workspace
+func (m *mockRepo) ListUserOrganizations(_ context.Context, userID uuid.UUID) ([]types.Organization, error) {
+	var result []types.Organization
 	for _, mem := range m.members {
 		if mem.UserID == userID {
-			if ws, ok := m.workspaces[mem.WorkspaceID]; ok {
-				result = append(result, *ws)
+			if org, ok := m.organizations[mem.OrganizationID]; ok {
+				result = append(result, *org)
 			}
 		}
 	}
 	return result, nil
 }
 
-func (m *mockRepo) UpdateWorkspace(_ context.Context, ws *types.Workspace) error {
-	m.workspaces[ws.ID] = ws
+func (m *mockRepo) UpdateOrganization(_ context.Context, org *types.Organization) error {
+	m.organizations[org.ID] = org
 	return nil
 }
 
-func (m *mockRepo) AddMember(_ context.Context, mem *types.WorkspaceMember) error {
-	key := mem.WorkspaceID.String() + ":" + mem.UserID.String()
+func (m *mockRepo) AddMember(_ context.Context, mem *types.Labor) error {
+	key := mem.OrganizationID.String() + ":" + mem.UserID.String()
 	cp := *mem
 	m.members[key] = &cp
 	return nil
 }
 
-func (m *mockRepo) GetMember(_ context.Context, wsID, userID uuid.UUID) (*types.WorkspaceMember, error) {
-	key := wsID.String() + ":" + userID.String()
+func (m *mockRepo) GetMember(_ context.Context, orgID, userID uuid.UUID) (*types.Labor, error) {
+	key := orgID.String() + ":" + userID.String()
 	mem, ok := m.members[key]
 	if !ok {
 		return nil, errs.NewNotFound("not found")
@@ -118,7 +118,7 @@ func (m *mockRepo) GetMember(_ context.Context, wsID, userID uuid.UUID) (*types.
 	return &cp, nil
 }
 
-func (m *mockRepo) ListMembers(_ context.Context, _ uuid.UUID) ([]types.WorkspaceMember, error) {
+func (m *mockRepo) ListMembers(_ context.Context, _ uuid.UUID) ([]types.Labor, error) {
 	return nil, nil
 }
 
@@ -359,7 +359,7 @@ func TestUnlock_WrongPassword(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestSwitchWorkspace(t *testing.T) {
+func TestSwitchOrganization(t *testing.T) {
 	repo := newMockRepo()
 	store := newMockStore()
 	svc := NewService(repo, store, 72*time.Hour, 10*time.Minute)
@@ -368,16 +368,16 @@ func TestSwitchWorkspace(t *testing.T) {
 		Email: "switch@example.com", Password: "password123", FullName: "Test",
 	})
 
-	ws, err := svc.CreateWorkspace(context.Background(), result.User.ID, "Test WS", "test-ws")
+	org, err := svc.CreateOrganization(context.Background(), result.User.ID, "Test WS", "test-org")
 	require.NoError(t, err)
 
-	sess, err := svc.SwitchWorkspace(context.Background(), result.Session.ID, ws.ID)
+	sess, err := svc.SwitchOrganization(context.Background(), result.Session.ID, org.ID)
 	require.NoError(t, err)
-	assert.Equal(t, ws.ID, sess.WorkspaceID)
+	assert.Equal(t, org.ID, sess.OrganizationID)
 	assert.Equal(t, "owner", sess.Role)
 }
 
-func TestSwitchWorkspace_NotMember(t *testing.T) {
+func TestSwitchOrganization_NotMember(t *testing.T) {
 	repo := newMockRepo()
 	store := newMockStore()
 	svc := NewService(repo, store, 72*time.Hour, 10*time.Minute)
@@ -386,6 +386,6 @@ func TestSwitchWorkspace_NotMember(t *testing.T) {
 		Email: "switch2@example.com", Password: "password123", FullName: "Test",
 	})
 
-	_, err := svc.SwitchWorkspace(context.Background(), result.Session.ID, uuid.New())
+	_, err := svc.SwitchOrganization(context.Background(), result.Session.ID, uuid.New())
 	assert.Error(t, err)
 }

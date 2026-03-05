@@ -68,7 +68,7 @@ func (h *ConnectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	data, _ := json.Marshal(map[string]string{
 		"user_id":      sess.UserID.String(),
-		"workspace_id": sess.WorkspaceID.String(),
+		"organization_id": sess.OrganizationID.String(),
 		"role":         sess.Role,
 	})
 
@@ -76,7 +76,7 @@ func (h *ConnectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Result: &connectResult{
 			User: sess.UserID.String(),
 			Channels: []string{
-				"workspace:" + sess.WorkspaceID.String(),
+				"org:" + sess.OrganizationID.String(),
 				"views:" + seanceID,
 			},
 			Data: data,

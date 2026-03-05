@@ -103,8 +103,8 @@ func findMigrationsDir(t *testing.T) string {
 	return ""
 }
 
-// SeedWorkspace creates a minimal workspace + user for testing.
-func SeedWorkspace(t *testing.T, pool *pgxpool.Pool) (userID, wsID fmt.Stringer) {
+// SeedOrganization creates a minimal organization + user for testing.
+func SeedOrganization(t *testing.T, pool *pgxpool.Pool) (userID, orgID fmt.Stringer) {
 	t.Helper()
 	ctx := context.Background()
 
@@ -118,10 +118,10 @@ func SeedWorkspace(t *testing.T, pool *pgxpool.Pool) (userID, wsID fmt.Stringer)
 	}
 
 	err = pool.QueryRow(ctx,
-		`INSERT INTO workspaces (name, slug, owner_id) VALUES ('Test WS', 'test-ws', $1) RETURNING id`, uid,
+		`INSERT INTO organizations (name, slug, owner_id) VALUES ('Test WS', 'test-ws', $1) RETURNING id`, uid,
 	).Scan(&wid)
 	if err != nil {
-		t.Fatalf("seed workspace: %v", err)
+		t.Fatalf("seed org: %v", err)
 	}
 
 	return stringer(uid), stringer(wid)

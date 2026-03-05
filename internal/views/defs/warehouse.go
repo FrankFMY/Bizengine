@@ -24,7 +24,7 @@ var WarehouseStockList = &views.ViewDef{
 	Factory: warehouseStockListFactory,
 }
 
-func warehouseStockListFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
+func warehouseStockListFactory(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
 	warehouseID, _ := params["warehouse_id"].(string)
 	limit := intParam(params, "limit", 50)
 	offset := intParam(params, "offset", 0)
@@ -35,11 +35,11 @@ func warehouseStockListFactory(ctx context.Context, pool *pgxpool.Pool, wsID uui
 		       sl.quantity, sl.reserved, sl.quantity - sl.reserved AS available,
 		       sl.min_quantity, sl.max_quantity, COUNT(*) OVER() AS total_count
 		FROM stock_levels sl
-		JOIN entities e ON e.id = sl.product_id AND e.workspace_id = $1
-		LEFT JOIN components cp ON cp.entity_id = sl.product_id AND cp.type = 'barcode' AND cp.workspace_id = $1
-		WHERE sl.workspace_id = $1 AND sl.warehouse_id = $2
+		JOIN entities e ON e.id = sl.product_id AND e.organization_id = $1
+		LEFT JOIN components cp ON cp.entity_id = sl.product_id AND cp.type = 'barcode' AND cp.organization_id = $1
+		WHERE sl.organization_id = $1 AND sl.warehouse_id = $2
 	`
-	args := []any{wsID, warehouseID}
+	args := []any{orgID, warehouseID}
 	argIdx := 3
 
 	if search != "" {
@@ -115,7 +115,7 @@ var WarehouseStockDetail = &views.ViewDef{
 	Factory: warehouseStockDetailFactory,
 }
 
-func warehouseStockDetailFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
+func warehouseStockDetailFactory(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
 	warehouseID, _ := params["warehouse_id"].(string)
 	productID, _ := params["product_id"].(string)
 
@@ -128,9 +128,9 @@ func warehouseStockDetailFactory(ctx context.Context, pool *pgxpool.Pool, wsID u
 	err := pool.QueryRow(ctx, `
 		SELECT e.name, sl.quantity, sl.reserved
 		FROM stock_levels sl
-		JOIN entities e ON e.id = sl.product_id AND e.workspace_id = $1
-		WHERE sl.workspace_id = $1 AND sl.warehouse_id = $2 AND sl.product_id = $3
-	`, wsID, warehouseID, productID).Scan(&name, &quantity, &reserved)
+		JOIN entities e ON e.id = sl.product_id AND e.organization_id = $1
+		WHERE sl.organization_id = $1 AND sl.warehouse_id = $2 AND sl.product_id = $3
+	`, orgID, warehouseID, productID).Scan(&name, &quantity, &reserved)
 	if err != nil {
 		return nil, err
 	}
@@ -152,9 +152,9 @@ func warehouseStockDetailFactory(ctx context.Context, pool *pgxpool.Pool, wsID u
 	movRows, err := pool.Query(ctx, `
 		SELECT id, type, quantity, reason, created_at
 		FROM stock_movements
-		WHERE workspace_id = $1 AND warehouse_id = $2 AND product_id = $3
+		WHERE organization_id = $1 AND warehouse_id = $2 AND product_id = $3
 		ORDER BY created_at DESC LIMIT 20
-	`, wsID, warehouseID, productID)
+	`, orgID, warehouseID, productID)
 	if err != nil {
 		return nil, err
 	}
@@ -199,18 +199,18 @@ var WarehouseLowStock = &views.ViewDef{
 	Factory: warehouseLowStockFactory,
 }
 
-func warehouseLowStockFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
+func warehouseLowStockFactory(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
 	warehouseID, _ := params["warehouse_id"].(string)
 
 	rows, err := pool.Query(ctx, `
 		SELECT sl.product_id, e.name, sl.quantity, sl.reserved,
 		       sl.quantity - sl.reserved AS available, sl.min_quantity
 		FROM stock_levels sl
-		JOIN entities e ON e.id = sl.product_id AND e.workspace_id = $1
-		WHERE sl.workspace_id = $1 AND sl.warehouse_id = $2
+		JOIN entities e ON e.id = sl.product_id AND e.organization_id = $1
+		WHERE sl.organization_id = $1 AND sl.warehouse_id = $2
 		  AND sl.quantity - sl.reserved <= sl.min_quantity AND sl.min_quantity > 0
 		ORDER BY (sl.quantity - sl.reserved) / NULLIF(sl.min_quantity, 0) ASC
-	`, wsID, warehouseID)
+	`, orgID, warehouseID)
 	if err != nil {
 		return nil, err
 	}

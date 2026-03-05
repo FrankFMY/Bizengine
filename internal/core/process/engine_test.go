@@ -156,11 +156,11 @@ func TestStartProcess(t *testing.T) {
 	engine.RegisterDefinition(def)
 
 	entityID := uuid.New()
-	wsID := uuid.New()
+	orgID := uuid.New()
 
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		EntityID:    &entityID,
 		Type:        "order.created",
 	}
@@ -187,16 +187,16 @@ func TestAdvanceProcess(t *testing.T) {
 	engine.RegisterDefinition(def)
 
 	entityID := uuid.New()
-	wsID := uuid.New()
+	orgID := uuid.New()
 
 	// Start process
 	engine.HandleEvent(ctx, types.Event{
-		ID: uuid.New(), WorkspaceID: wsID, EntityID: &entityID, Type: "order.created",
+		ID: uuid.New(), OrganizationID: orgID, EntityID: &entityID, Type: "order.created",
 	})
 
 	// Confirm
 	engine.HandleEvent(ctx, types.Event{
-		ID: uuid.New(), WorkspaceID: wsID, EntityID: &entityID, Type: "order.confirmed",
+		ID: uuid.New(), OrganizationID: orgID, EntityID: &entityID, Type: "order.confirmed",
 	})
 
 	for _, inst := range repo.instances {
@@ -206,7 +206,7 @@ func TestAdvanceProcess(t *testing.T) {
 	// Pay (triggers on_enter emit_event)
 	bus.published = nil
 	engine.HandleEvent(ctx, types.Event{
-		ID: uuid.New(), WorkspaceID: wsID, EntityID: &entityID, Type: "order.paid",
+		ID: uuid.New(), OrganizationID: orgID, EntityID: &entityID, Type: "order.paid",
 	})
 
 	for _, inst := range repo.instances {
@@ -230,12 +230,12 @@ func TestProcessToTerminal(t *testing.T) {
 	engine.RegisterDefinition(simpleOrderDef())
 
 	entityID := uuid.New()
-	wsID := uuid.New()
+	orgID := uuid.New()
 
 	events := []string{"order.created", "order.confirmed", "order.paid", "order.shipped", "order.delivered"}
 	for _, evType := range events {
 		engine.HandleEvent(ctx, types.Event{
-			ID: uuid.New(), WorkspaceID: wsID, EntityID: &entityID, Type: evType,
+			ID: uuid.New(), OrganizationID: orgID, EntityID: &entityID, Type: evType,
 		})
 	}
 
@@ -258,13 +258,13 @@ func TestCancelFromNew(t *testing.T) {
 	engine.RegisterDefinition(simpleOrderDef())
 
 	entityID := uuid.New()
-	wsID := uuid.New()
+	orgID := uuid.New()
 
 	engine.HandleEvent(ctx, types.Event{
-		ID: uuid.New(), WorkspaceID: wsID, EntityID: &entityID, Type: "order.created",
+		ID: uuid.New(), OrganizationID: orgID, EntityID: &entityID, Type: "order.created",
 	})
 	engine.HandleEvent(ctx, types.Event{
-		ID: uuid.New(), WorkspaceID: wsID, EntityID: &entityID, Type: "order.cancelled",
+		ID: uuid.New(), OrganizationID: orgID, EntityID: &entityID, Type: "order.cancelled",
 	})
 
 	for _, inst := range repo.instances {
@@ -306,15 +306,15 @@ func TestNoMatchingTransition(t *testing.T) {
 	engine.RegisterDefinition(simpleOrderDef())
 
 	entityID := uuid.New()
-	wsID := uuid.New()
+	orgID := uuid.New()
 
 	engine.HandleEvent(ctx, types.Event{
-		ID: uuid.New(), WorkspaceID: wsID, EntityID: &entityID, Type: "order.created",
+		ID: uuid.New(), OrganizationID: orgID, EntityID: &entityID, Type: "order.created",
 	})
 
 	// Try to ship from "new" — no transition should match
 	engine.HandleEvent(ctx, types.Event{
-		ID: uuid.New(), WorkspaceID: wsID, EntityID: &entityID, Type: "order.shipped",
+		ID: uuid.New(), OrganizationID: orgID, EntityID: &entityID, Type: "order.shipped",
 	})
 
 	for _, inst := range repo.instances {
@@ -340,11 +340,11 @@ func TestYAMLOrderFulfillmentFullCycle(t *testing.T) {
 	engine := NewEngine(repo, bus)
 	engine.RegisterDefinition(loadYAML(t, "../../../processes/order_fulfillment.yaml"))
 
-	wsID := uuid.New()
+	orgID := uuid.New()
 	entityID := uuid.New()
 	ev := func(eventType string) { //nolint
 		engine.HandleEvent(ctx, types.Event{
-			ID: uuid.New(), WorkspaceID: wsID, EntityID: &entityID, Type: eventType,
+			ID: uuid.New(), OrganizationID: orgID, EntityID: &entityID, Type: eventType,
 		})
 	}
 
@@ -375,11 +375,11 @@ func TestYAMLStockReplenishment(t *testing.T) {
 	def := loadYAML(t, "../../../processes/stock_replenishment.yaml")
 	engine.RegisterDefinition(def)
 
-	wsID := uuid.New()
+	orgID := uuid.New()
 	entityID := uuid.New()
 
 	engine.HandleEvent(ctx, types.Event{
-		ID: uuid.New(), WorkspaceID: wsID, EntityID: &entityID, Type: def.TriggerOn,
+		ID: uuid.New(), OrganizationID: orgID, EntityID: &entityID, Type: def.TriggerOn,
 	})
 
 	require.Len(t, repo.instances, 1)
@@ -399,11 +399,11 @@ func TestYAMLDeliveryTracking(t *testing.T) {
 	def := loadYAML(t, "../../../processes/delivery_tracking.yaml")
 	engine.RegisterDefinition(def)
 
-	wsID := uuid.New()
+	orgID := uuid.New()
 	entityID := uuid.New()
 
 	engine.HandleEvent(ctx, types.Event{
-		ID: uuid.New(), WorkspaceID: wsID, EntityID: &entityID, Type: def.TriggerOn,
+		ID: uuid.New(), OrganizationID: orgID, EntityID: &entityID, Type: def.TriggerOn,
 	})
 
 	require.Len(t, repo.instances, 1)
@@ -422,11 +422,11 @@ func TestYAMLEmployeeOnboarding(t *testing.T) {
 	def := loadYAML(t, "../../../processes/employee_onboarding.yaml")
 	engine.RegisterDefinition(def)
 
-	wsID := uuid.New()
+	orgID := uuid.New()
 	entityID := uuid.New()
 
 	engine.HandleEvent(ctx, types.Event{
-		ID: uuid.New(), WorkspaceID: wsID, EntityID: &entityID, Type: def.TriggerOn,
+		ID: uuid.New(), OrganizationID: orgID, EntityID: &entityID, Type: def.TriggerOn,
 	})
 
 	require.Len(t, repo.instances, 1)
@@ -443,11 +443,11 @@ func TestYAMLHistoryRecording(t *testing.T) {
 	engine := NewEngine(repo, bus)
 	engine.RegisterDefinition(loadYAML(t, "../../../processes/order_fulfillment.yaml"))
 
-	wsID := uuid.New()
+	orgID := uuid.New()
 	entityID := uuid.New()
 	ev := func(eventType string) {
 		engine.HandleEvent(ctx, types.Event{
-			ID: uuid.New(), WorkspaceID: wsID, EntityID: &entityID, Type: eventType,
+			ID: uuid.New(), OrganizationID: orgID, EntityID: &entityID, Type: eventType,
 		})
 	}
 

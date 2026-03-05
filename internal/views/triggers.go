@@ -14,7 +14,7 @@ func EventToChanges(ev types.Event) []ChangeEvent {
 		return nil
 	}
 
-	base := ChangeEvent{WorkspaceID: ev.WorkspaceID}
+	base := ChangeEvent{OrganizationID: ev.OrganizationID}
 
 	switch parts[0] {
 	case "entity":

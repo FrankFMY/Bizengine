@@ -22,9 +22,9 @@ func setupIdempTest(t *testing.T) (*redis.Client, *miniredis.Miniredis) {
 	return rdb, mr
 }
 
-func idempCtx(wsID uuid.UUID, idemp string) context.Context {
+func idempCtx(orgID uuid.UUID, idemp string) context.Context {
 	ctx := context.Background()
-	ctx = context.WithValue(ctx, auth.ExportedCtxKeyWorkspaceID, wsID)
+	ctx = context.WithValue(ctx, auth.ExportedCtxKeyOrganizationID, orgID)
 	ctx = context.WithValue(ctx, ctxKeyIdemp{}, idemp)
 	return ctx
 }
@@ -48,7 +48,7 @@ func TestIdempotency_NoIdemp_Passthrough(t *testing.T) {
 
 func TestIdempotency_FirstRequest_CachesResponse(t *testing.T) {
 	rdb, mr := setupIdempTest(t)
-	wsID := uuid.New()
+	orgID := uuid.New()
 	callCount := 0
 
 	handler := Idempotency(rdb)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -56,7 +56,7 @@ func TestIdempotency_FirstRequest_CachesResponse(t *testing.T) {
 		respondOK(w, http.StatusOK, map[string]string{"result": "ok"})
 	}))
 
-	ctx := idempCtx(wsID, "test-key-1")
+	ctx := idempCtx(orgID, "test-key-1")
 	req := httptest.NewRequest("POST", "/test", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -64,7 +64,7 @@ func TestIdempotency_FirstRequest_CachesResponse(t *testing.T) {
 	assert.Equal(t, 1, callCount)
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	key := IdempotencyKey(wsID, "test-key-1")
+	key := IdempotencyKey(orgID, "test-key-1")
 	val, err := mr.Get(key)
 	require.NoError(t, err)
 	assert.Contains(t, val, `"ok":true`)
@@ -72,7 +72,7 @@ func TestIdempotency_FirstRequest_CachesResponse(t *testing.T) {
 
 func TestIdempotency_DuplicateRequest_ReplaysCache(t *testing.T) {
 	rdb, _ := setupIdempTest(t)
-	wsID := uuid.New()
+	orgID := uuid.New()
 	callCount := 0
 
 	handler := Idempotency(rdb)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -81,7 +81,7 @@ func TestIdempotency_DuplicateRequest_ReplaysCache(t *testing.T) {
 	}))
 
 	// First request
-	ctx := idempCtx(wsID, "test-key-2")
+	ctx := idempCtx(orgID, "test-key-2")
 	req := httptest.NewRequest("POST", "/test", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -99,7 +99,7 @@ func TestIdempotency_DuplicateRequest_ReplaysCache(t *testing.T) {
 
 func TestIdempotency_ErrorResponse_DeletesKey(t *testing.T) {
 	rdb, mr := setupIdempTest(t)
-	wsID := uuid.New()
+	orgID := uuid.New()
 
 	handler := Idempotency(rdb)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -107,13 +107,13 @@ func TestIdempotency_ErrorResponse_DeletesKey(t *testing.T) {
 		w.Write([]byte(`{"ok":false}`))
 	}))
 
-	ctx := idempCtx(wsID, "test-key-err")
+	ctx := idempCtx(orgID, "test-key-err")
 	req := httptest.NewRequest("POST", "/test", nil).WithContext(ctx)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 
-	key := IdempotencyKey(wsID, "test-key-err")
+	key := IdempotencyKey(orgID, "test-key-err")
 	assert.False(t, mr.Exists(key))
 }

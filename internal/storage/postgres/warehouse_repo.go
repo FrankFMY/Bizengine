@@ -24,14 +24,14 @@ func NewWarehouseRepo(pool *pgxpool.Pool) *WarehouseRepo {
 }
 
 // GetStockLevel returns a stock level for a product in a warehouse.
-func (r *WarehouseRepo) GetStockLevel(ctx context.Context, wsID, productID, warehouseID uuid.UUID) (*warehouse.StockLevel, error) {
+func (r *WarehouseRepo) GetStockLevel(ctx context.Context, orgID, productID, warehouseID uuid.UUID) (*warehouse.StockLevel, error) {
 	var sl warehouse.StockLevel
 	err := r.pool.QueryRow(ctx,
-		`SELECT workspace_id, product_id, warehouse_id, quantity, reserved, unit, min_quantity, max_quantity, updated_at
+		`SELECT organization_id, product_id, warehouse_id, quantity, reserved, unit, min_quantity, max_quantity, updated_at
 		 FROM stock_levels
-		 WHERE workspace_id = $1 AND product_id = $2 AND warehouse_id = $3`,
-		wsID, productID, warehouseID,
-	).Scan(&sl.WorkspaceID, &sl.ProductID, &sl.WarehouseID, &sl.Quantity, &sl.Reserved,
+		 WHERE organization_id = $1 AND product_id = $2 AND warehouse_id = $3`,
+		orgID, productID, warehouseID,
+	).Scan(&sl.OrganizationID, &sl.ProductID, &sl.WarehouseID, &sl.Quantity, &sl.Reserved,
 		&sl.Unit, &sl.MinQuantity, &sl.MaxQuantity, &sl.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -44,15 +44,15 @@ func (r *WarehouseRepo) GetStockLevel(ctx context.Context, wsID, productID, ware
 }
 
 // ListStock returns stock levels for a warehouse.
-func (r *WarehouseRepo) ListStock(ctx context.Context, wsID, warehouseID uuid.UUID, filter warehouse.StockFilter) ([]warehouse.StockLevel, int, error) {
+func (r *WarehouseRepo) ListStock(ctx context.Context, orgID, warehouseID uuid.UUID, filter warehouse.StockFilter) ([]warehouse.StockLevel, int, error) {
 	filter.Page.Normalize()
 
 	var conditions []string
 	var args []any
 	argIdx := 1
 
-	conditions = append(conditions, fmt.Sprintf("sl.workspace_id = $%d", argIdx))
-	args = append(args, wsID)
+	conditions = append(conditions, fmt.Sprintf("sl.organization_id = $%d", argIdx))
+	args = append(args, orgID)
 	argIdx++
 
 	conditions = append(conditions, fmt.Sprintf("sl.warehouse_id = $%d", argIdx))
@@ -78,7 +78,7 @@ func (r *WarehouseRepo) ListStock(ctx context.Context, wsID, warehouseID uuid.UU
 	}
 
 	query := fmt.Sprintf(
-		`SELECT sl.workspace_id, sl.product_id, sl.warehouse_id, sl.quantity, sl.reserved, sl.unit, sl.min_quantity, sl.max_quantity, sl.updated_at
+		`SELECT sl.organization_id, sl.product_id, sl.warehouse_id, sl.quantity, sl.reserved, sl.unit, sl.min_quantity, sl.max_quantity, sl.updated_at
 		 FROM stock_levels sl WHERE %s ORDER BY sl.updated_at DESC LIMIT $%d OFFSET $%d`,
 		where, argIdx, argIdx+1,
 	)
@@ -93,7 +93,7 @@ func (r *WarehouseRepo) ListStock(ctx context.Context, wsID, warehouseID uuid.UU
 	var items []warehouse.StockLevel
 	for rows.Next() {
 		var sl warehouse.StockLevel
-		if err := rows.Scan(&sl.WorkspaceID, &sl.ProductID, &sl.WarehouseID, &sl.Quantity, &sl.Reserved,
+		if err := rows.Scan(&sl.OrganizationID, &sl.ProductID, &sl.WarehouseID, &sl.Quantity, &sl.Reserved,
 			&sl.Unit, &sl.MinQuantity, &sl.MaxQuantity, &sl.UpdatedAt); err != nil {
 			return nil, 0, err
 		}
@@ -104,12 +104,12 @@ func (r *WarehouseRepo) ListStock(ctx context.Context, wsID, warehouseID uuid.UU
 }
 
 // GetLowStock returns stock levels where available <= min_quantity.
-func (r *WarehouseRepo) GetLowStock(ctx context.Context, wsID uuid.UUID) ([]warehouse.StockLevel, error) {
+func (r *WarehouseRepo) GetLowStock(ctx context.Context, orgID uuid.UUID) ([]warehouse.StockLevel, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT workspace_id, product_id, warehouse_id, quantity, reserved, unit, min_quantity, max_quantity, updated_at
+		`SELECT organization_id, product_id, warehouse_id, quantity, reserved, unit, min_quantity, max_quantity, updated_at
 		 FROM stock_levels
-		 WHERE workspace_id = $1 AND quantity - reserved <= min_quantity AND min_quantity > 0`,
-		wsID,
+		 WHERE organization_id = $1 AND quantity - reserved <= min_quantity AND min_quantity > 0`,
+		orgID,
 	)
 	if err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ func (r *WarehouseRepo) GetLowStock(ctx context.Context, wsID uuid.UUID) ([]ware
 	var items []warehouse.StockLevel
 	for rows.Next() {
 		var sl warehouse.StockLevel
-		if err := rows.Scan(&sl.WorkspaceID, &sl.ProductID, &sl.WarehouseID, &sl.Quantity, &sl.Reserved,
+		if err := rows.Scan(&sl.OrganizationID, &sl.ProductID, &sl.WarehouseID, &sl.Quantity, &sl.Reserved,
 			&sl.Unit, &sl.MinQuantity, &sl.MaxQuantity, &sl.UpdatedAt); err != nil {
 			return nil, err
 		}
@@ -132,11 +132,11 @@ func (r *WarehouseRepo) GetLowStock(ctx context.Context, wsID uuid.UUID) ([]ware
 // UpsertStockLevel creates or updates a stock level.
 func (r *WarehouseRepo) UpsertStockLevel(ctx context.Context, tx pgx.Tx, sl *warehouse.StockLevel) error {
 	_, err := tx.Exec(ctx,
-		`INSERT INTO stock_levels (workspace_id, product_id, warehouse_id, quantity, reserved, unit, min_quantity, max_quantity, updated_at)
+		`INSERT INTO stock_levels (organization_id, product_id, warehouse_id, quantity, reserved, unit, min_quantity, max_quantity, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		 ON CONFLICT (workspace_id, product_id, warehouse_id) DO UPDATE SET
+		 ON CONFLICT (organization_id, product_id, warehouse_id) DO UPDATE SET
 		   quantity = $4, reserved = $5, unit = $6, min_quantity = $7, max_quantity = $8, updated_at = $9`,
-		sl.WorkspaceID, sl.ProductID, sl.WarehouseID, sl.Quantity, sl.Reserved,
+		sl.OrganizationID, sl.ProductID, sl.WarehouseID, sl.Quantity, sl.Reserved,
 		sl.Unit, sl.MinQuantity, sl.MaxQuantity, sl.UpdatedAt,
 	)
 	return err
@@ -145,24 +145,24 @@ func (r *WarehouseRepo) UpsertStockLevel(ctx context.Context, tx pgx.Tx, sl *war
 // InsertMovement records a stock movement.
 func (r *WarehouseRepo) InsertMovement(ctx context.Context, tx pgx.Tx, m *warehouse.StockMovement) error {
 	_, err := tx.Exec(ctx,
-		`INSERT INTO stock_movements (id, workspace_id, product_id, warehouse_id, type, quantity, unit, cost_per_unit, reason, reference_type, reference_id, dest_warehouse_id, actor_id, created_at)
+		`INSERT INTO stock_movements (id, organization_id, product_id, warehouse_id, type, quantity, unit, cost_per_unit, reason, reference_type, reference_id, dest_warehouse_id, actor_id, created_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-		m.ID, m.WorkspaceID, m.ProductID, m.WarehouseID, m.Type, m.Quantity, m.Unit,
+		m.ID, m.OrganizationID, m.ProductID, m.WarehouseID, m.Type, m.Quantity, m.Unit,
 		m.CostPerUnit, m.Reason, m.ReferenceType, m.ReferenceID, m.DestWarehouseID, m.ActorID, m.CreatedAt,
 	)
 	return err
 }
 
 // ListMovements returns stock movements with optional filters.
-func (r *WarehouseRepo) ListMovements(ctx context.Context, wsID uuid.UUID, filter warehouse.MovementFilter) ([]warehouse.StockMovement, int, error) {
+func (r *WarehouseRepo) ListMovements(ctx context.Context, orgID uuid.UUID, filter warehouse.MovementFilter) ([]warehouse.StockMovement, int, error) {
 	filter.Page.Normalize()
 
 	var conditions []string
 	var args []any
 	argIdx := 1
 
-	conditions = append(conditions, fmt.Sprintf("workspace_id = $%d", argIdx))
-	args = append(args, wsID)
+	conditions = append(conditions, fmt.Sprintf("organization_id = $%d", argIdx))
+	args = append(args, orgID)
 	argIdx++
 
 	if filter.ProductID != nil {
@@ -194,7 +194,7 @@ func (r *WarehouseRepo) ListMovements(ctx context.Context, wsID uuid.UUID, filte
 	}
 
 	query := fmt.Sprintf(
-		`SELECT id, workspace_id, product_id, warehouse_id, type, quantity, unit, cost_per_unit, reason, reference_type, reference_id, dest_warehouse_id, actor_id, created_at
+		`SELECT id, organization_id, product_id, warehouse_id, type, quantity, unit, cost_per_unit, reason, reference_type, reference_id, dest_warehouse_id, actor_id, created_at
 		 FROM stock_movements WHERE %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d`,
 		where, argIdx, argIdx+1,
 	)
@@ -209,7 +209,7 @@ func (r *WarehouseRepo) ListMovements(ctx context.Context, wsID uuid.UUID, filte
 	var items []warehouse.StockMovement
 	for rows.Next() {
 		var m warehouse.StockMovement
-		if err := rows.Scan(&m.ID, &m.WorkspaceID, &m.ProductID, &m.WarehouseID, &m.Type, &m.Quantity,
+		if err := rows.Scan(&m.ID, &m.OrganizationID, &m.ProductID, &m.WarehouseID, &m.Type, &m.Quantity,
 			&m.Unit, &m.CostPerUnit, &m.Reason, &m.ReferenceType, &m.ReferenceID, &m.DestWarehouseID,
 			&m.ActorID, &m.CreatedAt); err != nil {
 			return nil, 0, err

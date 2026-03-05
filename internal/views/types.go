@@ -24,7 +24,7 @@ type TableDep struct {
 }
 
 // ViewFactory executes the view query and returns normalized results.
-type ViewFactory func(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, params map[string]any) (*ViewResult, error)
+type ViewFactory func(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, params map[string]any) (*ViewResult, error)
 
 // ViewResult holds the normalized output of a view factory.
 type ViewResult struct {
@@ -45,5 +45,5 @@ type ChangeEvent struct {
 	Table          string
 	RowID          string
 	ChangedColumns []string
-	WorkspaceID    uuid.UUID
+	OrganizationID    uuid.UUID
 }

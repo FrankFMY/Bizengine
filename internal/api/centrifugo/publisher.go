@@ -39,9 +39,9 @@ type publishData struct {
 	Data    json.RawMessage `json:"data"`
 }
 
-// HandleEvent publishes an event to the workspace channel in Centrifugo.
+// HandleEvent publishes an event to the organization channel in Centrifugo.
 func (p *Publisher) HandleEvent(ctx context.Context, ev types.Event) error {
-	channel := "workspace:" + ev.WorkspaceID.String()
+	channel := "org:" + ev.OrganizationID.String()
 
 	payload, err := json.Marshal(ev)
 	if err != nil {

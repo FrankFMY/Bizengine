@@ -13,24 +13,24 @@ import (
 type Repository interface {
 	// Shifts
 	CreateShift(ctx context.Context, s *Shift) error
-	GetShift(ctx context.Context, wsID, shiftID uuid.UUID) (*Shift, error)
-	ListShifts(ctx context.Context, wsID uuid.UUID, filter ShiftFilter) ([]Shift, int, error)
+	GetShift(ctx context.Context, orgID, shiftID uuid.UUID) (*Shift, error)
+	ListShifts(ctx context.Context, orgID uuid.UUID, filter ShiftFilter) ([]Shift, int, error)
 	UpdateShift(ctx context.Context, s *Shift) error
-	DeleteShift(ctx context.Context, wsID, shiftID uuid.UUID) error
-	HasOverlappingShift(ctx context.Context, wsID, employeeID uuid.UUID, start, end time.Time, excludeID *uuid.UUID) (bool, error)
+	DeleteShift(ctx context.Context, orgID, shiftID uuid.UUID) error
+	HasOverlappingShift(ctx context.Context, orgID, employeeID uuid.UUID, start, end time.Time, excludeID *uuid.UUID) (bool, error)
 
 	// Timesheets
 	CreateTimesheet(ctx context.Context, ts *Timesheet) error
-	GetTimesheet(ctx context.Context, wsID, tsID uuid.UUID) (*Timesheet, error)
-	ListTimesheets(ctx context.Context, wsID uuid.UUID, filter TimesheetFilter) ([]Timesheet, int, error)
+	GetTimesheet(ctx context.Context, orgID, tsID uuid.UUID) (*Timesheet, error)
+	ListTimesheets(ctx context.Context, orgID uuid.UUID, filter TimesheetFilter) ([]Timesheet, int, error)
 	UpdateTimesheet(ctx context.Context, ts *Timesheet) error
-	GetOpenTimesheet(ctx context.Context, wsID, employeeID uuid.UUID) (*Timesheet, error)
+	GetOpenTimesheet(ctx context.Context, orgID, employeeID uuid.UUID) (*Timesheet, error)
 }
 
 // Shift represents a planned work shift.
 type Shift struct {
 	ID           uuid.UUID  `json:"id"`
-	WorkspaceID  uuid.UUID  `json:"workspace_id"`
+	OrganizationID  uuid.UUID  `json:"organization_id"`
 	EmployeeID   uuid.UUID  `json:"employee_id"`
 	LocationID   *uuid.UUID `json:"location_id,omitempty"`
 	StartTime    time.Time  `json:"start_time"`
@@ -44,7 +44,7 @@ type Shift struct {
 // Timesheet represents an employee time entry.
 type Timesheet struct {
 	ID          uuid.UUID  `json:"id"`
-	WorkspaceID uuid.UUID  `json:"workspace_id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
 	EmployeeID  uuid.UUID  `json:"employee_id"`
 	ShiftID     *uuid.UUID `json:"shift_id,omitempty"`
 	ClockIn     time.Time  `json:"clock_in"`

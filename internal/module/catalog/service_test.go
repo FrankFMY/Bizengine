@@ -35,18 +35,18 @@ func (m *mockEntityRepo) Create(_ context.Context, e *types.Entity) error {
 	return nil
 }
 
-func (m *mockEntityRepo) GetByID(_ context.Context, wsID, id uuid.UUID) (*types.Entity, error) {
+func (m *mockEntityRepo) GetByID(_ context.Context, orgID, id uuid.UUID) (*types.Entity, error) {
 	e, ok := m.entities[id]
-	if !ok || e.WorkspaceID != wsID {
+	if !ok || e.OrganizationID != orgID {
 		return nil, pgx.ErrNoRows
 	}
 	return e, nil
 }
 
-func (m *mockEntityRepo) List(_ context.Context, wsID uuid.UUID, filter entity.ListFilter) ([]types.Entity, int, error) {
+func (m *mockEntityRepo) List(_ context.Context, orgID uuid.UUID, filter entity.ListFilter) ([]types.Entity, int, error) {
 	var result []types.Entity
 	for _, e := range m.entities {
-		if e.WorkspaceID != wsID || e.DeletedAt != nil {
+		if e.OrganizationID != orgID || e.DeletedAt != nil {
 			continue
 		}
 		if filter.Kind != nil && e.Kind != *filter.Kind {
@@ -126,7 +126,7 @@ func (m *mockEventStore) AppendTx(context.Context, pgx.Tx, types.Event) error   
 func (m *mockEventStore) GetByEntity(_ context.Context, _, _ uuid.UUID, _ *time.Time, _ int) ([]types.Event, error) {
 	return nil, nil
 }
-func (m *mockEventStore) GetByWorkspace(_ context.Context, _ uuid.UUID, _, _ int) ([]types.Event, int, error) {
+func (m *mockEventStore) GetByOrganization(_ context.Context, _ uuid.UUID, _, _ int) ([]types.Event, int, error) {
 	return nil, 0, nil
 }
 func (m *mockEventStore) GetByType(_ context.Context, _ uuid.UUID, _ string, _ *time.Time, _ int) ([]types.Event, error) {
@@ -174,7 +174,7 @@ func setupService(catalogRepo *mockCatalogRepo) (*Service, *mockEntityRepo, *moc
 // --- tests ---
 
 func TestCreateProduct(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 
@@ -182,7 +182,7 @@ func TestCreateProduct(t *testing.T) {
 		repo := &mockCatalogRepo{findBySKUErr: pgx.ErrNoRows}
 		svc, _, eventBus := setupService(repo)
 
-		p, err := svc.CreateProduct(ctx, wsID, CreateProductInput{
+		p, err := svc.CreateProduct(ctx, orgID, CreateProductInput{
 			Name:  "Test Product",
 			SKU:   "SKU-001",
 			Price: json.RawMessage(`{"amount":10000,"currency":"RUB"}`),
@@ -200,7 +200,7 @@ func TestCreateProduct(t *testing.T) {
 		repo := &mockCatalogRepo{}
 		svc, _, _ := setupService(repo)
 
-		_, err := svc.CreateProduct(ctx, wsID, CreateProductInput{
+		_, err := svc.CreateProduct(ctx, orgID, CreateProductInput{
 			Price: json.RawMessage(`{"amount":10000}`),
 		}, &actorID)
 
@@ -212,7 +212,7 @@ func TestCreateProduct(t *testing.T) {
 		repo := &mockCatalogRepo{}
 		svc, _, _ := setupService(repo)
 
-		_, err := svc.CreateProduct(ctx, wsID, CreateProductInput{
+		_, err := svc.CreateProduct(ctx, orgID, CreateProductInput{
 			Name: "No Price",
 		}, &actorID)
 
@@ -225,7 +225,7 @@ func TestCreateProduct(t *testing.T) {
 		repo := &mockCatalogRepo{findBySKUResult: existing}
 		svc, _, _ := setupService(repo)
 
-		_, err := svc.CreateProduct(ctx, wsID, CreateProductInput{
+		_, err := svc.CreateProduct(ctx, orgID, CreateProductInput{
 			Name:  "Dup",
 			SKU:   "SKU-001",
 			Price: json.RawMessage(`{"amount":5000}`),
@@ -237,28 +237,28 @@ func TestCreateProduct(t *testing.T) {
 }
 
 func TestGetProduct(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 
 	repo := &mockCatalogRepo{findBySKUErr: pgx.ErrNoRows}
 	svc, _, _ := setupService(repo)
 
-	p, err := svc.CreateProduct(ctx, wsID, CreateProductInput{
+	p, err := svc.CreateProduct(ctx, orgID, CreateProductInput{
 		Name:  "Get Me",
 		SKU:   "SKU-GET",
 		Price: json.RawMessage(`{"amount":1000}`),
 	}, &actorID)
 	require.NoError(t, err)
 
-	got, err := svc.GetProduct(ctx, wsID, p.ID)
+	got, err := svc.GetProduct(ctx, orgID, p.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Get Me", got.Name)
 	assert.NotNil(t, got.Price)
 }
 
 func TestListProducts(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	ctx := context.Background()
 
 	products := []Product{
@@ -268,21 +268,21 @@ func TestListProducts(t *testing.T) {
 	repo := &mockCatalogRepo{listResult: products, listTotal: 2}
 	svc, _, _ := setupService(repo)
 
-	result, err := svc.ListProducts(ctx, wsID, ProductFilter{})
+	result, err := svc.ListProducts(ctx, orgID, ProductFilter{})
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.Total)
 	assert.Len(t, result.Items, 2)
 }
 
 func TestUpdateProduct(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 
 	repo := &mockCatalogRepo{findBySKUErr: pgx.ErrNoRows}
 	svc, _, _ := setupService(repo)
 
-	p, err := svc.CreateProduct(ctx, wsID, CreateProductInput{
+	p, err := svc.CreateProduct(ctx, orgID, CreateProductInput{
 		Name:  "Before",
 		SKU:   "SKU-UPD",
 		Price: json.RawMessage(`{"amount":5000}`),
@@ -290,7 +290,7 @@ func TestUpdateProduct(t *testing.T) {
 	require.NoError(t, err)
 
 	newName := "After"
-	updated, err := svc.UpdateProduct(ctx, wsID, p.ID, UpdateProductInput{
+	updated, err := svc.UpdateProduct(ctx, orgID, p.ID, UpdateProductInput{
 		Name:  &newName,
 		Price: json.RawMessage(`{"amount":7000}`),
 	}, &actorID)
@@ -300,21 +300,21 @@ func TestUpdateProduct(t *testing.T) {
 }
 
 func TestArchiveProduct(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 
 	repo := &mockCatalogRepo{findBySKUErr: pgx.ErrNoRows}
 	svc, entityRepo, _ := setupService(repo)
 
-	p, err := svc.CreateProduct(ctx, wsID, CreateProductInput{
+	p, err := svc.CreateProduct(ctx, orgID, CreateProductInput{
 		Name:  "To Archive",
 		SKU:   "SKU-ARC",
 		Price: json.RawMessage(`{"amount":1000}`),
 	}, &actorID)
 	require.NoError(t, err)
 
-	err = svc.ArchiveProduct(ctx, wsID, p.ID, &actorID)
+	err = svc.ArchiveProduct(ctx, orgID, p.ID, &actorID)
 	require.NoError(t, err)
 
 	archived := entityRepo.entities[p.ID]
@@ -322,7 +322,7 @@ func TestArchiveProduct(t *testing.T) {
 }
 
 func TestCreateCategory(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 
@@ -330,21 +330,21 @@ func TestCreateCategory(t *testing.T) {
 	svc, _, _ := setupService(repo)
 
 	t.Run("success", func(t *testing.T) {
-		c, err := svc.CreateCategory(ctx, wsID, CreateCategoryInput{Name: "Electronics"}, &actorID)
+		c, err := svc.CreateCategory(ctx, orgID, CreateCategoryInput{Name: "Electronics"}, &actorID)
 		require.NoError(t, err)
 		assert.Equal(t, "Electronics", c.Name)
 		assert.Equal(t, "category", c.Kind)
 	})
 
 	t.Run("empty name", func(t *testing.T) {
-		_, err := svc.CreateCategory(ctx, wsID, CreateCategoryInput{}, &actorID)
+		_, err := svc.CreateCategory(ctx, orgID, CreateCategoryInput{}, &actorID)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "name is required")
 	})
 }
 
 func TestDeleteCategory(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 
@@ -352,10 +352,10 @@ func TestDeleteCategory(t *testing.T) {
 		repo := &mockCatalogRepo{}
 		svc, _, _ := setupService(repo)
 
-		c, err := svc.CreateCategory(ctx, wsID, CreateCategoryInput{Name: "Empty"}, &actorID)
+		c, err := svc.CreateCategory(ctx, orgID, CreateCategoryInput{Name: "Empty"}, &actorID)
 		require.NoError(t, err)
 
-		err = svc.DeleteCategory(ctx, wsID, c.ID, &actorID)
+		err = svc.DeleteCategory(ctx, orgID, c.ID, &actorID)
 		require.NoError(t, err)
 	})
 
@@ -363,17 +363,17 @@ func TestDeleteCategory(t *testing.T) {
 		repo := &mockCatalogRepo{findBySKUErr: pgx.ErrNoRows}
 		svc, _, _ := setupService(repo)
 
-		cat, err := svc.CreateCategory(ctx, wsID, CreateCategoryInput{Name: "Has Products"}, &actorID)
+		cat, err := svc.CreateCategory(ctx, orgID, CreateCategoryInput{Name: "Has Products"}, &actorID)
 		require.NoError(t, err)
 
-		_, err = svc.CreateProduct(ctx, wsID, CreateProductInput{
+		_, err = svc.CreateProduct(ctx, orgID, CreateProductInput{
 			Name:       "In Category",
 			CategoryID: &cat.ID,
 			Price:      json.RawMessage(`{"amount":1000}`),
 		}, &actorID)
 		require.NoError(t, err)
 
-		err = svc.DeleteCategory(ctx, wsID, cat.ID, &actorID)
+		err = svc.DeleteCategory(ctx, orgID, cat.ID, &actorID)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "category has products")
 	})

@@ -24,13 +24,13 @@ func NewService(repo Repository, bus event.Bus) *Service {
 	return &Service{repo: repo, bus: bus}
 }
 
-// SeedDefaultAccounts creates the default chart of accounts for a workspace.
-func (s *Service) SeedDefaultAccounts(ctx context.Context, wsID uuid.UUID) error {
+// SeedDefaultAccounts creates the default chart of accounts for an organization.
+func (s *Service) SeedDefaultAccounts(ctx context.Context, orgID uuid.UUID) error {
 	return s.repo.WithTx(ctx, func(tx pgx.Tx) error {
 		for _, input := range DefaultAccounts() {
 			acct := &Account{
 				ID:          uuid.New(),
-				WorkspaceID: wsID,
+				OrganizationID: orgID,
 				Code:        input.Code,
 				Name:        input.Name,
 				Type:        input.Type,
@@ -47,7 +47,7 @@ func (s *Service) SeedDefaultAccounts(ctx context.Context, wsID uuid.UUID) error
 }
 
 // CreateAccount creates a new account.
-func (s *Service) CreateAccount(ctx context.Context, wsID uuid.UUID, input CreateAccountInput) (*Account, error) {
+func (s *Service) CreateAccount(ctx context.Context, orgID uuid.UUID, input CreateAccountInput) (*Account, error) {
 	if input.Code == "" {
 		return nil, errs.NewBadRequest("code is required")
 	}
@@ -65,7 +65,7 @@ func (s *Service) CreateAccount(ctx context.Context, wsID uuid.UUID, input Creat
 
 	acct := &Account{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		Code:        input.Code,
 		Name:        input.Name,
 		Type:        input.Type,
@@ -82,32 +82,32 @@ func (s *Service) CreateAccount(ctx context.Context, wsID uuid.UUID, input Creat
 	return acct, nil
 }
 
-// ListAccounts returns all accounts for a workspace.
-func (s *Service) ListAccounts(ctx context.Context, wsID uuid.UUID) ([]Account, error) {
-	return s.repo.ListAccounts(ctx, wsID)
+// ListAccounts returns all accounts for an organization.
+func (s *Service) ListAccounts(ctx context.Context, orgID uuid.UUID) ([]Account, error) {
+	return s.repo.ListAccounts(ctx, orgID)
 }
 
 // DeleteAccount deletes an account if it's not system and has no lines.
-func (s *Service) DeleteAccount(ctx context.Context, wsID, accountID uuid.UUID) error {
-	acct, err := s.repo.GetAccount(ctx, wsID, accountID)
+func (s *Service) DeleteAccount(ctx context.Context, orgID, accountID uuid.UUID) error {
+	acct, err := s.repo.GetAccount(ctx, orgID, accountID)
 	if err != nil {
 		return err
 	}
 	if acct.IsSystem {
 		return errs.NewConflict("cannot delete system account")
 	}
-	hasLines, err := s.repo.HasTransactionLines(ctx, wsID, accountID)
+	hasLines, err := s.repo.HasTransactionLines(ctx, orgID, accountID)
 	if err != nil {
 		return err
 	}
 	if hasLines {
 		return errs.NewConflict("cannot delete account with existing transaction lines")
 	}
-	return s.repo.DeleteAccount(ctx, wsID, accountID)
+	return s.repo.DeleteAccount(ctx, orgID, accountID)
 }
 
 // CreateTransaction creates a new journal entry with double-entry validation.
-func (s *Service) CreateTransaction(ctx context.Context, wsID uuid.UUID, input CreateTransactionInput, actorID *uuid.UUID) (*Transaction, error) {
+func (s *Service) CreateTransaction(ctx context.Context, orgID uuid.UUID, input CreateTransactionInput, actorID *uuid.UUID) (*Transaction, error) {
 	if len(input.Lines) < 2 {
 		return nil, errs.NewBadRequest("at least two lines are required")
 	}
@@ -138,7 +138,7 @@ func (s *Service) CreateTransaction(ctx context.Context, wsID uuid.UUID, input C
 
 	txn := &Transaction{
 		ID:            uuid.New(),
-		WorkspaceID:   wsID,
+		OrganizationID:   orgID,
 		Date:          date,
 		Description:   input.Description,
 		ReferenceType: input.ReferenceType,
@@ -152,7 +152,7 @@ func (s *Service) CreateTransaction(ctx context.Context, wsID uuid.UUID, input C
 		lines = append(lines, TransactionLine{
 			ID:            uuid.New(),
 			TransactionID: txn.ID,
-			WorkspaceID:   wsID,
+			OrganizationID:   orgID,
 			AccountID:     lineInput.AccountID,
 			Debit:         lineInput.Debit,
 			Credit:        lineInput.Credit,
@@ -172,7 +172,7 @@ func (s *Service) CreateTransaction(ctx context.Context, wsID uuid.UUID, input C
 
 	txn.Lines = lines
 
-	s.publishEvent(ctx, wsID, "finance.transaction.created", map[string]any{
+	s.publishEvent(ctx, orgID, "finance.transaction.created", map[string]any{
 		"transaction_id": txn.ID.String(),
 		"date":           input.Date,
 		"total":          totalDebit,
@@ -182,8 +182,8 @@ func (s *Service) CreateTransaction(ctx context.Context, wsID uuid.UUID, input C
 }
 
 // GetTransaction returns a transaction with its lines.
-func (s *Service) GetTransaction(ctx context.Context, wsID, txnID uuid.UUID) (*Transaction, error) {
-	txn, err := s.repo.GetTransaction(ctx, wsID, txnID)
+func (s *Service) GetTransaction(ctx context.Context, orgID, txnID uuid.UUID) (*Transaction, error) {
+	txn, err := s.repo.GetTransaction(ctx, orgID, txnID)
 	if err != nil {
 		return nil, err
 	}
@@ -196,14 +196,14 @@ func (s *Service) GetTransaction(ctx context.Context, wsID, txnID uuid.UUID) (*T
 }
 
 // ListTransactions returns transactions matching the filter.
-func (s *Service) ListTransactions(ctx context.Context, wsID uuid.UUID, filter TransactionFilter) ([]Transaction, int, error) {
+func (s *Service) ListTransactions(ctx context.Context, orgID uuid.UUID, filter TransactionFilter) ([]Transaction, int, error) {
 	filter.Page.Normalize()
-	return s.repo.ListTransactions(ctx, wsID, filter)
+	return s.repo.ListTransactions(ctx, orgID, filter)
 }
 
 // PostTransaction marks a transaction as posted (irreversible).
-func (s *Service) PostTransaction(ctx context.Context, wsID, txnID uuid.UUID, actorID *uuid.UUID) error {
-	txn, err := s.repo.GetTransaction(ctx, wsID, txnID)
+func (s *Service) PostTransaction(ctx context.Context, orgID, txnID uuid.UUID, actorID *uuid.UUID) error {
+	txn, err := s.repo.GetTransaction(ctx, orgID, txnID)
 	if err != nil {
 		return err
 	}
@@ -218,14 +218,14 @@ func (s *Service) PostTransaction(ctx context.Context, wsID, txnID uuid.UUID, ac
 		return err
 	}
 
-	s.publishEvent(ctx, wsID, "finance.transaction.posted", map[string]any{
+	s.publishEvent(ctx, orgID, "finance.transaction.posted", map[string]any{
 		"transaction_id": txnID.String(),
 	}, actorID)
 	return nil
 }
 
 // CreateInvoice creates a new invoice.
-func (s *Service) CreateInvoice(ctx context.Context, wsID uuid.UUID, input CreateInvoiceInput) (*Invoice, error) {
+func (s *Service) CreateInvoice(ctx context.Context, orgID uuid.UUID, input CreateInvoiceInput) (*Invoice, error) {
 	if input.Number == "" {
 		return nil, errs.NewBadRequest("number is required")
 	}
@@ -239,7 +239,7 @@ func (s *Service) CreateInvoice(ctx context.Context, wsID uuid.UUID, input Creat
 
 	inv := &Invoice{
 		ID:             uuid.New(),
-		WorkspaceID:    wsID,
+		OrganizationID:    orgID,
 		Number:         input.Number,
 		Type:           input.Type,
 		CounterpartyID: input.CounterpartyID,
@@ -261,14 +261,14 @@ func (s *Service) CreateInvoice(ctx context.Context, wsID uuid.UUID, input Creat
 }
 
 // ListInvoices returns invoices matching the filter.
-func (s *Service) ListInvoices(ctx context.Context, wsID uuid.UUID, filter InvoiceFilter) ([]Invoice, int, error) {
+func (s *Service) ListInvoices(ctx context.Context, orgID uuid.UUID, filter InvoiceFilter) ([]Invoice, int, error) {
 	filter.Page.Normalize()
-	return s.repo.ListInvoices(ctx, wsID, filter)
+	return s.repo.ListInvoices(ctx, orgID, filter)
 }
 
 // MarkInvoicePaid marks an invoice as paid.
-func (s *Service) MarkInvoicePaid(ctx context.Context, wsID, invoiceID uuid.UUID) error {
-	inv, err := s.repo.GetInvoice(ctx, wsID, invoiceID)
+func (s *Service) MarkInvoicePaid(ctx context.Context, orgID, invoiceID uuid.UUID) error {
+	inv, err := s.repo.GetInvoice(ctx, orgID, invoiceID)
 	if err != nil {
 		return err
 	}
@@ -283,27 +283,27 @@ func (s *Service) MarkInvoicePaid(ctx context.Context, wsID, invoiceID uuid.UUID
 }
 
 // GetTrialBalance returns the trial balance as of a date.
-func (s *Service) GetTrialBalance(ctx context.Context, wsID uuid.UUID, date time.Time) ([]TrialBalanceRow, error) {
-	return s.repo.GetTrialBalance(ctx, wsID, date)
+func (s *Service) GetTrialBalance(ctx context.Context, orgID uuid.UUID, date time.Time) ([]TrialBalanceRow, error) {
+	return s.repo.GetTrialBalance(ctx, orgID, date)
 }
 
 // GetAccountBalance returns the balance for a single account.
-func (s *Service) GetAccountBalance(ctx context.Context, wsID, accountID uuid.UUID, from, to time.Time) (*AccountBalance, error) {
-	return s.repo.GetAccountBalance(ctx, wsID, accountID, from, to)
+func (s *Service) GetAccountBalance(ctx context.Context, orgID, accountID uuid.UUID, from, to time.Time) (*AccountBalance, error) {
+	return s.repo.GetAccountBalance(ctx, orgID, accountID, from, to)
 }
 
 // CreateAutoTransaction creates a transaction from an event (for event subscriptions).
-func (s *Service) CreateAutoTransaction(ctx context.Context, wsID uuid.UUID, date string, description string, debitCode, creditCode string, amount int64, refType *string, refID *uuid.UUID) error {
-	debitAcct, err := s.repo.GetAccountByCode(ctx, wsID, debitCode)
+func (s *Service) CreateAutoTransaction(ctx context.Context, orgID uuid.UUID, date string, description string, debitCode, creditCode string, amount int64, refType *string, refID *uuid.UUID) error {
+	debitAcct, err := s.repo.GetAccountByCode(ctx, orgID, debitCode)
 	if err != nil {
 		return err
 	}
-	creditAcct, err := s.repo.GetAccountByCode(ctx, wsID, creditCode)
+	creditAcct, err := s.repo.GetAccountByCode(ctx, orgID, creditCode)
 	if err != nil {
 		return err
 	}
 
-	_, err = s.CreateTransaction(ctx, wsID, CreateTransactionInput{
+	_, err = s.CreateTransaction(ctx, orgID, CreateTransactionInput{
 		Date:          date,
 		Description:   description,
 		ReferenceType: refType,
@@ -316,11 +316,11 @@ func (s *Service) CreateAutoTransaction(ctx context.Context, wsID uuid.UUID, dat
 	return err
 }
 
-func (s *Service) publishEvent(ctx context.Context, wsID uuid.UUID, eventType string, data map[string]any, actorID *uuid.UUID) {
+func (s *Service) publishEvent(ctx context.Context, orgID uuid.UUID, eventType string, data map[string]any, actorID *uuid.UUID) {
 	payload, _ := json.Marshal(data)
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		Type:        eventType,
 		Data:        payload,
 		Timestamp:   time.Now(),

@@ -36,19 +36,19 @@ func (m *mockHRRepo) CreateShift(_ context.Context, s *Shift) error {
 	return nil
 }
 
-func (m *mockHRRepo) GetShift(_ context.Context, wsID, shiftID uuid.UUID) (*Shift, error) {
+func (m *mockHRRepo) GetShift(_ context.Context, orgID, shiftID uuid.UUID) (*Shift, error) {
 	s, ok := m.shifts[shiftID]
-	if !ok || s.WorkspaceID != wsID {
+	if !ok || s.OrganizationID != orgID {
 		return nil, assert.AnError
 	}
 	cp := *s
 	return &cp, nil
 }
 
-func (m *mockHRRepo) ListShifts(_ context.Context, wsID uuid.UUID, _ ShiftFilter) ([]Shift, int, error) {
+func (m *mockHRRepo) ListShifts(_ context.Context, orgID uuid.UUID, _ ShiftFilter) ([]Shift, int, error) {
 	var result []Shift
 	for _, s := range m.shifts {
-		if s.WorkspaceID == wsID {
+		if s.OrganizationID == orgID {
 			result = append(result, *s)
 		}
 	}
@@ -61,8 +61,8 @@ func (m *mockHRRepo) UpdateShift(_ context.Context, s *Shift) error {
 	return nil
 }
 
-func (m *mockHRRepo) DeleteShift(_ context.Context, wsID, shiftID uuid.UUID) error {
-	if s, ok := m.shifts[shiftID]; ok && s.WorkspaceID == wsID {
+func (m *mockHRRepo) DeleteShift(_ context.Context, orgID, shiftID uuid.UUID) error {
+	if s, ok := m.shifts[shiftID]; ok && s.OrganizationID == orgID {
 		delete(m.shifts, shiftID)
 		return nil
 	}
@@ -79,19 +79,19 @@ func (m *mockHRRepo) CreateTimesheet(_ context.Context, ts *Timesheet) error {
 	return nil
 }
 
-func (m *mockHRRepo) GetTimesheet(_ context.Context, wsID, tsID uuid.UUID) (*Timesheet, error) {
+func (m *mockHRRepo) GetTimesheet(_ context.Context, orgID, tsID uuid.UUID) (*Timesheet, error) {
 	ts, ok := m.timesheets[tsID]
-	if !ok || ts.WorkspaceID != wsID {
+	if !ok || ts.OrganizationID != orgID {
 		return nil, assert.AnError
 	}
 	cp := *ts
 	return &cp, nil
 }
 
-func (m *mockHRRepo) ListTimesheets(_ context.Context, wsID uuid.UUID, _ TimesheetFilter) ([]Timesheet, int, error) {
+func (m *mockHRRepo) ListTimesheets(_ context.Context, orgID uuid.UUID, _ TimesheetFilter) ([]Timesheet, int, error) {
 	var result []Timesheet
 	for _, ts := range m.timesheets {
-		if ts.WorkspaceID == wsID {
+		if ts.OrganizationID == orgID {
 			result = append(result, *ts)
 		}
 	}
@@ -104,9 +104,9 @@ func (m *mockHRRepo) UpdateTimesheet(_ context.Context, ts *Timesheet) error {
 	return nil
 }
 
-func (m *mockHRRepo) GetOpenTimesheet(_ context.Context, wsID, employeeID uuid.UUID) (*Timesheet, error) {
+func (m *mockHRRepo) GetOpenTimesheet(_ context.Context, orgID, employeeID uuid.UUID) (*Timesheet, error) {
 	for _, ts := range m.timesheets {
-		if ts.WorkspaceID == wsID && ts.EmployeeID == employeeID && ts.Status == "open" {
+		if ts.OrganizationID == orgID && ts.EmployeeID == employeeID && ts.Status == "open" {
 			cp := *ts
 			return &cp, nil
 		}
@@ -137,10 +137,10 @@ func (m *mockEntityRepo) GetByID(_ context.Context, _, id uuid.UUID) (*types.Ent
 	}
 	return nil, pgx.ErrNoRows
 }
-func (m *mockEntityRepo) List(_ context.Context, wsID uuid.UUID, filter entity.ListFilter) ([]types.Entity, int, error) {
+func (m *mockEntityRepo) List(_ context.Context, orgID uuid.UUID, filter entity.ListFilter) ([]types.Entity, int, error) {
 	var result []types.Entity
 	for _, e := range m.entities {
-		if e.WorkspaceID != wsID {
+		if e.OrganizationID != orgID {
 			continue
 		}
 		if filter.Kind != nil && e.Kind != *filter.Kind {
@@ -196,7 +196,7 @@ func (m *mockEventStore) AppendTx(context.Context, pgx.Tx, types.Event) error { 
 func (m *mockEventStore) GetByEntity(_ context.Context, _, _ uuid.UUID, _ *time.Time, _ int) ([]types.Event, error) {
 	return nil, nil
 }
-func (m *mockEventStore) GetByWorkspace(_ context.Context, _ uuid.UUID, _, _ int) ([]types.Event, int, error) {
+func (m *mockEventStore) GetByOrganization(_ context.Context, _ uuid.UUID, _, _ int) ([]types.Event, int, error) {
 	return nil, 0, nil
 }
 func (m *mockEventStore) GetByType(_ context.Context, _ uuid.UUID, _ string, _ *time.Time, _ int) ([]types.Event, error) {
@@ -230,14 +230,14 @@ func setupHRService() (*Service, *mockHRRepo, *mockBus) {
 // --- tests ---
 
 func TestHireEmployee(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 
 	t.Run("success", func(t *testing.T) {
 		svc, _, bus := setupHRService()
 
-		emp, err := svc.HireEmployee(ctx, wsID, HireInput{
+		emp, err := svc.HireEmployee(ctx, orgID, HireInput{
 			Name:     "Ivan Petrov",
 			Position: "Developer",
 			Salary:   map[string]any{"base_salary": 8000000, "currency": "RUB"},
@@ -260,49 +260,49 @@ func TestHireEmployee(t *testing.T) {
 
 	t.Run("missing name", func(t *testing.T) {
 		svc, _, _ := setupHRService()
-		_, err := svc.HireEmployee(ctx, wsID, HireInput{Position: "Dev"}, &actorID)
+		_, err := svc.HireEmployee(ctx, orgID, HireInput{Position: "Dev"}, &actorID)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "name is required")
 	})
 
 	t.Run("missing position", func(t *testing.T) {
 		svc, _, _ := setupHRService()
-		_, err := svc.HireEmployee(ctx, wsID, HireInput{Name: "Test"}, &actorID)
+		_, err := svc.HireEmployee(ctx, orgID, HireInput{Name: "Test"}, &actorID)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "position is required")
 	})
 }
 
 func TestGetEmployee(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 
 	svc, _, _ := setupHRService()
-	emp, _ := svc.HireEmployee(ctx, wsID, HireInput{
+	emp, _ := svc.HireEmployee(ctx, orgID, HireInput{
 		Name:     "Test Employee",
 		Position: "QA",
 	}, &actorID)
 
-	got, err := svc.GetEmployee(ctx, wsID, emp.ID)
+	got, err := svc.GetEmployee(ctx, orgID, emp.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Test Employee", got.Name)
 	assert.Equal(t, "QA", got.Employment["position"])
 }
 
 func TestTerminateEmployee(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 
 	svc, _, bus := setupHRService()
 
-	emp, _ := svc.HireEmployee(ctx, wsID, HireInput{
+	emp, _ := svc.HireEmployee(ctx, orgID, HireInput{
 		Name:     "To Terminate",
 		Position: "Temp",
 	}, &actorID)
 
-	err := svc.TerminateEmployee(ctx, wsID, emp.ID, "contract ended", &actorID)
+	err := svc.TerminateEmployee(ctx, orgID, emp.ID, "contract ended", &actorID)
 	require.NoError(t, err)
 
 	hasEvent := false
@@ -315,7 +315,7 @@ func TestTerminateEmployee(t *testing.T) {
 }
 
 func TestCreateShift(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 	employeeID := uuid.New()
@@ -326,7 +326,7 @@ func TestCreateShift(t *testing.T) {
 		start := time.Now().Add(24 * time.Hour)
 		end := start.Add(8 * time.Hour)
 
-		shift, err := svc.CreateShift(ctx, wsID, CreateShiftInput{
+		shift, err := svc.CreateShift(ctx, orgID, CreateShiftInput{
 			EmployeeID:   employeeID,
 			StartTime:    start,
 			EndTime:      end,
@@ -346,7 +346,7 @@ func TestCreateShift(t *testing.T) {
 		start := time.Now().Add(24 * time.Hour)
 		end := start.Add(-1 * time.Hour)
 
-		_, err := svc.CreateShift(ctx, wsID, CreateShiftInput{
+		_, err := svc.CreateShift(ctx, orgID, CreateShiftInput{
 			EmployeeID: employeeID,
 			StartTime:  start,
 			EndTime:    end,
@@ -363,7 +363,7 @@ func TestCreateShift(t *testing.T) {
 		start := time.Now().Add(24 * time.Hour)
 		end := start.Add(8 * time.Hour)
 
-		_, err := svc.CreateShift(ctx, wsID, CreateShiftInput{
+		_, err := svc.CreateShift(ctx, orgID, CreateShiftInput{
 			EmployeeID: employeeID,
 			StartTime:  start,
 			EndTime:    end,
@@ -375,7 +375,7 @@ func TestCreateShift(t *testing.T) {
 }
 
 func TestClockInClockOut(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 	employeeID := uuid.New()
@@ -383,12 +383,12 @@ func TestClockInClockOut(t *testing.T) {
 	t.Run("clock in and out", func(t *testing.T) {
 		svc, _, bus := setupHRService()
 
-		ts, err := svc.ClockIn(ctx, wsID, employeeID, nil, &actorID)
+		ts, err := svc.ClockIn(ctx, orgID, employeeID, nil, &actorID)
 		require.NoError(t, err)
 		assert.Equal(t, "open", ts.Status)
 		assert.Nil(t, ts.ClockOut)
 
-		ts, err = svc.ClockOut(ctx, wsID, ts.ID, &actorID)
+		ts, err = svc.ClockOut(ctx, orgID, ts.ID, &actorID)
 		require.NoError(t, err)
 		assert.Equal(t, "closed", ts.Status)
 		assert.NotNil(t, ts.ClockOut)
@@ -411,27 +411,27 @@ func TestClockInClockOut(t *testing.T) {
 	t.Run("double clock in rejected", func(t *testing.T) {
 		svc, _, _ := setupHRService()
 
-		_, err := svc.ClockIn(ctx, wsID, employeeID, nil, &actorID)
+		_, err := svc.ClockIn(ctx, orgID, employeeID, nil, &actorID)
 		require.NoError(t, err)
 
-		_, err = svc.ClockIn(ctx, wsID, employeeID, nil, &actorID)
+		_, err = svc.ClockIn(ctx, orgID, employeeID, nil, &actorID)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "already clocked in")
 	})
 }
 
 func TestApproveTimesheet(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 	employeeID := uuid.New()
 
 	svc, _, bus := setupHRService()
 
-	ts, _ := svc.ClockIn(ctx, wsID, employeeID, nil, &actorID)
-	ts, _ = svc.ClockOut(ctx, wsID, ts.ID, &actorID)
+	ts, _ := svc.ClockIn(ctx, orgID, employeeID, nil, &actorID)
+	ts, _ = svc.ClockOut(ctx, orgID, ts.ID, &actorID)
 
-	err := svc.ApproveTimesheet(ctx, wsID, ts.ID, &actorID)
+	err := svc.ApproveTimesheet(ctx, orgID, ts.ID, &actorID)
 	require.NoError(t, err)
 
 	hasEvent := false
@@ -444,42 +444,42 @@ func TestApproveTimesheet(t *testing.T) {
 }
 
 func TestApproveOpenTimesheetFails(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 	employeeID := uuid.New()
 
 	svc, _, _ := setupHRService()
-	ts, _ := svc.ClockIn(ctx, wsID, employeeID, nil, &actorID)
+	ts, _ := svc.ClockIn(ctx, orgID, employeeID, nil, &actorID)
 
-	err := svc.ApproveTimesheet(ctx, wsID, ts.ID, &actorID)
+	err := svc.ApproveTimesheet(ctx, orgID, ts.ID, &actorID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "only closed timesheets")
 }
 
 func TestListEmployees(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 
 	svc, _, _ := setupHRService()
-	svc.HireEmployee(ctx, wsID, HireInput{Name: "Emp1", Position: "Dev"}, &actorID)
-	svc.HireEmployee(ctx, wsID, HireInput{Name: "Emp2", Position: "QA"}, &actorID)
+	svc.HireEmployee(ctx, orgID, HireInput{Name: "Emp1", Position: "Dev"}, &actorID)
+	svc.HireEmployee(ctx, orgID, HireInput{Name: "Emp2", Position: "QA"}, &actorID)
 
-	employees, total, err := svc.ListEmployees(ctx, wsID, EmployeeFilter{})
+	employees, total, err := svc.ListEmployees(ctx, orgID, EmployeeFilter{})
 	require.NoError(t, err)
 	assert.Equal(t, 2, total)
 	assert.Len(t, employees, 2)
 }
 
 func TestEmploymentHasAutoFields(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 
 	svc, _, _ := setupHRService()
 
-	emp, err := svc.HireEmployee(ctx, wsID, HireInput{
+	emp, err := svc.HireEmployee(ctx, orgID, HireInput{
 		Name:     "Auto Fields",
 		Position: "Manager",
 	}, &actorID)

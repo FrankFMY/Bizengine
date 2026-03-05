@@ -20,11 +20,11 @@ type Store interface {
 	AppendTx(ctx context.Context, tx pgx.Tx, event types.Event) error
 
 	// GetByEntity returns events for a specific entity, ordered by timestamp DESC.
-	GetByEntity(ctx context.Context, wsID, entityID uuid.UUID, since *time.Time, limit int) ([]types.Event, error)
+	GetByEntity(ctx context.Context, orgID, entityID uuid.UUID, since *time.Time, limit int) ([]types.Event, error)
 
-	// GetByWorkspace returns events for a workspace, ordered by timestamp DESC.
-	GetByWorkspace(ctx context.Context, wsID uuid.UUID, limit, offset int) ([]types.Event, int, error)
+	// GetByOrganization returns events for an organization, ordered by timestamp DESC.
+	GetByOrganization(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]types.Event, int, error)
 
 	// GetByType returns events of a specific type, ordered by timestamp DESC.
-	GetByType(ctx context.Context, wsID uuid.UUID, eventType string, since *time.Time, limit int) ([]types.Event, error)
+	GetByType(ctx context.Context, orgID uuid.UUID, eventType string, since *time.Time, limit int) ([]types.Event, error)
 }

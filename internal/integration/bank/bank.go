@@ -32,8 +32,8 @@ type ImportResult struct {
 
 // BankService defines the interface for bank integration operations.
 type BankService interface {
-	ImportStatement(ctx context.Context, wsID uuid.UUID, data []byte) (*ImportResult, error)
-	ExportPaymentOrders(ctx context.Context, wsID uuid.UUID, orders []PaymentOrder) ([]byte, error)
+	ImportStatement(ctx context.Context, orgID uuid.UUID, data []byte) (*ImportResult, error)
+	ExportPaymentOrders(ctx context.Context, orgID uuid.UUID, orders []PaymentOrder) ([]byte, error)
 }
 
 // Stub is a stub implementation of BankService that logs calls and returns success.
@@ -43,8 +43,8 @@ type Stub struct{}
 func NewStub() *Stub { return &Stub{} }
 
 // ImportStatement logs the call and returns a fake import result.
-func (s *Stub) ImportStatement(_ context.Context, wsID uuid.UUID, data []byte) (*ImportResult, error) {
-	log.Debug().Str("ws", wsID.String()).Int("data_len", len(data)).Msg("bank stub: ImportStatement")
+func (s *Stub) ImportStatement(_ context.Context, orgID uuid.UUID, data []byte) (*ImportResult, error) {
+	log.Debug().Str("org", orgID.String()).Int("data_len", len(data)).Msg("bank stub: ImportStatement")
 	return &ImportResult{
 		TransactionsImported: 0,
 		TotalDebit:           0,
@@ -55,7 +55,7 @@ func (s *Stub) ImportStatement(_ context.Context, wsID uuid.UUID, data []byte) (
 }
 
 // ExportPaymentOrders logs the call and returns empty 1C format data.
-func (s *Stub) ExportPaymentOrders(_ context.Context, wsID uuid.UUID, orders []PaymentOrder) ([]byte, error) {
-	log.Debug().Str("ws", wsID.String()).Int("orders", len(orders)).Msg("bank stub: ExportPaymentOrders")
+func (s *Stub) ExportPaymentOrders(_ context.Context, orgID uuid.UUID, orders []PaymentOrder) ([]byte, error) {
+	log.Debug().Str("org", orgID.String()).Int("orders", len(orders)).Msg("bank stub: ExportPaymentOrders")
 	return []byte("1CClientBankExchange\nVersionEncoding=UTF-8\nSender=BizEngine\nRecipient=Bank\nFormatVersion=1.03\n"), nil
 }

@@ -20,15 +20,15 @@ var DashboardSummary = &views.ViewDef{
 	Factory: dashboardSummaryFactory,
 }
 
-func dashboardSummaryFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, _ map[string]any) (*views.ViewResult, error) {
+func dashboardSummaryFactory(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, _ map[string]any) (*views.ViewResult, error) {
 	tables := map[string]map[string]any{"dashboard": {}}
 
 	var ordersToday, revenueToday int64
 	err := pool.QueryRow(ctx, `
 		SELECT COUNT(*), COALESCE(SUM(total), 0)
 		FROM orders
-		WHERE workspace_id = $1 AND created_at >= CURRENT_DATE AND cancelled_at IS NULL
-	`, wsID).Scan(&ordersToday, &revenueToday)
+		WHERE organization_id = $1 AND created_at >= CURRENT_DATE AND cancelled_at IS NULL
+	`, orgID).Scan(&ordersToday, &revenueToday)
 	if err != nil {
 		return nil, err
 	}
@@ -37,8 +37,8 @@ func dashboardSummaryFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.
 	err = pool.QueryRow(ctx, `
 		SELECT COUNT(*)
 		FROM stock_levels
-		WHERE workspace_id = $1 AND min_quantity > 0 AND quantity - reserved <= min_quantity
-	`, wsID).Scan(&lowStockCount)
+		WHERE organization_id = $1 AND min_quantity > 0 AND quantity - reserved <= min_quantity
+	`, orgID).Scan(&lowStockCount)
 	if err != nil {
 		return nil, err
 	}
@@ -47,8 +47,8 @@ func dashboardSummaryFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.
 	err = pool.QueryRow(ctx, `
 		SELECT COUNT(DISTINCT t.employee_id)
 		FROM timesheets t
-		WHERE t.workspace_id = $1 AND t.status = 'open' AND t.clock_out IS NULL
-	`, wsID).Scan(&employeesOnShift)
+		WHERE t.organization_id = $1 AND t.status = 'open' AND t.clock_out IS NULL
+	`, orgID).Scan(&employeesOnShift)
 	if err != nil {
 		return nil, err
 	}

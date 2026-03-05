@@ -22,7 +22,7 @@ type Manager struct {
 
 	mu        sync.RWMutex
 	subs      map[string][]*Subscription        // seance_id -> subscriptions
-	dataStore map[string]*WorkspaceDataStore     // workspace_id string -> store
+	dataStore map[string]*OrganizationDataStore     // organization_id string -> store
 }
 
 // Subscription tracks a single client's view subscription.
@@ -31,14 +31,14 @@ type Subscription struct {
 	ViewKey     string
 	Params      map[string]any
 	ParamsHash  string
-	WorkspaceID uuid.UUID
+	OrganizationID uuid.UUID
 	UserID      uuid.UUID
 	LastRefs    []DataRef
 	Version     int64
 }
 
-// WorkspaceDataStore holds the normalized data cache for a single workspace.
-type WorkspaceDataStore struct {
+// OrganizationDataStore holds the normalized data cache for a single organization.
+type OrganizationDataStore struct {
 	mu     sync.RWMutex
 	tables map[string]map[string]*DataRow // table -> id -> row
 }
@@ -57,7 +57,7 @@ func NewManager(registry *Registry, pool *pgxpool.Pool, publisher ViewPublisher)
 		pool:      pool,
 		publisher: publisher,
 		subs:      make(map[string][]*Subscription),
-		dataStore: make(map[string]*WorkspaceDataStore),
+		dataStore: make(map[string]*OrganizationDataStore),
 	}
 }
 
@@ -68,7 +68,7 @@ type SubscribeResult struct {
 }
 
 // Subscribe creates a new view subscription, runs the factory, and sends a snapshot.
-func (m *Manager) Subscribe(ctx context.Context, seanceID string, wsID, userID uuid.UUID, viewKey string, params map[string]any) (*SubscribeResult, error) {
+func (m *Manager) Subscribe(ctx context.Context, seanceID string, orgID, userID uuid.UUID, viewKey string, params map[string]any) (*SubscribeResult, error) {
 	def, ok := m.registry.Get(viewKey)
 	if !ok {
 		return nil, errs.NewNotFound("view not found: " + viewKey)
@@ -90,7 +90,7 @@ func (m *Manager) Subscribe(ctx context.Context, seanceID string, wsID, userID u
 	}
 	m.mu.RUnlock()
 
-	result, err := def.Factory(ctx, m.pool, wsID, params)
+	result, err := def.Factory(ctx, m.pool, orgID, params)
 	if err != nil {
 		return nil, errs.Wrap(err, errs.CodeInternal, "view factory failed")
 	}
@@ -100,7 +100,7 @@ func (m *Manager) Subscribe(ctx context.Context, seanceID string, wsID, userID u
 		ViewKey:     viewKey,
 		Params:      params,
 		ParamsHash:  paramsHash,
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		UserID:      userID,
 		LastRefs:    result.Refs,
 		Version:     result.Version,
@@ -108,10 +108,10 @@ func (m *Manager) Subscribe(ctx context.Context, seanceID string, wsID, userID u
 
 	m.mu.Lock()
 	m.subs[seanceID] = append(m.subs[seanceID], sub)
-	store := m.getOrCreateStore(wsID.String())
+	store := m.getOrCreateStore(orgID.String())
 	m.mu.Unlock()
 
-	// Add data to workspace store, incrementing ref counts.
+	// Add data to organization store, incrementing ref counts.
 	store.AddFromResult(result)
 
 	// Send snapshot via Centrifugo.
@@ -134,7 +134,7 @@ func (m *Manager) Unsubscribe(seanceID, paramsHash string) {
 	subs := m.subs[seanceID]
 	for i, sub := range subs {
 		if sub.ParamsHash == paramsHash {
-			store := m.dataStore[sub.WorkspaceID.String()]
+			store := m.dataStore[sub.OrganizationID.String()]
 			if store != nil {
 				store.RemoveRefs(sub.LastRefs)
 			}
@@ -153,7 +153,7 @@ func (m *Manager) UnsubscribeAll(seanceID string) {
 
 	for _, sub := range subs {
 		m.mu.RLock()
-		store := m.dataStore[sub.WorkspaceID.String()]
+		store := m.dataStore[sub.OrganizationID.String()]
 		m.mu.RUnlock()
 		if store != nil {
 			store.RemoveRefs(sub.LastRefs)
@@ -195,7 +195,7 @@ type SyncView struct {
 }
 
 // Sync handles reconnection: re-sends diffs or full snapshots as needed.
-func (m *Manager) Sync(ctx context.Context, seanceID string, wsID uuid.UUID, req SyncRequest) error {
+func (m *Manager) Sync(ctx context.Context, seanceID string, orgID uuid.UUID, req SyncRequest) error {
 	m.mu.RLock()
 	subs := m.subs[seanceID]
 	m.mu.RUnlock()
@@ -218,7 +218,7 @@ func (m *Manager) Sync(ctx context.Context, seanceID string, wsID uuid.UUID, req
 			if !ok {
 				continue
 			}
-			result, err := def.Factory(ctx, m.pool, wsID, sub.Params)
+			result, err := def.Factory(ctx, m.pool, orgID, sub.Params)
 			if err != nil {
 				log.Error().Err(err).Str("view", sub.ViewKey).Msg("sync: factory failed")
 				continue
@@ -245,9 +245,9 @@ func (m *Manager) Sync(ctx context.Context, seanceID string, wsID uuid.UUID, req
 
 // Invalidate processes a ChangeEvent: computes table_diff and view_diff as needed.
 func (m *Manager) Invalidate(ctx context.Context, change ChangeEvent) {
-	wsKey := change.WorkspaceID.String()
+	wsKey := change.OrganizationID.String()
 
-	// 1. Table diff: check if the changed row exists in the workspace data store.
+	// 1. Table diff: check if the changed row exists in the organization data store.
 	m.mu.RLock()
 	store := m.dataStore[wsKey]
 	m.mu.RUnlock()
@@ -277,7 +277,7 @@ func (m *Manager) Invalidate(ctx context.Context, change ChangeEvent) {
 	var toProcess []*Subscription
 	for _, subs := range m.subs {
 		for _, sub := range subs {
-			if sub.WorkspaceID == change.WorkspaceID && affectedKeys[sub.ViewKey] {
+			if sub.OrganizationID == change.OrganizationID && affectedKeys[sub.ViewKey] {
 				toProcess = append(toProcess, sub)
 			}
 		}
@@ -290,7 +290,7 @@ func (m *Manager) Invalidate(ctx context.Context, change ChangeEvent) {
 			continue
 		}
 
-		result, err := def.Factory(ctx, m.pool, sub.WorkspaceID, sub.Params)
+		result, err := def.Factory(ctx, m.pool, sub.OrganizationID, sub.Params)
 		if err != nil {
 			log.Error().Err(err).Str("view", sub.ViewKey).Msg("invalidate: factory failed")
 			continue
@@ -321,10 +321,10 @@ func (m *Manager) Invalidate(ctx context.Context, change ChangeEvent) {
 	}
 }
 
-func (m *Manager) getOrCreateStore(wsKey string) *WorkspaceDataStore {
+func (m *Manager) getOrCreateStore(wsKey string) *OrganizationDataStore {
 	store, ok := m.dataStore[wsKey]
 	if !ok {
-		store = &WorkspaceDataStore{
+		store = &OrganizationDataStore{
 			tables: make(map[string]map[string]*DataRow),
 		}
 		m.dataStore[wsKey] = store
@@ -333,7 +333,7 @@ func (m *Manager) getOrCreateStore(wsKey string) *WorkspaceDataStore {
 }
 
 // AddFromResult adds/increments ref counts for all records in a ViewResult.
-func (s *WorkspaceDataStore) AddFromResult(result *ViewResult) {
+func (s *OrganizationDataStore) AddFromResult(result *ViewResult) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -355,7 +355,7 @@ func (s *WorkspaceDataStore) AddFromResult(result *ViewResult) {
 }
 
 // RemoveRefs decrements ref counts and garbage-collects rows with RefCount == 0.
-func (s *WorkspaceDataStore) RemoveRefs(refs []DataRef) {
+func (s *OrganizationDataStore) RemoveRefs(refs []DataRef) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -376,7 +376,7 @@ func (s *WorkspaceDataStore) RemoveRefs(refs []DataRef) {
 }
 
 // GetRow returns a copy of the cached fields for a row, or nil if not cached.
-func (s *WorkspaceDataStore) GetRow(table, id string) map[string]any {
+func (s *OrganizationDataStore) GetRow(table, id string) map[string]any {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -396,7 +396,7 @@ func (s *WorkspaceDataStore) GetRow(table, id string) map[string]any {
 }
 
 // BumpVersion increments the version of a cached row.
-func (s *WorkspaceDataStore) BumpVersion(table, id string) {
+func (s *OrganizationDataStore) BumpVersion(table, id string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

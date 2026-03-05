@@ -20,18 +20,18 @@ var FinanceTrialBalance = &views.ViewDef{
 	Factory: financeTrialBalanceFactory,
 }
 
-func financeTrialBalanceFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, _ map[string]any) (*views.ViewResult, error) {
+func financeTrialBalanceFactory(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, _ map[string]any) (*views.ViewResult, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT a.id, a.code, a.name, a.type,
 		       COALESCE(SUM(tl.debit), 0) AS total_debit,
 		       COALESCE(SUM(tl.credit), 0) AS total_credit
 		FROM accounts a
-		LEFT JOIN transaction_lines tl ON tl.account_id = a.id AND tl.workspace_id = $1
+		LEFT JOIN transaction_lines tl ON tl.account_id = a.id AND tl.organization_id = $1
 		LEFT JOIN transactions t ON t.id = tl.transaction_id AND t.is_posted = TRUE
-		WHERE a.workspace_id = $1
+		WHERE a.organization_id = $1
 		GROUP BY a.id, a.code, a.name, a.type
 		ORDER BY a.code
-	`, wsID)
+	`, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ var FinanceTransactionsList = &views.ViewDef{
 	Factory: financeTransactionsListFactory,
 }
 
-func financeTransactionsListFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
+func financeTransactionsListFactory(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
 	limit := intParam(params, "limit", 50)
 	offset := intParam(params, "offset", 0)
 	accountID, _ := params["account_id"].(string)
@@ -86,10 +86,10 @@ func financeTransactionsListFactory(ctx context.Context, pool *pgxpool.Pool, wsI
 		       COALESCE(SUM(tl.credit), 0) AS total_credit,
 		       COUNT(*) OVER() AS total_count
 		FROM transactions t
-		JOIN transaction_lines tl ON tl.transaction_id = t.id AND tl.workspace_id = $1
-		WHERE t.workspace_id = $1
+		JOIN transaction_lines tl ON tl.transaction_id = t.id AND tl.organization_id = $1
+		WHERE t.organization_id = $1
 	`
-	args := []any{wsID}
+	args := []any{orgID}
 	argIdx := 2
 
 	if accountID != "" {
@@ -149,7 +149,7 @@ var FinanceAccountBalance = &views.ViewDef{
 	Factory: financeAccountBalanceFactory,
 }
 
-func financeAccountBalanceFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
+func financeAccountBalanceFactory(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
 	accountID, _ := params["account_id"].(string)
 
 	var id, code, name, acctType string
@@ -160,11 +160,11 @@ func financeAccountBalanceFactory(ctx context.Context, pool *pgxpool.Pool, wsID 
 		       COALESCE(SUM(tl.debit), 0),
 		       COALESCE(SUM(tl.credit), 0)
 		FROM accounts a
-		LEFT JOIN transaction_lines tl ON tl.account_id = a.id AND tl.workspace_id = $1
+		LEFT JOIN transaction_lines tl ON tl.account_id = a.id AND tl.organization_id = $1
 		LEFT JOIN transactions t ON t.id = tl.transaction_id AND t.is_posted = TRUE
-		WHERE a.workspace_id = $1 AND a.id = $2
+		WHERE a.organization_id = $1 AND a.id = $2
 		GROUP BY a.id
-	`, wsID, accountID).Scan(&id, &code, &name, &acctType, &totalDebit, &totalCredit)
+	`, orgID, accountID).Scan(&id, &code, &name, &acctType, &totalDebit, &totalCredit)
 	if err != nil {
 		return nil, err
 	}

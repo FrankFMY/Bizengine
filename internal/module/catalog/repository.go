@@ -11,9 +11,9 @@ import (
 
 // Repository defines catalog-specific storage operations beyond core entity CRUD.
 type Repository interface {
-	// FindBySKU returns a product entity by its internal barcode/SKU within a workspace.
-	FindBySKU(ctx context.Context, wsID uuid.UUID, sku string) (*types.Entity, error)
+	// FindBySKU returns a product entity by its internal barcode/SKU within an organization.
+	FindBySKU(ctx context.Context, orgID uuid.UUID, sku string) (*types.Entity, error)
 
 	// ListProductsWithComponents returns products with their components, supporting catalog-specific filters.
-	ListProductsWithComponents(ctx context.Context, wsID uuid.UUID, filter ProductFilter) ([]Product, int, error)
+	ListProductsWithComponents(ctx context.Context, orgID uuid.UUID, filter ProductFilter) ([]Product, int, error)
 }

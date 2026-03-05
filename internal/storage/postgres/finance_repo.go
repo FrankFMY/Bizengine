@@ -27,21 +27,21 @@ func NewFinanceRepo(pool *pgxpool.Pool) *FinanceRepo {
 // CreateAccount inserts an account record.
 func (r *FinanceRepo) CreateAccount(ctx context.Context, tx pgx.Tx, a *finance.Account) error {
 	_, err := tx.Exec(ctx,
-		`INSERT INTO accounts (id, workspace_id, code, name, type, parent_id, is_system, currency, created_at)
+		`INSERT INTO accounts (id, organization_id, code, name, type, parent_id, is_system, currency, created_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		a.ID, a.WorkspaceID, a.Code, a.Name, a.Type, a.ParentID, a.IsSystem, a.Currency, a.CreatedAt,
+		a.ID, a.OrganizationID, a.Code, a.Name, a.Type, a.ParentID, a.IsSystem, a.Currency, a.CreatedAt,
 	)
 	return err
 }
 
 // GetAccount returns an account by ID.
-func (r *FinanceRepo) GetAccount(ctx context.Context, wsID, accountID uuid.UUID) (*finance.Account, error) {
+func (r *FinanceRepo) GetAccount(ctx context.Context, orgID, accountID uuid.UUID) (*finance.Account, error) {
 	var a finance.Account
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, workspace_id, code, name, type, parent_id, is_system, currency, created_at
-		 FROM accounts WHERE workspace_id = $1 AND id = $2`,
-		wsID, accountID,
-	).Scan(&a.ID, &a.WorkspaceID, &a.Code, &a.Name, &a.Type, &a.ParentID, &a.IsSystem, &a.Currency, &a.CreatedAt)
+		`SELECT id, organization_id, code, name, type, parent_id, is_system, currency, created_at
+		 FROM accounts WHERE organization_id = $1 AND id = $2`,
+		orgID, accountID,
+	).Scan(&a.ID, &a.OrganizationID, &a.Code, &a.Name, &a.Type, &a.ParentID, &a.IsSystem, &a.Currency, &a.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errs.NewNotFound("account not found")
@@ -52,13 +52,13 @@ func (r *FinanceRepo) GetAccount(ctx context.Context, wsID, accountID uuid.UUID)
 }
 
 // GetAccountByCode returns an account by code.
-func (r *FinanceRepo) GetAccountByCode(ctx context.Context, wsID uuid.UUID, code string) (*finance.Account, error) {
+func (r *FinanceRepo) GetAccountByCode(ctx context.Context, orgID uuid.UUID, code string) (*finance.Account, error) {
 	var a finance.Account
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, workspace_id, code, name, type, parent_id, is_system, currency, created_at
-		 FROM accounts WHERE workspace_id = $1 AND code = $2`,
-		wsID, code,
-	).Scan(&a.ID, &a.WorkspaceID, &a.Code, &a.Name, &a.Type, &a.ParentID, &a.IsSystem, &a.Currency, &a.CreatedAt)
+		`SELECT id, organization_id, code, name, type, parent_id, is_system, currency, created_at
+		 FROM accounts WHERE organization_id = $1 AND code = $2`,
+		orgID, code,
+	).Scan(&a.ID, &a.OrganizationID, &a.Code, &a.Name, &a.Type, &a.ParentID, &a.IsSystem, &a.Currency, &a.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errs.NewNotFound("account not found: " + code)
@@ -68,12 +68,12 @@ func (r *FinanceRepo) GetAccountByCode(ctx context.Context, wsID uuid.UUID, code
 	return &a, nil
 }
 
-// ListAccounts returns all accounts for a workspace.
-func (r *FinanceRepo) ListAccounts(ctx context.Context, wsID uuid.UUID) ([]finance.Account, error) {
+// ListAccounts returns all accounts for an organization.
+func (r *FinanceRepo) ListAccounts(ctx context.Context, orgID uuid.UUID) ([]finance.Account, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, workspace_id, code, name, type, parent_id, is_system, currency, created_at
-		 FROM accounts WHERE workspace_id = $1 ORDER BY code`,
-		wsID,
+		`SELECT id, organization_id, code, name, type, parent_id, is_system, currency, created_at
+		 FROM accounts WHERE organization_id = $1 ORDER BY code`,
+		orgID,
 	)
 	if err != nil {
 		return nil, err
@@ -83,7 +83,7 @@ func (r *FinanceRepo) ListAccounts(ctx context.Context, wsID uuid.UUID) ([]finan
 	var accounts []finance.Account
 	for rows.Next() {
 		var a finance.Account
-		if err := rows.Scan(&a.ID, &a.WorkspaceID, &a.Code, &a.Name, &a.Type, &a.ParentID, &a.IsSystem, &a.Currency, &a.CreatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.OrganizationID, &a.Code, &a.Name, &a.Type, &a.ParentID, &a.IsSystem, &a.Currency, &a.CreatedAt); err != nil {
 			return nil, err
 		}
 		accounts = append(accounts, a)
@@ -92,10 +92,10 @@ func (r *FinanceRepo) ListAccounts(ctx context.Context, wsID uuid.UUID) ([]finan
 }
 
 // DeleteAccount deletes an account.
-func (r *FinanceRepo) DeleteAccount(ctx context.Context, wsID, accountID uuid.UUID) error {
+func (r *FinanceRepo) DeleteAccount(ctx context.Context, orgID, accountID uuid.UUID) error {
 	tag, err := r.pool.Exec(ctx,
-		`DELETE FROM accounts WHERE workspace_id = $1 AND id = $2`,
-		wsID, accountID,
+		`DELETE FROM accounts WHERE organization_id = $1 AND id = $2`,
+		orgID, accountID,
 	)
 	if err != nil {
 		return err
@@ -107,11 +107,11 @@ func (r *FinanceRepo) DeleteAccount(ctx context.Context, wsID, accountID uuid.UU
 }
 
 // HasTransactionLines checks if an account has any transaction lines.
-func (r *FinanceRepo) HasTransactionLines(ctx context.Context, wsID, accountID uuid.UUID) (bool, error) {
+func (r *FinanceRepo) HasTransactionLines(ctx context.Context, orgID, accountID uuid.UUID) (bool, error) {
 	var exists bool
 	err := r.pool.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM transaction_lines WHERE workspace_id = $1 AND account_id = $2)`,
-		wsID, accountID,
+		`SELECT EXISTS(SELECT 1 FROM transaction_lines WHERE organization_id = $1 AND account_id = $2)`,
+		orgID, accountID,
 	).Scan(&exists)
 	return exists, err
 }
@@ -119,9 +119,9 @@ func (r *FinanceRepo) HasTransactionLines(ctx context.Context, wsID, accountID u
 // CreateTransaction inserts a transaction record.
 func (r *FinanceRepo) CreateTransaction(ctx context.Context, tx pgx.Tx, t *finance.Transaction) error {
 	_, err := tx.Exec(ctx,
-		`INSERT INTO transactions (id, workspace_id, date, description, reference_type, reference_id, is_posted, actor_id, created_at)
+		`INSERT INTO transactions (id, organization_id, date, description, reference_type, reference_id, is_posted, actor_id, created_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		t.ID, t.WorkspaceID, t.Date, t.Description, t.ReferenceType, t.ReferenceID, t.IsPosted, t.ActorID, t.CreatedAt,
+		t.ID, t.OrganizationID, t.Date, t.Description, t.ReferenceType, t.ReferenceID, t.IsPosted, t.ActorID, t.CreatedAt,
 	)
 	return err
 }
@@ -130,9 +130,9 @@ func (r *FinanceRepo) CreateTransaction(ctx context.Context, tx pgx.Tx, t *finan
 func (r *FinanceRepo) CreateTransactionLines(ctx context.Context, tx pgx.Tx, lines []finance.TransactionLine) error {
 	for _, line := range lines {
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO transaction_lines (id, transaction_id, workspace_id, account_id, debit, credit, description, entity_id)
+			`INSERT INTO transaction_lines (id, transaction_id, organization_id, account_id, debit, credit, description, entity_id)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-			line.ID, line.TransactionID, line.WorkspaceID, line.AccountID, line.Debit, line.Credit, line.Description, line.EntityID,
+			line.ID, line.TransactionID, line.OrganizationID, line.AccountID, line.Debit, line.Credit, line.Description, line.EntityID,
 		); err != nil {
 			return err
 		}
@@ -141,13 +141,13 @@ func (r *FinanceRepo) CreateTransactionLines(ctx context.Context, tx pgx.Tx, lin
 }
 
 // GetTransaction returns a transaction by ID.
-func (r *FinanceRepo) GetTransaction(ctx context.Context, wsID, txnID uuid.UUID) (*finance.Transaction, error) {
+func (r *FinanceRepo) GetTransaction(ctx context.Context, orgID, txnID uuid.UUID) (*finance.Transaction, error) {
 	var t finance.Transaction
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, workspace_id, date, description, reference_type, reference_id, is_posted, actor_id, created_at
-		 FROM transactions WHERE workspace_id = $1 AND id = $2`,
-		wsID, txnID,
-	).Scan(&t.ID, &t.WorkspaceID, &t.Date, &t.Description, &t.ReferenceType, &t.ReferenceID, &t.IsPosted, &t.ActorID, &t.CreatedAt)
+		`SELECT id, organization_id, date, description, reference_type, reference_id, is_posted, actor_id, created_at
+		 FROM transactions WHERE organization_id = $1 AND id = $2`,
+		orgID, txnID,
+	).Scan(&t.ID, &t.OrganizationID, &t.Date, &t.Description, &t.ReferenceType, &t.ReferenceID, &t.IsPosted, &t.ActorID, &t.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errs.NewNotFound("transaction not found")
@@ -160,7 +160,7 @@ func (r *FinanceRepo) GetTransaction(ctx context.Context, wsID, txnID uuid.UUID)
 // GetTransactionLines returns lines for a transaction.
 func (r *FinanceRepo) GetTransactionLines(ctx context.Context, txnID uuid.UUID) ([]finance.TransactionLine, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, transaction_id, workspace_id, account_id, debit, credit, description, entity_id
+		`SELECT id, transaction_id, organization_id, account_id, debit, credit, description, entity_id
 		 FROM transaction_lines WHERE transaction_id = $1`,
 		txnID,
 	)
@@ -172,7 +172,7 @@ func (r *FinanceRepo) GetTransactionLines(ctx context.Context, txnID uuid.UUID) 
 	var lines []finance.TransactionLine
 	for rows.Next() {
 		var l finance.TransactionLine
-		if err := rows.Scan(&l.ID, &l.TransactionID, &l.WorkspaceID, &l.AccountID, &l.Debit, &l.Credit, &l.Description, &l.EntityID); err != nil {
+		if err := rows.Scan(&l.ID, &l.TransactionID, &l.OrganizationID, &l.AccountID, &l.Debit, &l.Credit, &l.Description, &l.EntityID); err != nil {
 			return nil, err
 		}
 		lines = append(lines, l)
@@ -181,15 +181,15 @@ func (r *FinanceRepo) GetTransactionLines(ctx context.Context, txnID uuid.UUID) 
 }
 
 // ListTransactions returns transactions matching the filter.
-func (r *FinanceRepo) ListTransactions(ctx context.Context, wsID uuid.UUID, filter finance.TransactionFilter) ([]finance.Transaction, int, error) {
+func (r *FinanceRepo) ListTransactions(ctx context.Context, orgID uuid.UUID, filter finance.TransactionFilter) ([]finance.Transaction, int, error) {
 	filter.Page.Normalize()
 
 	var conditions []string
 	var args []any
 	argIdx := 1
 
-	conditions = append(conditions, fmt.Sprintf("t.workspace_id = $%d", argIdx))
-	args = append(args, wsID)
+	conditions = append(conditions, fmt.Sprintf("t.organization_id = $%d", argIdx))
+	args = append(args, orgID)
 	argIdx++
 
 	if filter.AccountID != nil {
@@ -221,7 +221,7 @@ func (r *FinanceRepo) ListTransactions(ctx context.Context, wsID uuid.UUID, filt
 	}
 
 	query := fmt.Sprintf(
-		`SELECT t.id, t.workspace_id, t.date, t.description, t.reference_type, t.reference_id, t.is_posted, t.actor_id, t.created_at
+		`SELECT t.id, t.organization_id, t.date, t.description, t.reference_type, t.reference_id, t.is_posted, t.actor_id, t.created_at
 		 FROM transactions t WHERE %s ORDER BY t.date DESC, t.created_at DESC LIMIT $%d OFFSET $%d`,
 		where, argIdx, argIdx+1,
 	)
@@ -236,7 +236,7 @@ func (r *FinanceRepo) ListTransactions(ctx context.Context, wsID uuid.UUID, filt
 	var txns []finance.Transaction
 	for rows.Next() {
 		var t finance.Transaction
-		if err := rows.Scan(&t.ID, &t.WorkspaceID, &t.Date, &t.Description, &t.ReferenceType, &t.ReferenceID, &t.IsPosted, &t.ActorID, &t.CreatedAt); err != nil {
+		if err := rows.Scan(&t.ID, &t.OrganizationID, &t.Date, &t.Description, &t.ReferenceType, &t.ReferenceID, &t.IsPosted, &t.ActorID, &t.CreatedAt); err != nil {
 			return nil, 0, err
 		}
 		txns = append(txns, t)
@@ -247,8 +247,8 @@ func (r *FinanceRepo) ListTransactions(ctx context.Context, wsID uuid.UUID, filt
 // UpdateTransaction updates a transaction record.
 func (r *FinanceRepo) UpdateTransaction(ctx context.Context, tx pgx.Tx, t *finance.Transaction) error {
 	_, err := tx.Exec(ctx,
-		`UPDATE transactions SET is_posted = $3, description = $4 WHERE workspace_id = $1 AND id = $2`,
-		t.WorkspaceID, t.ID, t.IsPosted, t.Description,
+		`UPDATE transactions SET is_posted = $3, description = $4 WHERE organization_id = $1 AND id = $2`,
+		t.OrganizationID, t.ID, t.IsPosted, t.Description,
 	)
 	return err
 }
@@ -256,22 +256,22 @@ func (r *FinanceRepo) UpdateTransaction(ctx context.Context, tx pgx.Tx, t *finan
 // CreateInvoice inserts an invoice record.
 func (r *FinanceRepo) CreateInvoice(ctx context.Context, inv *finance.Invoice) error {
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO invoices (id, workspace_id, number, type, counterparty_id, order_id, subtotal, tax, total, currency, status, issued_at, due_at, paid_at, created_at)
+		`INSERT INTO invoices (id, organization_id, number, type, counterparty_id, order_id, subtotal, tax, total, currency, status, issued_at, due_at, paid_at, created_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
-		inv.ID, inv.WorkspaceID, inv.Number, inv.Type, inv.CounterpartyID, inv.OrderID,
+		inv.ID, inv.OrganizationID, inv.Number, inv.Type, inv.CounterpartyID, inv.OrderID,
 		inv.Subtotal, inv.Tax, inv.Total, inv.Currency, inv.Status, inv.IssuedAt, inv.DueAt, inv.PaidAt, inv.CreatedAt,
 	)
 	return err
 }
 
 // GetInvoice returns an invoice by ID.
-func (r *FinanceRepo) GetInvoice(ctx context.Context, wsID, invoiceID uuid.UUID) (*finance.Invoice, error) {
+func (r *FinanceRepo) GetInvoice(ctx context.Context, orgID, invoiceID uuid.UUID) (*finance.Invoice, error) {
 	var inv finance.Invoice
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, workspace_id, number, type, counterparty_id, order_id, subtotal, tax, total, currency, status, issued_at, due_at, paid_at, created_at
-		 FROM invoices WHERE workspace_id = $1 AND id = $2`,
-		wsID, invoiceID,
-	).Scan(&inv.ID, &inv.WorkspaceID, &inv.Number, &inv.Type, &inv.CounterpartyID, &inv.OrderID,
+		`SELECT id, organization_id, number, type, counterparty_id, order_id, subtotal, tax, total, currency, status, issued_at, due_at, paid_at, created_at
+		 FROM invoices WHERE organization_id = $1 AND id = $2`,
+		orgID, invoiceID,
+	).Scan(&inv.ID, &inv.OrganizationID, &inv.Number, &inv.Type, &inv.CounterpartyID, &inv.OrderID,
 		&inv.Subtotal, &inv.Tax, &inv.Total, &inv.Currency, &inv.Status, &inv.IssuedAt, &inv.DueAt, &inv.PaidAt, &inv.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -283,15 +283,15 @@ func (r *FinanceRepo) GetInvoice(ctx context.Context, wsID, invoiceID uuid.UUID)
 }
 
 // ListInvoices returns invoices matching the filter.
-func (r *FinanceRepo) ListInvoices(ctx context.Context, wsID uuid.UUID, filter finance.InvoiceFilter) ([]finance.Invoice, int, error) {
+func (r *FinanceRepo) ListInvoices(ctx context.Context, orgID uuid.UUID, filter finance.InvoiceFilter) ([]finance.Invoice, int, error) {
 	filter.Page.Normalize()
 
 	var conditions []string
 	var args []any
 	argIdx := 1
 
-	conditions = append(conditions, fmt.Sprintf("workspace_id = $%d", argIdx))
-	args = append(args, wsID)
+	conditions = append(conditions, fmt.Sprintf("organization_id = $%d", argIdx))
+	args = append(args, orgID)
 	argIdx++
 
 	if filter.Type != nil {
@@ -313,7 +313,7 @@ func (r *FinanceRepo) ListInvoices(ctx context.Context, wsID uuid.UUID, filter f
 	}
 
 	query := fmt.Sprintf(
-		`SELECT id, workspace_id, number, type, counterparty_id, order_id, subtotal, tax, total, currency, status, issued_at, due_at, paid_at, created_at
+		`SELECT id, organization_id, number, type, counterparty_id, order_id, subtotal, tax, total, currency, status, issued_at, due_at, paid_at, created_at
 		 FROM invoices WHERE %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d`,
 		where, argIdx, argIdx+1,
 	)
@@ -328,7 +328,7 @@ func (r *FinanceRepo) ListInvoices(ctx context.Context, wsID uuid.UUID, filter f
 	var invoices []finance.Invoice
 	for rows.Next() {
 		var inv finance.Invoice
-		if err := rows.Scan(&inv.ID, &inv.WorkspaceID, &inv.Number, &inv.Type, &inv.CounterpartyID, &inv.OrderID,
+		if err := rows.Scan(&inv.ID, &inv.OrganizationID, &inv.Number, &inv.Type, &inv.CounterpartyID, &inv.OrderID,
 			&inv.Subtotal, &inv.Tax, &inv.Total, &inv.Currency, &inv.Status, &inv.IssuedAt, &inv.DueAt, &inv.PaidAt, &inv.CreatedAt); err != nil {
 			return nil, 0, err
 		}
@@ -340,25 +340,25 @@ func (r *FinanceRepo) ListInvoices(ctx context.Context, wsID uuid.UUID, filter f
 // UpdateInvoice updates an invoice record.
 func (r *FinanceRepo) UpdateInvoice(ctx context.Context, inv *finance.Invoice) error {
 	_, err := r.pool.Exec(ctx,
-		`UPDATE invoices SET status = $3, paid_at = $4 WHERE workspace_id = $1 AND id = $2`,
-		inv.WorkspaceID, inv.ID, inv.Status, inv.PaidAt,
+		`UPDATE invoices SET status = $3, paid_at = $4 WHERE organization_id = $1 AND id = $2`,
+		inv.OrganizationID, inv.ID, inv.Status, inv.PaidAt,
 	)
 	return err
 }
 
 // GetTrialBalance returns the trial balance as of a date.
-func (r *FinanceRepo) GetTrialBalance(ctx context.Context, wsID uuid.UUID, date time.Time) ([]finance.TrialBalanceRow, error) {
+func (r *FinanceRepo) GetTrialBalance(ctx context.Context, orgID uuid.UUID, date time.Time) ([]finance.TrialBalanceRow, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT a.id, a.code, a.name,
 		        COALESCE(SUM(tl.debit), 0) AS debit,
 		        COALESCE(SUM(tl.credit), 0) AS credit
 		 FROM accounts a
-		 LEFT JOIN transaction_lines tl ON tl.account_id = a.id AND tl.workspace_id = a.workspace_id
+		 LEFT JOIN transaction_lines tl ON tl.account_id = a.id AND tl.organization_id = a.organization_id
 		 LEFT JOIN transactions t ON t.id = tl.transaction_id AND t.is_posted = TRUE AND t.date <= $2
-		 WHERE a.workspace_id = $1
+		 WHERE a.organization_id = $1
 		 GROUP BY a.id, a.code, a.name
 		 ORDER BY a.code`,
-		wsID, date,
+		orgID, date,
 	)
 	if err != nil {
 		return nil, err
@@ -377,15 +377,15 @@ func (r *FinanceRepo) GetTrialBalance(ctx context.Context, wsID uuid.UUID, date 
 }
 
 // GetAccountBalance returns the balance for a single account in a date range.
-func (r *FinanceRepo) GetAccountBalance(ctx context.Context, wsID, accountID uuid.UUID, from, to time.Time) (*finance.AccountBalance, error) {
+func (r *FinanceRepo) GetAccountBalance(ctx context.Context, orgID, accountID uuid.UUID, from, to time.Time) (*finance.AccountBalance, error) {
 	var bal finance.AccountBalance
 	bal.AccountID = accountID
 	err := r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(tl.debit), 0), COALESCE(SUM(tl.credit), 0)
 		 FROM transaction_lines tl
 		 JOIN transactions t ON t.id = tl.transaction_id AND t.is_posted = TRUE
-		 WHERE tl.workspace_id = $1 AND tl.account_id = $2 AND t.date >= $3 AND t.date <= $4`,
-		wsID, accountID, from, to,
+		 WHERE tl.organization_id = $1 AND tl.account_id = $2 AND t.date >= $3 AND t.date <= $4`,
+		orgID, accountID, from, to,
 	).Scan(&bal.DebitTotal, &bal.CreditTotal)
 	if err != nil {
 		return nil, err

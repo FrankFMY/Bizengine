@@ -39,22 +39,22 @@ func newMockFinanceRepo() *mockFinanceRepo {
 func (m *mockFinanceRepo) CreateAccount(_ context.Context, _ pgx.Tx, a *Account) error {
 	cp := *a
 	m.accounts[a.ID] = &cp
-	key := a.WorkspaceID.String() + ":" + a.Code
+	key := a.OrganizationID.String() + ":" + a.Code
 	m.accountCodes[key] = &cp
 	return nil
 }
 
-func (m *mockFinanceRepo) GetAccount(_ context.Context, wsID, accountID uuid.UUID) (*Account, error) {
+func (m *mockFinanceRepo) GetAccount(_ context.Context, orgID, accountID uuid.UUID) (*Account, error) {
 	a, ok := m.accounts[accountID]
-	if !ok || a.WorkspaceID != wsID {
+	if !ok || a.OrganizationID != orgID {
 		return nil, assert.AnError
 	}
 	cp := *a
 	return &cp, nil
 }
 
-func (m *mockFinanceRepo) GetAccountByCode(_ context.Context, wsID uuid.UUID, code string) (*Account, error) {
-	key := wsID.String() + ":" + code
+func (m *mockFinanceRepo) GetAccountByCode(_ context.Context, orgID uuid.UUID, code string) (*Account, error) {
+	key := orgID.String() + ":" + code
 	a, ok := m.accountCodes[key]
 	if !ok {
 		return nil, assert.AnError
@@ -63,19 +63,19 @@ func (m *mockFinanceRepo) GetAccountByCode(_ context.Context, wsID uuid.UUID, co
 	return &cp, nil
 }
 
-func (m *mockFinanceRepo) ListAccounts(_ context.Context, wsID uuid.UUID) ([]Account, error) {
+func (m *mockFinanceRepo) ListAccounts(_ context.Context, orgID uuid.UUID) ([]Account, error) {
 	var result []Account
 	for _, a := range m.accounts {
-		if a.WorkspaceID == wsID {
+		if a.OrganizationID == orgID {
 			result = append(result, *a)
 		}
 	}
 	return result, nil
 }
 
-func (m *mockFinanceRepo) DeleteAccount(_ context.Context, wsID, accountID uuid.UUID) error {
-	if a, ok := m.accounts[accountID]; ok && a.WorkspaceID == wsID {
-		key := wsID.String() + ":" + a.Code
+func (m *mockFinanceRepo) DeleteAccount(_ context.Context, orgID, accountID uuid.UUID) error {
+	if a, ok := m.accounts[accountID]; ok && a.OrganizationID == orgID {
+		key := orgID.String() + ":" + a.Code
 		delete(m.accountCodes, key)
 		delete(m.accounts, accountID)
 		return nil
@@ -102,9 +102,9 @@ func (m *mockFinanceRepo) CreateTransactionLines(_ context.Context, _ pgx.Tx, li
 	return nil
 }
 
-func (m *mockFinanceRepo) GetTransaction(_ context.Context, wsID, txnID uuid.UUID) (*Transaction, error) {
+func (m *mockFinanceRepo) GetTransaction(_ context.Context, orgID, txnID uuid.UUID) (*Transaction, error) {
 	t, ok := m.transactions[txnID]
-	if !ok || t.WorkspaceID != wsID {
+	if !ok || t.OrganizationID != orgID {
 		return nil, assert.AnError
 	}
 	cp := *t
@@ -115,10 +115,10 @@ func (m *mockFinanceRepo) GetTransactionLines(_ context.Context, txnID uuid.UUID
 	return m.lines[txnID], nil
 }
 
-func (m *mockFinanceRepo) ListTransactions(_ context.Context, wsID uuid.UUID, _ TransactionFilter) ([]Transaction, int, error) {
+func (m *mockFinanceRepo) ListTransactions(_ context.Context, orgID uuid.UUID, _ TransactionFilter) ([]Transaction, int, error) {
 	var result []Transaction
 	for _, t := range m.transactions {
-		if t.WorkspaceID == wsID {
+		if t.OrganizationID == orgID {
 			result = append(result, *t)
 		}
 	}
@@ -137,19 +137,19 @@ func (m *mockFinanceRepo) CreateInvoice(_ context.Context, inv *Invoice) error {
 	return nil
 }
 
-func (m *mockFinanceRepo) GetInvoice(_ context.Context, wsID, invoiceID uuid.UUID) (*Invoice, error) {
+func (m *mockFinanceRepo) GetInvoice(_ context.Context, orgID, invoiceID uuid.UUID) (*Invoice, error) {
 	inv, ok := m.invoices[invoiceID]
-	if !ok || inv.WorkspaceID != wsID {
+	if !ok || inv.OrganizationID != orgID {
 		return nil, assert.AnError
 	}
 	cp := *inv
 	return &cp, nil
 }
 
-func (m *mockFinanceRepo) ListInvoices(_ context.Context, wsID uuid.UUID, _ InvoiceFilter) ([]Invoice, int, error) {
+func (m *mockFinanceRepo) ListInvoices(_ context.Context, orgID uuid.UUID, _ InvoiceFilter) ([]Invoice, int, error) {
 	var result []Invoice
 	for _, inv := range m.invoices {
-		if inv.WorkspaceID == wsID {
+		if inv.OrganizationID == orgID {
 			result = append(result, *inv)
 		}
 	}
@@ -198,13 +198,13 @@ func setupFinanceService() (*Service, *mockFinanceRepo, *mockBus) {
 // --- tests ---
 
 func TestCreateAccount(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	ctx := context.Background()
 
 	t.Run("success", func(t *testing.T) {
 		svc, repo, _ := setupFinanceService()
 
-		acct, err := svc.CreateAccount(ctx, wsID, CreateAccountInput{
+		acct, err := svc.CreateAccount(ctx, orgID, CreateAccountInput{
 			Code: "44",
 			Name: "Selling expenses",
 			Type: "expense",
@@ -217,7 +217,7 @@ func TestCreateAccount(t *testing.T) {
 
 	t.Run("invalid type", func(t *testing.T) {
 		svc, _, _ := setupFinanceService()
-		_, err := svc.CreateAccount(ctx, wsID, CreateAccountInput{
+		_, err := svc.CreateAccount(ctx, orgID, CreateAccountInput{
 			Code: "01",
 			Name: "Test",
 			Type: "invalid",
@@ -228,7 +228,7 @@ func TestCreateAccount(t *testing.T) {
 
 	t.Run("missing code", func(t *testing.T) {
 		svc, _, _ := setupFinanceService()
-		_, err := svc.CreateAccount(ctx, wsID, CreateAccountInput{
+		_, err := svc.CreateAccount(ctx, orgID, CreateAccountInput{
 			Name: "Test",
 			Type: "asset",
 		})
@@ -238,17 +238,17 @@ func TestCreateAccount(t *testing.T) {
 }
 
 func TestSeedDefaultAccounts(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	ctx := context.Background()
 
 	svc, repo, _ := setupFinanceService()
-	err := svc.SeedDefaultAccounts(ctx, wsID)
+	err := svc.SeedDefaultAccounts(ctx, orgID)
 	require.NoError(t, err)
 	assert.Len(t, repo.accounts, 10)
 }
 
 func TestCreateTransaction(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 	acct1 := uuid.New()
@@ -257,7 +257,7 @@ func TestCreateTransaction(t *testing.T) {
 	t.Run("balanced transaction", func(t *testing.T) {
 		svc, _, bus := setupFinanceService()
 
-		txn, err := svc.CreateTransaction(ctx, wsID, CreateTransactionInput{
+		txn, err := svc.CreateTransaction(ctx, orgID, CreateTransactionInput{
 			Date:        "2025-01-15",
 			Description: "Test transaction",
 			Lines: []CreateTransactionLineInput{
@@ -283,7 +283,7 @@ func TestCreateTransaction(t *testing.T) {
 	t.Run("unbalanced rejected", func(t *testing.T) {
 		svc, _, _ := setupFinanceService()
 
-		_, err := svc.CreateTransaction(ctx, wsID, CreateTransactionInput{
+		_, err := svc.CreateTransaction(ctx, orgID, CreateTransactionInput{
 			Date: "2025-01-15",
 			Lines: []CreateTransactionLineInput{
 				{AccountID: acct1, Debit: 50000},
@@ -298,7 +298,7 @@ func TestCreateTransaction(t *testing.T) {
 	t.Run("less than two lines", func(t *testing.T) {
 		svc, _, _ := setupFinanceService()
 
-		_, err := svc.CreateTransaction(ctx, wsID, CreateTransactionInput{
+		_, err := svc.CreateTransaction(ctx, orgID, CreateTransactionInput{
 			Date: "2025-01-15",
 			Lines: []CreateTransactionLineInput{
 				{AccountID: acct1, Debit: 50000},
@@ -312,7 +312,7 @@ func TestCreateTransaction(t *testing.T) {
 	t.Run("both debit and credit rejected", func(t *testing.T) {
 		svc, _, _ := setupFinanceService()
 
-		_, err := svc.CreateTransaction(ctx, wsID, CreateTransactionInput{
+		_, err := svc.CreateTransaction(ctx, orgID, CreateTransactionInput{
 			Date: "2025-01-15",
 			Lines: []CreateTransactionLineInput{
 				{AccountID: acct1, Debit: 50000, Credit: 50000},
@@ -327,7 +327,7 @@ func TestCreateTransaction(t *testing.T) {
 	t.Run("zero line rejected", func(t *testing.T) {
 		svc, _, _ := setupFinanceService()
 
-		_, err := svc.CreateTransaction(ctx, wsID, CreateTransactionInput{
+		_, err := svc.CreateTransaction(ctx, orgID, CreateTransactionInput{
 			Date: "2025-01-15",
 			Lines: []CreateTransactionLineInput{
 				{AccountID: acct1, Debit: 50000},
@@ -342,7 +342,7 @@ func TestCreateTransaction(t *testing.T) {
 	t.Run("invalid date", func(t *testing.T) {
 		svc, _, _ := setupFinanceService()
 
-		_, err := svc.CreateTransaction(ctx, wsID, CreateTransactionInput{
+		_, err := svc.CreateTransaction(ctx, orgID, CreateTransactionInput{
 			Date: "not-a-date",
 			Lines: []CreateTransactionLineInput{
 				{AccountID: acct1, Debit: 50000},
@@ -356,13 +356,13 @@ func TestCreateTransaction(t *testing.T) {
 }
 
 func TestPostTransaction(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 	ctx := context.Background()
 
 	svc, _, _ := setupFinanceService()
 
-	txn, _ := svc.CreateTransaction(ctx, wsID, CreateTransactionInput{
+	txn, _ := svc.CreateTransaction(ctx, orgID, CreateTransactionInput{
 		Date: "2025-01-15",
 		Lines: []CreateTransactionLineInput{
 			{AccountID: uuid.New(), Debit: 10000},
@@ -370,37 +370,37 @@ func TestPostTransaction(t *testing.T) {
 		},
 	}, &actorID)
 
-	err := svc.PostTransaction(ctx, wsID, txn.ID, &actorID)
+	err := svc.PostTransaction(ctx, orgID, txn.ID, &actorID)
 	require.NoError(t, err)
 
-	err = svc.PostTransaction(ctx, wsID, txn.ID, &actorID)
+	err = svc.PostTransaction(ctx, orgID, txn.ID, &actorID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already posted")
 }
 
 func TestDeleteAccount(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	ctx := context.Background()
 
 	t.Run("delete non-system account", func(t *testing.T) {
 		svc, _, _ := setupFinanceService()
 
-		acct, _ := svc.CreateAccount(ctx, wsID, CreateAccountInput{
+		acct, _ := svc.CreateAccount(ctx, orgID, CreateAccountInput{
 			Code: "99", Name: "Test", Type: "asset",
 		})
 
-		err := svc.DeleteAccount(ctx, wsID, acct.ID)
+		err := svc.DeleteAccount(ctx, orgID, acct.ID)
 		require.NoError(t, err)
 	})
 
 	t.Run("cannot delete system account", func(t *testing.T) {
 		svc, _, _ := setupFinanceService()
-		svc.SeedDefaultAccounts(ctx, wsID)
+		svc.SeedDefaultAccounts(ctx, orgID)
 
-		accounts, _ := svc.ListAccounts(ctx, wsID)
+		accounts, _ := svc.ListAccounts(ctx, orgID)
 		require.NotEmpty(t, accounts)
 
-		err := svc.DeleteAccount(ctx, wsID, accounts[0].ID)
+		err := svc.DeleteAccount(ctx, orgID, accounts[0].ID)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "cannot delete system account")
 	})
@@ -408,25 +408,25 @@ func TestDeleteAccount(t *testing.T) {
 	t.Run("cannot delete account with lines", func(t *testing.T) {
 		svc, repo, _ := setupFinanceService()
 
-		acct, _ := svc.CreateAccount(ctx, wsID, CreateAccountInput{
+		acct, _ := svc.CreateAccount(ctx, orgID, CreateAccountInput{
 			Code: "44", Name: "Expenses", Type: "expense",
 		})
 		repo.hasLines[acct.ID] = true
 
-		err := svc.DeleteAccount(ctx, wsID, acct.ID)
+		err := svc.DeleteAccount(ctx, orgID, acct.ID)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "existing transaction lines")
 	})
 }
 
 func TestCreateInvoice(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	ctx := context.Background()
 
 	t.Run("success", func(t *testing.T) {
 		svc, _, _ := setupFinanceService()
 
-		inv, err := svc.CreateInvoice(ctx, wsID, CreateInvoiceInput{
+		inv, err := svc.CreateInvoice(ctx, orgID, CreateInvoiceInput{
 			Number:   "INV-001",
 			Type:     "outgoing",
 			Subtotal: 100000,
@@ -442,7 +442,7 @@ func TestCreateInvoice(t *testing.T) {
 
 	t.Run("invalid type", func(t *testing.T) {
 		svc, _, _ := setupFinanceService()
-		_, err := svc.CreateInvoice(ctx, wsID, CreateInvoiceInput{
+		_, err := svc.CreateInvoice(ctx, orgID, CreateInvoiceInput{
 			Number: "INV-002",
 			Type:   "invalid",
 		})
@@ -452,32 +452,32 @@ func TestCreateInvoice(t *testing.T) {
 }
 
 func TestMarkInvoicePaid(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	ctx := context.Background()
 
 	svc, _, _ := setupFinanceService()
 
-	inv, _ := svc.CreateInvoice(ctx, wsID, CreateInvoiceInput{
+	inv, _ := svc.CreateInvoice(ctx, orgID, CreateInvoiceInput{
 		Number: "INV-001",
 		Type:   "outgoing",
 		Total:  50000,
 	})
 
-	err := svc.MarkInvoicePaid(ctx, wsID, inv.ID)
+	err := svc.MarkInvoicePaid(ctx, orgID, inv.ID)
 	require.NoError(t, err)
 
-	err = svc.MarkInvoicePaid(ctx, wsID, inv.ID)
+	err = svc.MarkInvoicePaid(ctx, orgID, inv.ID)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "already paid")
 }
 
 func TestAutoTransaction(t *testing.T) {
-	wsID := uuid.New()
+	orgID := uuid.New()
 	ctx := context.Background()
 
 	svc, _, _ := setupFinanceService()
-	svc.SeedDefaultAccounts(ctx, wsID)
+	svc.SeedDefaultAccounts(ctx, orgID)
 
-	err := svc.CreateAutoTransaction(ctx, wsID, "2025-01-15", "Order payment", "51", "62", 50000, nil, nil)
+	err := svc.CreateAutoTransaction(ctx, orgID, "2025-01-15", "Order payment", "51", "62", 50000, nil, nil)
 	require.NoError(t, err)
 }

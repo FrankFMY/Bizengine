@@ -82,7 +82,7 @@ func NewService(entitySvc *entity.Service, repo Repository, eventBus event.Bus) 
 }
 
 // CreateProduct creates a product entity with its components.
-func (s *Service) CreateProduct(ctx context.Context, wsID uuid.UUID, input CreateProductInput, actorID *uuid.UUID) (*Product, error) {
+func (s *Service) CreateProduct(ctx context.Context, orgID uuid.UUID, input CreateProductInput, actorID *uuid.UUID) (*Product, error) {
 	if input.Name == "" {
 		return nil, errs.NewBadRequest("name is required")
 	}
@@ -92,14 +92,14 @@ func (s *Service) CreateProduct(ctx context.Context, wsID uuid.UUID, input Creat
 
 	// Check SKU uniqueness
 	if input.SKU != "" {
-		existing, err := s.repo.FindBySKU(ctx, wsID, input.SKU)
+		existing, err := s.repo.FindBySKU(ctx, orgID, input.SKU)
 		if err == nil && existing != nil {
 			return nil, errs.NewConflict("SKU already exists: " + input.SKU)
 		}
 	}
 
 	// Create entity
-	e, err := s.entitySvc.Create(ctx, wsID, entity.CreateEntityInput{
+	e, err := s.entitySvc.Create(ctx, orgID, entity.CreateEntityInput{
 		Kind:     "product",
 		Name:     input.Name,
 		ParentID: input.CategoryID,
@@ -109,7 +109,7 @@ func (s *Service) CreateProduct(ctx context.Context, wsID uuid.UUID, input Creat
 	}
 
 	// Set components
-	if _, err := s.entitySvc.SetComponent(ctx, wsID, e.ID, "price", input.Price, actorID); err != nil {
+	if _, err := s.entitySvc.SetComponent(ctx, orgID, e.ID, "price", input.Price, actorID); err != nil {
 		return nil, err
 	}
 
@@ -117,17 +117,17 @@ func (s *Service) CreateProduct(ctx context.Context, wsID uuid.UUID, input Creat
 		input.Barcode, _ = json.Marshal(map[string]string{"internal": input.SKU})
 	}
 	if input.Barcode != nil {
-		if _, err := s.entitySvc.SetComponent(ctx, wsID, e.ID, "barcode", input.Barcode, actorID); err != nil {
+		if _, err := s.entitySvc.SetComponent(ctx, orgID, e.ID, "barcode", input.Barcode, actorID); err != nil {
 			return nil, err
 		}
 	}
 	if input.Attributes != nil {
-		if _, err := s.entitySvc.SetComponent(ctx, wsID, e.ID, "attributes", input.Attributes, actorID); err != nil {
+		if _, err := s.entitySvc.SetComponent(ctx, orgID, e.ID, "attributes", input.Attributes, actorID); err != nil {
 			return nil, err
 		}
 	}
 	if input.Media != nil {
-		if _, err := s.entitySvc.SetComponent(ctx, wsID, e.ID, "media", input.Media, actorID); err != nil {
+		if _, err := s.entitySvc.SetComponent(ctx, orgID, e.ID, "media", input.Media, actorID); err != nil {
 			return nil, err
 		}
 	}
@@ -135,7 +135,7 @@ func (s *Service) CreateProduct(ctx context.Context, wsID uuid.UUID, input Creat
 	// Publish catalog-specific event
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		EntityID:    &e.ID,
 		Type:        "catalog.product.created",
 		ActorID:     actorID,
@@ -150,12 +150,12 @@ func (s *Service) CreateProduct(ctx context.Context, wsID uuid.UUID, input Creat
 	})
 	s.eventBus.Publish(ctx, ev)
 
-	return s.GetProduct(ctx, wsID, e.ID)
+	return s.GetProduct(ctx, orgID, e.ID)
 }
 
 // GetProduct returns a product with all its components.
-func (s *Service) GetProduct(ctx context.Context, wsID uuid.UUID, productID uuid.UUID) (*Product, error) {
-	e, err := s.entitySvc.Get(ctx, wsID, productID, true)
+func (s *Service) GetProduct(ctx context.Context, orgID uuid.UUID, productID uuid.UUID) (*Product, error) {
+	e, err := s.entitySvc.Get(ctx, orgID, productID, true)
 	if err != nil {
 		return nil, err
 	}
@@ -166,10 +166,10 @@ func (s *Service) GetProduct(ctx context.Context, wsID uuid.UUID, productID uuid
 }
 
 // ListProducts returns products matching the filter.
-func (s *Service) ListProducts(ctx context.Context, wsID uuid.UUID, filter ProductFilter) (*types.PageResponse[Product], error) {
+func (s *Service) ListProducts(ctx context.Context, orgID uuid.UUID, filter ProductFilter) (*types.PageResponse[Product], error) {
 	filter.Page.Normalize()
 
-	products, total, err := s.repo.ListProductsWithComponents(ctx, wsID, filter)
+	products, total, err := s.repo.ListProductsWithComponents(ctx, orgID, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -187,8 +187,8 @@ func (s *Service) ListProducts(ctx context.Context, wsID uuid.UUID, filter Produ
 }
 
 // UpdateProduct updates a product and its components.
-func (s *Service) UpdateProduct(ctx context.Context, wsID uuid.UUID, productID uuid.UUID, input UpdateProductInput, actorID *uuid.UUID) (*Product, error) {
-	e, err := s.entitySvc.Get(ctx, wsID, productID, false)
+func (s *Service) UpdateProduct(ctx context.Context, orgID uuid.UUID, productID uuid.UUID, input UpdateProductInput, actorID *uuid.UUID) (*Product, error) {
+	e, err := s.entitySvc.Get(ctx, orgID, productID, false)
 	if err != nil {
 		return nil, err
 	}
@@ -205,29 +205,29 @@ func (s *Service) UpdateProduct(ctx context.Context, wsID uuid.UUID, productID u
 		updateInput.ParentID = input.CategoryID
 	}
 	if input.Name != nil || input.CategoryID != nil {
-		if _, err := s.entitySvc.Update(ctx, wsID, productID, updateInput, actorID); err != nil {
+		if _, err := s.entitySvc.Update(ctx, orgID, productID, updateInput, actorID); err != nil {
 			return nil, err
 		}
 	}
 
 	// Update components
 	if input.Price != nil {
-		if _, err := s.entitySvc.SetComponent(ctx, wsID, productID, "price", input.Price, actorID); err != nil {
+		if _, err := s.entitySvc.SetComponent(ctx, orgID, productID, "price", input.Price, actorID); err != nil {
 			return nil, err
 		}
 	}
 	if input.Barcode != nil {
-		if _, err := s.entitySvc.SetComponent(ctx, wsID, productID, "barcode", input.Barcode, actorID); err != nil {
+		if _, err := s.entitySvc.SetComponent(ctx, orgID, productID, "barcode", input.Barcode, actorID); err != nil {
 			return nil, err
 		}
 	}
 	if input.Attributes != nil {
-		if _, err := s.entitySvc.SetComponent(ctx, wsID, productID, "attributes", input.Attributes, actorID); err != nil {
+		if _, err := s.entitySvc.SetComponent(ctx, orgID, productID, "attributes", input.Attributes, actorID); err != nil {
 			return nil, err
 		}
 	}
 	if input.Media != nil {
-		if _, err := s.entitySvc.SetComponent(ctx, wsID, productID, "media", input.Media, actorID); err != nil {
+		if _, err := s.entitySvc.SetComponent(ctx, orgID, productID, "media", input.Media, actorID); err != nil {
 			return nil, err
 		}
 	}
@@ -235,7 +235,7 @@ func (s *Service) UpdateProduct(ctx context.Context, wsID uuid.UUID, productID u
 	// Publish event
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		EntityID:    &productID,
 		Type:        "catalog.product.updated",
 		ActorID:     actorID,
@@ -245,19 +245,19 @@ func (s *Service) UpdateProduct(ctx context.Context, wsID uuid.UUID, productID u
 	ev.Data, _ = json.Marshal(map[string]any{"id": productID})
 	s.eventBus.Publish(ctx, ev)
 
-	return s.GetProduct(ctx, wsID, productID)
+	return s.GetProduct(ctx, orgID, productID)
 }
 
 // ArchiveProduct sets a product status to archived.
-func (s *Service) ArchiveProduct(ctx context.Context, wsID uuid.UUID, productID uuid.UUID, actorID *uuid.UUID) error {
+func (s *Service) ArchiveProduct(ctx context.Context, orgID uuid.UUID, productID uuid.UUID, actorID *uuid.UUID) error {
 	status := "archived"
-	if _, err := s.entitySvc.Update(ctx, wsID, productID, entity.UpdateEntityInput{Status: &status}, actorID); err != nil {
+	if _, err := s.entitySvc.Update(ctx, orgID, productID, entity.UpdateEntityInput{Status: &status}, actorID); err != nil {
 		return err
 	}
 
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		EntityID:    &productID,
 		Type:        "catalog.product.archived",
 		ActorID:     actorID,
@@ -270,12 +270,12 @@ func (s *Service) ArchiveProduct(ctx context.Context, wsID uuid.UUID, productID 
 }
 
 // CreateCategory creates a category entity.
-func (s *Service) CreateCategory(ctx context.Context, wsID uuid.UUID, input CreateCategoryInput, actorID *uuid.UUID) (*Category, error) {
+func (s *Service) CreateCategory(ctx context.Context, orgID uuid.UUID, input CreateCategoryInput, actorID *uuid.UUID) (*Category, error) {
 	if input.Name == "" {
 		return nil, errs.NewBadRequest("name is required")
 	}
 
-	e, err := s.entitySvc.Create(ctx, wsID, entity.CreateEntityInput{
+	e, err := s.entitySvc.Create(ctx, orgID, entity.CreateEntityInput{
 		Kind:     "category",
 		Name:     input.Name,
 		ParentID: input.ParentID,
@@ -288,7 +288,7 @@ func (s *Service) CreateCategory(ctx context.Context, wsID uuid.UUID, input Crea
 }
 
 // ListCategories returns categories, optionally filtered by parent.
-func (s *Service) ListCategories(ctx context.Context, wsID uuid.UUID, parentID *uuid.UUID) ([]Category, error) {
+func (s *Service) ListCategories(ctx context.Context, orgID uuid.UUID, parentID *uuid.UUID) ([]Category, error) {
 	kind := "category"
 	filter := entity.ListFilter{
 		Kind:     &kind,
@@ -296,7 +296,7 @@ func (s *Service) ListCategories(ctx context.Context, wsID uuid.UUID, parentID *
 		Page:     types.PageRequest{Limit: 200, Sort: "sort_order", Order: "asc"},
 	}
 
-	result, err := s.entitySvc.List(ctx, wsID, filter, false)
+	result, err := s.entitySvc.List(ctx, orgID, filter, false)
 	if err != nil {
 		return nil, err
 	}
@@ -309,9 +309,9 @@ func (s *Service) ListCategories(ctx context.Context, wsID uuid.UUID, parentID *
 }
 
 // UpdateCategory updates a category.
-func (s *Service) UpdateCategory(ctx context.Context, wsID uuid.UUID, categoryID uuid.UUID, name *string, parentID *uuid.UUID, actorID *uuid.UUID) (*Category, error) {
+func (s *Service) UpdateCategory(ctx context.Context, orgID uuid.UUID, categoryID uuid.UUID, name *string, parentID *uuid.UUID, actorID *uuid.UUID) (*Category, error) {
 	input := entity.UpdateEntityInput{Name: name, ParentID: parentID}
-	e, err := s.entitySvc.Update(ctx, wsID, categoryID, input, actorID)
+	e, err := s.entitySvc.Update(ctx, orgID, categoryID, input, actorID)
 	if err != nil {
 		return nil, err
 	}
@@ -319,9 +319,9 @@ func (s *Service) UpdateCategory(ctx context.Context, wsID uuid.UUID, categoryID
 }
 
 // DeleteCategory deletes a category (only if no products in it).
-func (s *Service) DeleteCategory(ctx context.Context, wsID uuid.UUID, categoryID uuid.UUID, actorID *uuid.UUID) error {
+func (s *Service) DeleteCategory(ctx context.Context, orgID uuid.UUID, categoryID uuid.UUID, actorID *uuid.UUID) error {
 	kind := "product"
-	result, err := s.entitySvc.List(ctx, wsID, entity.ListFilter{
+	result, err := s.entitySvc.List(ctx, orgID, entity.ListFilter{
 		Kind:     &kind,
 		ParentID: &categoryID,
 		Page:     types.PageRequest{Limit: 1},
@@ -333,7 +333,7 @@ func (s *Service) DeleteCategory(ctx context.Context, wsID uuid.UUID, categoryID
 		return errs.NewConflict("category has products, cannot delete")
 	}
 
-	return s.entitySvc.Delete(ctx, wsID, categoryID, actorID)
+	return s.entitySvc.Delete(ctx, orgID, categoryID, actorID)
 }
 
 func entityToProduct(e *types.Entity) *Product {

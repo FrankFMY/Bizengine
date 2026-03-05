@@ -52,7 +52,7 @@ func (m *mockViewManager) Sync(_ context.Context, _ string, _ uuid.UUID, req vie
 
 func viewsRouter(h *ViewsHandler) http.Handler {
 	r := chi.NewRouter()
-	r.Route("/api/v1/workspaces/{wsID}/views", func(r chi.Router) {
+	r.Route("/api/v1/organizations/{orgID}/views", func(r chi.Router) {
 		r.Post("/subscribe", h.Subscribe)
 		r.Post("/unsubscribe", h.Unsubscribe)
 		r.Get("/active", h.Active)
@@ -63,7 +63,7 @@ func viewsRouter(h *ViewsHandler) http.Handler {
 
 func withViewsAuth(r *http.Request) *http.Request {
 	ctx := context.WithValue(r.Context(), auth.ExportedCtxKeyUserID, uuid.New())
-	ctx = context.WithValue(ctx, auth.ExportedCtxKeyWorkspaceID, uuid.New())
+	ctx = context.WithValue(ctx, auth.ExportedCtxKeyOrganizationID, uuid.New())
 	ctx = context.WithValue(ctx, auth.ExportedCtxKeyRole, "admin")
 	seanceKey := auth.ExportedCtxKeySeanceID()
 	ctx = context.WithValue(ctx, seanceKey, "test-seance-id")
@@ -77,9 +77,9 @@ func TestViewsHandler_Subscribe(t *testing.T) {
 	h := NewViewsHandler(mgr)
 	router := viewsRouter(h)
 
-	wsID := uuid.New()
+	orgID := uuid.New()
 	body, _ := json.Marshal(map[string]any{"view": "orders_list", "params": map[string]any{"status": "active"}})
-	req := httptest.NewRequest("POST", "/api/v1/workspaces/"+wsID.String()+"/views/subscribe", bytes.NewReader(body))
+	req := httptest.NewRequest("POST", "/api/v1/organizations/"+orgID.String()+"/views/subscribe", bytes.NewReader(body))
 	req = withViewsAuth(req)
 
 	w := httptest.NewRecorder()
@@ -99,9 +99,9 @@ func TestViewsHandler_Subscribe_MissingView(t *testing.T) {
 	h := NewViewsHandler(&mockViewManager{})
 	router := viewsRouter(h)
 
-	wsID := uuid.New()
+	orgID := uuid.New()
 	body, _ := json.Marshal(map[string]any{})
-	req := httptest.NewRequest("POST", "/api/v1/workspaces/"+wsID.String()+"/views/subscribe", bytes.NewReader(body))
+	req := httptest.NewRequest("POST", "/api/v1/organizations/"+orgID.String()+"/views/subscribe", bytes.NewReader(body))
 	req = withViewsAuth(req)
 
 	w := httptest.NewRecorder()
@@ -115,9 +115,9 @@ func TestViewsHandler_Unsubscribe(t *testing.T) {
 	h := NewViewsHandler(mgr)
 	router := viewsRouter(h)
 
-	wsID := uuid.New()
+	orgID := uuid.New()
 	body, _ := json.Marshal(map[string]any{"view": "orders_list", "params_hash": "abc123"})
-	req := httptest.NewRequest("POST", "/api/v1/workspaces/"+wsID.String()+"/views/unsubscribe", bytes.NewReader(body))
+	req := httptest.NewRequest("POST", "/api/v1/organizations/"+orgID.String()+"/views/unsubscribe", bytes.NewReader(body))
 	req = withViewsAuth(req)
 
 	w := httptest.NewRecorder()
@@ -136,8 +136,8 @@ func TestViewsHandler_Active(t *testing.T) {
 	h := NewViewsHandler(mgr)
 	router := viewsRouter(h)
 
-	wsID := uuid.New()
-	req := httptest.NewRequest("GET", "/api/v1/workspaces/"+wsID.String()+"/views/active", nil)
+	orgID := uuid.New()
+	req := httptest.NewRequest("GET", "/api/v1/organizations/"+orgID.String()+"/views/active", nil)
 	req = withViewsAuth(req)
 
 	w := httptest.NewRecorder()
@@ -157,7 +157,7 @@ func TestViewsHandler_Sync(t *testing.T) {
 	h := NewViewsHandler(mgr)
 	router := viewsRouter(h)
 
-	wsID := uuid.New()
+	orgID := uuid.New()
 	syncReq := views.SyncRequest{
 		Views: []views.SyncView{{View: "orders_list", ParamsHash: "abc", Version: 40}},
 		Tables: map[string]map[string]int64{
@@ -165,7 +165,7 @@ func TestViewsHandler_Sync(t *testing.T) {
 		},
 	}
 	body, _ := json.Marshal(syncReq)
-	req := httptest.NewRequest("POST", "/api/v1/workspaces/"+wsID.String()+"/views/sync", bytes.NewReader(body))
+	req := httptest.NewRequest("POST", "/api/v1/organizations/"+orgID.String()+"/views/sync", bytes.NewReader(body))
 	req = withViewsAuth(req)
 
 	w := httptest.NewRecorder()

@@ -15,16 +15,16 @@ import (
 type Repository interface {
 	// Entity CRUD
 	Create(ctx context.Context, e *types.Entity) error
-	GetByID(ctx context.Context, wsID, id uuid.UUID) (*types.Entity, error)
-	List(ctx context.Context, wsID uuid.UUID, filter ListFilter) ([]types.Entity, int, error)
+	GetByID(ctx context.Context, orgID, id uuid.UUID) (*types.Entity, error)
+	List(ctx context.Context, orgID uuid.UUID, filter ListFilter) ([]types.Entity, int, error)
 	Update(ctx context.Context, e *types.Entity) error
-	SoftDelete(ctx context.Context, wsID, id uuid.UUID) error
+	SoftDelete(ctx context.Context, orgID, id uuid.UUID) error
 
 	// Component CRUD
 	SetComponent(ctx context.Context, c *types.Component) error
-	GetComponent(ctx context.Context, wsID, entityID uuid.UUID, compType string) (*types.Component, error)
-	ListComponents(ctx context.Context, wsID, entityID uuid.UUID) ([]types.Component, error)
-	DeleteComponent(ctx context.Context, wsID, entityID uuid.UUID, compType string) error
+	GetComponent(ctx context.Context, orgID, entityID uuid.UUID, compType string) (*types.Component, error)
+	ListComponents(ctx context.Context, orgID, entityID uuid.UUID) ([]types.Component, error)
+	DeleteComponent(ctx context.Context, orgID, entityID uuid.UUID, compType string) error
 
 	// Transactional support
 	WithTx(ctx context.Context, fn func(tx pgx.Tx) error) error

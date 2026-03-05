@@ -27,21 +27,21 @@ func NewHRRepo(pool *pgxpool.Pool) *HRRepo {
 // CreateShift inserts a shift record.
 func (r *HRRepo) CreateShift(ctx context.Context, s *hr.Shift) error {
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO shifts (id, workspace_id, employee_id, location_id, start_time, end_time, break_minutes, status, notes, created_at)
+		`INSERT INTO shifts (id, organization_id, employee_id, location_id, start_time, end_time, break_minutes, status, notes, created_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-		s.ID, s.WorkspaceID, s.EmployeeID, s.LocationID, s.StartTime, s.EndTime, s.BreakMinutes, s.Status, s.Notes, s.CreatedAt,
+		s.ID, s.OrganizationID, s.EmployeeID, s.LocationID, s.StartTime, s.EndTime, s.BreakMinutes, s.Status, s.Notes, s.CreatedAt,
 	)
 	return err
 }
 
 // GetShift returns a shift by ID.
-func (r *HRRepo) GetShift(ctx context.Context, wsID, shiftID uuid.UUID) (*hr.Shift, error) {
+func (r *HRRepo) GetShift(ctx context.Context, orgID, shiftID uuid.UUID) (*hr.Shift, error) {
 	var s hr.Shift
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, workspace_id, employee_id, location_id, start_time, end_time, break_minutes, status, notes, created_at
-		 FROM shifts WHERE workspace_id = $1 AND id = $2`,
-		wsID, shiftID,
-	).Scan(&s.ID, &s.WorkspaceID, &s.EmployeeID, &s.LocationID, &s.StartTime, &s.EndTime, &s.BreakMinutes, &s.Status, &s.Notes, &s.CreatedAt)
+		`SELECT id, organization_id, employee_id, location_id, start_time, end_time, break_minutes, status, notes, created_at
+		 FROM shifts WHERE organization_id = $1 AND id = $2`,
+		orgID, shiftID,
+	).Scan(&s.ID, &s.OrganizationID, &s.EmployeeID, &s.LocationID, &s.StartTime, &s.EndTime, &s.BreakMinutes, &s.Status, &s.Notes, &s.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errs.NewNotFound("shift not found")
@@ -52,15 +52,15 @@ func (r *HRRepo) GetShift(ctx context.Context, wsID, shiftID uuid.UUID) (*hr.Shi
 }
 
 // ListShifts returns shifts matching the filter.
-func (r *HRRepo) ListShifts(ctx context.Context, wsID uuid.UUID, filter hr.ShiftFilter) ([]hr.Shift, int, error) {
+func (r *HRRepo) ListShifts(ctx context.Context, orgID uuid.UUID, filter hr.ShiftFilter) ([]hr.Shift, int, error) {
 	filter.Page.Normalize()
 
 	var conditions []string
 	var args []any
 	argIdx := 1
 
-	conditions = append(conditions, fmt.Sprintf("workspace_id = $%d", argIdx))
-	args = append(args, wsID)
+	conditions = append(conditions, fmt.Sprintf("organization_id = $%d", argIdx))
+	args = append(args, orgID)
 	argIdx++
 
 	if filter.EmployeeID != nil {
@@ -92,7 +92,7 @@ func (r *HRRepo) ListShifts(ctx context.Context, wsID uuid.UUID, filter hr.Shift
 	}
 
 	query := fmt.Sprintf(
-		`SELECT id, workspace_id, employee_id, location_id, start_time, end_time, break_minutes, status, notes, created_at
+		`SELECT id, organization_id, employee_id, location_id, start_time, end_time, break_minutes, status, notes, created_at
 		 FROM shifts WHERE %s ORDER BY start_time DESC LIMIT $%d OFFSET $%d`,
 		where, argIdx, argIdx+1,
 	)
@@ -107,7 +107,7 @@ func (r *HRRepo) ListShifts(ctx context.Context, wsID uuid.UUID, filter hr.Shift
 	var shifts []hr.Shift
 	for rows.Next() {
 		var s hr.Shift
-		if err := rows.Scan(&s.ID, &s.WorkspaceID, &s.EmployeeID, &s.LocationID, &s.StartTime, &s.EndTime, &s.BreakMinutes, &s.Status, &s.Notes, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.OrganizationID, &s.EmployeeID, &s.LocationID, &s.StartTime, &s.EndTime, &s.BreakMinutes, &s.Status, &s.Notes, &s.CreatedAt); err != nil {
 			return nil, 0, err
 		}
 		shifts = append(shifts, s)
@@ -119,17 +119,17 @@ func (r *HRRepo) ListShifts(ctx context.Context, wsID uuid.UUID, filter hr.Shift
 func (r *HRRepo) UpdateShift(ctx context.Context, s *hr.Shift) error {
 	_, err := r.pool.Exec(ctx,
 		`UPDATE shifts SET start_time = $3, end_time = $4, break_minutes = $5, status = $6, notes = $7
-		 WHERE workspace_id = $1 AND id = $2`,
-		s.WorkspaceID, s.ID, s.StartTime, s.EndTime, s.BreakMinutes, s.Status, s.Notes,
+		 WHERE organization_id = $1 AND id = $2`,
+		s.OrganizationID, s.ID, s.StartTime, s.EndTime, s.BreakMinutes, s.Status, s.Notes,
 	)
 	return err
 }
 
 // DeleteShift deletes a shift by ID.
-func (r *HRRepo) DeleteShift(ctx context.Context, wsID, shiftID uuid.UUID) error {
+func (r *HRRepo) DeleteShift(ctx context.Context, orgID, shiftID uuid.UUID) error {
 	tag, err := r.pool.Exec(ctx,
-		`DELETE FROM shifts WHERE workspace_id = $1 AND id = $2`,
-		wsID, shiftID,
+		`DELETE FROM shifts WHERE organization_id = $1 AND id = $2`,
+		orgID, shiftID,
 	)
 	if err != nil {
 		return err
@@ -141,12 +141,12 @@ func (r *HRRepo) DeleteShift(ctx context.Context, wsID, shiftID uuid.UUID) error
 }
 
 // HasOverlappingShift checks if there's an overlapping shift for the employee.
-func (r *HRRepo) HasOverlappingShift(ctx context.Context, wsID, employeeID uuid.UUID, start, end time.Time, excludeID *uuid.UUID) (bool, error) {
+func (r *HRRepo) HasOverlappingShift(ctx context.Context, orgID, employeeID uuid.UUID, start, end time.Time, excludeID *uuid.UUID) (bool, error) {
 	query := `SELECT EXISTS(
 		SELECT 1 FROM shifts
-		WHERE workspace_id = $1 AND employee_id = $2
+		WHERE organization_id = $1 AND employee_id = $2
 		  AND start_time < $4 AND end_time > $3`
-	args := []any{wsID, employeeID, start, end}
+	args := []any{orgID, employeeID, start, end}
 	if excludeID != nil {
 		query += " AND id != $5"
 		args = append(args, *excludeID)
@@ -161,21 +161,21 @@ func (r *HRRepo) HasOverlappingShift(ctx context.Context, wsID, employeeID uuid.
 // CreateTimesheet inserts a timesheet record.
 func (r *HRRepo) CreateTimesheet(ctx context.Context, ts *hr.Timesheet) error {
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO timesheets (id, workspace_id, employee_id, shift_id, clock_in, clock_out, hours_worked, status, created_at)
+		`INSERT INTO timesheets (id, organization_id, employee_id, shift_id, clock_in, clock_out, hours_worked, status, created_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		ts.ID, ts.WorkspaceID, ts.EmployeeID, ts.ShiftID, ts.ClockIn, ts.ClockOut, ts.HoursWorked, ts.Status, ts.CreatedAt,
+		ts.ID, ts.OrganizationID, ts.EmployeeID, ts.ShiftID, ts.ClockIn, ts.ClockOut, ts.HoursWorked, ts.Status, ts.CreatedAt,
 	)
 	return err
 }
 
 // GetTimesheet returns a timesheet by ID.
-func (r *HRRepo) GetTimesheet(ctx context.Context, wsID, tsID uuid.UUID) (*hr.Timesheet, error) {
+func (r *HRRepo) GetTimesheet(ctx context.Context, orgID, tsID uuid.UUID) (*hr.Timesheet, error) {
 	var ts hr.Timesheet
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, workspace_id, employee_id, shift_id, clock_in, clock_out, hours_worked, status, created_at
-		 FROM timesheets WHERE workspace_id = $1 AND id = $2`,
-		wsID, tsID,
-	).Scan(&ts.ID, &ts.WorkspaceID, &ts.EmployeeID, &ts.ShiftID, &ts.ClockIn, &ts.ClockOut, &ts.HoursWorked, &ts.Status, &ts.CreatedAt)
+		`SELECT id, organization_id, employee_id, shift_id, clock_in, clock_out, hours_worked, status, created_at
+		 FROM timesheets WHERE organization_id = $1 AND id = $2`,
+		orgID, tsID,
+	).Scan(&ts.ID, &ts.OrganizationID, &ts.EmployeeID, &ts.ShiftID, &ts.ClockIn, &ts.ClockOut, &ts.HoursWorked, &ts.Status, &ts.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errs.NewNotFound("timesheet not found")
@@ -186,15 +186,15 @@ func (r *HRRepo) GetTimesheet(ctx context.Context, wsID, tsID uuid.UUID) (*hr.Ti
 }
 
 // ListTimesheets returns timesheets matching the filter.
-func (r *HRRepo) ListTimesheets(ctx context.Context, wsID uuid.UUID, filter hr.TimesheetFilter) ([]hr.Timesheet, int, error) {
+func (r *HRRepo) ListTimesheets(ctx context.Context, orgID uuid.UUID, filter hr.TimesheetFilter) ([]hr.Timesheet, int, error) {
 	filter.Page.Normalize()
 
 	var conditions []string
 	var args []any
 	argIdx := 1
 
-	conditions = append(conditions, fmt.Sprintf("workspace_id = $%d", argIdx))
-	args = append(args, wsID)
+	conditions = append(conditions, fmt.Sprintf("organization_id = $%d", argIdx))
+	args = append(args, orgID)
 	argIdx++
 
 	if filter.EmployeeID != nil {
@@ -226,7 +226,7 @@ func (r *HRRepo) ListTimesheets(ctx context.Context, wsID uuid.UUID, filter hr.T
 	}
 
 	query := fmt.Sprintf(
-		`SELECT id, workspace_id, employee_id, shift_id, clock_in, clock_out, hours_worked, status, created_at
+		`SELECT id, organization_id, employee_id, shift_id, clock_in, clock_out, hours_worked, status, created_at
 		 FROM timesheets WHERE %s ORDER BY clock_in DESC LIMIT $%d OFFSET $%d`,
 		where, argIdx, argIdx+1,
 	)
@@ -241,7 +241,7 @@ func (r *HRRepo) ListTimesheets(ctx context.Context, wsID uuid.UUID, filter hr.T
 	var timesheets []hr.Timesheet
 	for rows.Next() {
 		var ts hr.Timesheet
-		if err := rows.Scan(&ts.ID, &ts.WorkspaceID, &ts.EmployeeID, &ts.ShiftID, &ts.ClockIn, &ts.ClockOut, &ts.HoursWorked, &ts.Status, &ts.CreatedAt); err != nil {
+		if err := rows.Scan(&ts.ID, &ts.OrganizationID, &ts.EmployeeID, &ts.ShiftID, &ts.ClockIn, &ts.ClockOut, &ts.HoursWorked, &ts.Status, &ts.CreatedAt); err != nil {
 			return nil, 0, err
 		}
 		timesheets = append(timesheets, ts)
@@ -253,20 +253,20 @@ func (r *HRRepo) ListTimesheets(ctx context.Context, wsID uuid.UUID, filter hr.T
 func (r *HRRepo) UpdateTimesheet(ctx context.Context, ts *hr.Timesheet) error {
 	_, err := r.pool.Exec(ctx,
 		`UPDATE timesheets SET clock_out = $3, hours_worked = $4, status = $5
-		 WHERE workspace_id = $1 AND id = $2`,
-		ts.WorkspaceID, ts.ID, ts.ClockOut, ts.HoursWorked, ts.Status,
+		 WHERE organization_id = $1 AND id = $2`,
+		ts.OrganizationID, ts.ID, ts.ClockOut, ts.HoursWorked, ts.Status,
 	)
 	return err
 }
 
 // GetOpenTimesheet returns an open timesheet for an employee, or nil.
-func (r *HRRepo) GetOpenTimesheet(ctx context.Context, wsID, employeeID uuid.UUID) (*hr.Timesheet, error) {
+func (r *HRRepo) GetOpenTimesheet(ctx context.Context, orgID, employeeID uuid.UUID) (*hr.Timesheet, error) {
 	var ts hr.Timesheet
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, workspace_id, employee_id, shift_id, clock_in, clock_out, hours_worked, status, created_at
-		 FROM timesheets WHERE workspace_id = $1 AND employee_id = $2 AND status = 'open' LIMIT 1`,
-		wsID, employeeID,
-	).Scan(&ts.ID, &ts.WorkspaceID, &ts.EmployeeID, &ts.ShiftID, &ts.ClockIn, &ts.ClockOut, &ts.HoursWorked, &ts.Status, &ts.CreatedAt)
+		`SELECT id, organization_id, employee_id, shift_id, clock_in, clock_out, hours_worked, status, created_at
+		 FROM timesheets WHERE organization_id = $1 AND employee_id = $2 AND status = 'open' LIMIT 1`,
+		orgID, employeeID,
+	).Scan(&ts.ID, &ts.OrganizationID, &ts.EmployeeID, &ts.ShiftID, &ts.ClockIn, &ts.ClockOut, &ts.HoursWorked, &ts.Status, &ts.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil

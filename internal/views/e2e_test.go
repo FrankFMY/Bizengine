@@ -64,7 +64,7 @@ func (f *simulatedFactory) build(_ context.Context, _ *pgxpool.Pool, _ uuid.UUID
 // 4. Verify diff contains correct refs_patch and new tables
 func TestE2E_SubscribeEventInvalidateDiff(t *testing.T) {
 	ctx := context.Background()
-	wsID := uuid.New()
+	orgID := uuid.New()
 	userID := uuid.New()
 	seanceID := "e2e-seance"
 
@@ -120,7 +120,7 @@ func TestE2E_SubscribeEventInvalidateDiff(t *testing.T) {
 
 	// Step 1: Subscribe
 	whID := uuid.New()
-	result, err := mgr.Subscribe(ctx, seanceID, wsID, userID, "warehouse_stock_list", map[string]any{
+	result, err := mgr.Subscribe(ctx, seanceID, orgID, userID, "warehouse_stock_list", map[string]any{
 		"warehouse_id": whID.String(),
 	})
 	require.NoError(t, err)
@@ -137,14 +137,14 @@ func TestE2E_SubscribeEventInvalidateDiff(t *testing.T) {
 	// Step 2: Simulate event → trigger → ChangeEvent
 	ev := types.Event{
 		Type:        "warehouse.stock.received",
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		Data:        []byte(`{"product_id":"prod-1"}`),
 	}
 	changes := EventToChanges(ev)
 	require.Len(t, changes, 1)
 	assert.Equal(t, "stock_levels", changes[0].Table)
 	assert.Equal(t, "prod-1", changes[0].RowID)
-	assert.Equal(t, wsID, changes[0].WorkspaceID)
+	assert.Equal(t, orgID, changes[0].OrganizationID)
 
 	// Step 3: Invalidate
 	mgr.Invalidate(ctx, changes[0])
@@ -178,7 +178,7 @@ func TestE2E_SubscribeEventInvalidateDiff(t *testing.T) {
 // TestE2E_SubscribeUnsubscribeCleanup verifies RefCount GC works.
 func TestE2E_SubscribeUnsubscribeCleanup(t *testing.T) {
 	ctx := context.Background()
-	wsID := uuid.New()
+	orgID := uuid.New()
 	pub := &collectingPublisher{}
 	reg := NewRegistry()
 
@@ -206,8 +206,8 @@ func TestE2E_SubscribeUnsubscribeCleanup(t *testing.T) {
 	mgr := NewManager(reg, nil, pub)
 
 	// Two different seances subscribe to the same view.
-	r1, _ := mgr.Subscribe(ctx, "s1", wsID, uuid.New(), "orders_list", nil)
-	r2, _ := mgr.Subscribe(ctx, "s2", wsID, uuid.New(), "orders_list", nil)
+	r1, _ := mgr.Subscribe(ctx, "s1", orgID, uuid.New(), "orders_list", nil)
+	r2, _ := mgr.Subscribe(ctx, "s2", orgID, uuid.New(), "orders_list", nil)
 	assert.NotEmpty(t, r1.ParamsHash)
 	assert.NotEmpty(t, r2.ParamsHash)
 
@@ -222,7 +222,7 @@ func TestE2E_SubscribeUnsubscribeCleanup(t *testing.T) {
 
 	// Data store should still have rows (s2 holds refs).
 	mgr.mu.RLock()
-	store := mgr.dataStore[wsID.String()]
+	store := mgr.dataStore[orgID.String()]
 	mgr.mu.RUnlock()
 	require.NotNil(t, store)
 	assert.NotNil(t, store.GetRow("orders", "ord-1"))
@@ -237,7 +237,7 @@ func TestE2E_SubscribeUnsubscribeCleanup(t *testing.T) {
 // invalidates all views depending on it.
 func TestE2E_MultipleViewsSameTable(t *testing.T) {
 	ctx := context.Background()
-	wsID := uuid.New()
+	orgID := uuid.New()
 	pub := &collectingPublisher{}
 	reg := NewRegistry()
 
@@ -258,14 +258,14 @@ func TestE2E_MultipleViewsSameTable(t *testing.T) {
 
 	mgr := NewManager(reg, nil, pub)
 
-	mgr.Subscribe(ctx, "s1", wsID, uuid.New(), "view_a", nil)
-	mgr.Subscribe(ctx, "s1", wsID, uuid.New(), "view_b", nil)
+	mgr.Subscribe(ctx, "s1", orgID, uuid.New(), "view_a", nil)
+	mgr.Subscribe(ctx, "s1", orgID, uuid.New(), "view_b", nil)
 
 	// Both subscribed = 2 snapshots.
 	assert.Len(t, pub.snapshots, 2)
 
 	// Invalidate "orders" table.
-	mgr.Invalidate(ctx, ChangeEvent{Table: "orders", RowID: "o1", WorkspaceID: wsID})
+	mgr.Invalidate(ctx, ChangeEvent{Table: "orders", RowID: "o1", OrganizationID: orgID})
 
 	// Both view factories should have been called again (2 subscribe + 2 invalidate = 4 total).
 	assert.Equal(t, 2, callCount["view_a"])
@@ -275,7 +275,7 @@ func TestE2E_MultipleViewsSameTable(t *testing.T) {
 // TestE2E_SyncFullSnapshot verifies that sync sends full snapshot when version diff > 10.
 func TestE2E_SyncFullSnapshot(t *testing.T) {
 	ctx := context.Background()
-	wsID := uuid.New()
+	orgID := uuid.New()
 	pub := &collectingPublisher{}
 	reg := NewRegistry()
 
@@ -290,7 +290,7 @@ func TestE2E_SyncFullSnapshot(t *testing.T) {
 	})
 
 	mgr := NewManager(reg, nil, pub)
-	r, _ := mgr.Subscribe(ctx, "s1", wsID, uuid.New(), "test_view", nil)
+	r, _ := mgr.Subscribe(ctx, "s1", orgID, uuid.New(), "test_view", nil)
 
 	// Simulate the subscription being at version 50 (server-side).
 	mgr.mu.Lock()
@@ -298,7 +298,7 @@ func TestE2E_SyncFullSnapshot(t *testing.T) {
 	mgr.mu.Unlock()
 
 	// Client thinks it's at version 1 → diff > 10 → full snapshot.
-	err := mgr.Sync(ctx, "s1", wsID, SyncRequest{
+	err := mgr.Sync(ctx, "s1", orgID, SyncRequest{
 		Views: []SyncView{{View: "test_view", ParamsHash: r.ParamsHash, Version: 1}},
 	})
 	require.NoError(t, err)
@@ -321,7 +321,7 @@ func TestE2E_InvalidateNoSubscribers(t *testing.T) {
 	})
 
 	mgr := NewManager(reg, nil, pub)
-	mgr.Invalidate(context.Background(), ChangeEvent{Table: "orphan_table", RowID: "1", WorkspaceID: uuid.New()})
+	mgr.Invalidate(context.Background(), ChangeEvent{Table: "orphan_table", RowID: "1", OrganizationID: uuid.New()})
 
 	assert.Empty(t, pub.snapshots)
 	assert.Empty(t, pub.viewDiff)
@@ -357,7 +357,7 @@ func TestE2E_EventTriggerMapping(t *testing.T) {
 		t.Run(tt.eventType, func(t *testing.T) {
 			ev := types.Event{
 				Type:        tt.eventType,
-				WorkspaceID: uuid.New(),
+				OrganizationID: uuid.New(),
 			}
 			if tt.needsEntity {
 				eid := uuid.New()

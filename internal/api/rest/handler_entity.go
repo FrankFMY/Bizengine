@@ -20,9 +20,9 @@ func NewEntityHandler(entitySvc *entity.Service) *EntityHandler {
 	return &EntityHandler{entitySvc: entitySvc}
 }
 
-// Create handles POST /api/v1/workspaces/{wsID}/entities.
+// Create handles POST /api/v1/organizations/{orgID}/entities.
 func (h *EntityHandler) Create(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -35,7 +35,7 @@ func (h *EntityHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	e, err := h.entitySvc.Create(r.Context(), wsID, input, &userID)
+	e, err := h.entitySvc.Create(r.Context(), orgID, input, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -44,9 +44,9 @@ func (h *EntityHandler) Create(w http.ResponseWriter, r *http.Request) {
 	respondCreated(w, e)
 }
 
-// Get handles GET /api/v1/workspaces/{wsID}/entities/{id}.
+// Get handles GET /api/v1/organizations/{orgID}/entities/{id}.
 func (h *EntityHandler) Get(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -58,7 +58,7 @@ func (h *EntityHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	include := r.URL.Query().Get("include")
-	e, err := h.entitySvc.Get(r.Context(), wsID, id, include == "components")
+	e, err := h.entitySvc.Get(r.Context(), orgID, id, include == "components")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -67,9 +67,9 @@ func (h *EntityHandler) Get(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,e)
 }
 
-// List handles GET /api/v1/workspaces/{wsID}/entities.
+// List handles GET /api/v1/organizations/{orgID}/entities.
 func (h *EntityHandler) List(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -84,7 +84,7 @@ func (h *EntityHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	include := r.URL.Query().Get("include")
-	result, err := h.entitySvc.List(r.Context(), wsID, filter, include == "components")
+	result, err := h.entitySvc.List(r.Context(), orgID, filter, include == "components")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -93,9 +93,9 @@ func (h *EntityHandler) List(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,result)
 }
 
-// Update handles PUT /api/v1/workspaces/{wsID}/entities/{id}.
+// Update handles PUT /api/v1/organizations/{orgID}/entities/{id}.
 func (h *EntityHandler) Update(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -113,7 +113,7 @@ func (h *EntityHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	e, err := h.entitySvc.Update(r.Context(), wsID, id, input, &userID)
+	e, err := h.entitySvc.Update(r.Context(), orgID, id, input, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -122,9 +122,9 @@ func (h *EntityHandler) Update(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,e)
 }
 
-// Delete handles DELETE /api/v1/workspaces/{wsID}/entities/{id}.
+// Delete handles DELETE /api/v1/organizations/{orgID}/entities/{id}.
 func (h *EntityHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -136,7 +136,7 @@ func (h *EntityHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
-	if err := h.entitySvc.Delete(r.Context(), wsID, id, &userID); err != nil {
+	if err := h.entitySvc.Delete(r.Context(), orgID, id, &userID); err != nil {
 		respondError(w, err)
 		return
 	}
@@ -144,9 +144,9 @@ func (h *EntityHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK, nil)
 }
 
-// SetComponent handles PUT /api/v1/workspaces/{wsID}/entities/{entityID}/components/{type}.
+// SetComponent handles PUT /api/v1/organizations/{orgID}/entities/{entityID}/components/{type}.
 func (h *EntityHandler) SetComponent(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -165,7 +165,7 @@ func (h *EntityHandler) SetComponent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c, err := h.entitySvc.SetComponent(r.Context(), wsID, entityID, compType, data, &userID)
+	c, err := h.entitySvc.SetComponent(r.Context(), orgID, entityID, compType, data, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -174,9 +174,9 @@ func (h *EntityHandler) SetComponent(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,c)
 }
 
-// GetComponent handles GET /api/v1/workspaces/{wsID}/entities/{entityID}/components/{type}.
+// GetComponent handles GET /api/v1/organizations/{orgID}/entities/{entityID}/components/{type}.
 func (h *EntityHandler) GetComponent(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -188,7 +188,7 @@ func (h *EntityHandler) GetComponent(w http.ResponseWriter, r *http.Request) {
 	}
 	compType := chi.URLParam(r, "type")
 
-	c, err := h.entitySvc.GetComponent(r.Context(), wsID, entityID, compType)
+	c, err := h.entitySvc.GetComponent(r.Context(), orgID, entityID, compType)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -197,9 +197,9 @@ func (h *EntityHandler) GetComponent(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,c)
 }
 
-// ListComponents handles GET /api/v1/workspaces/{wsID}/entities/{entityID}/components.
+// ListComponents handles GET /api/v1/organizations/{orgID}/entities/{entityID}/components.
 func (h *EntityHandler) ListComponents(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -210,7 +210,7 @@ func (h *EntityHandler) ListComponents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	comps, err := h.entitySvc.ListComponents(r.Context(), wsID, entityID)
+	comps, err := h.entitySvc.ListComponents(r.Context(), orgID, entityID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -219,9 +219,9 @@ func (h *EntityHandler) ListComponents(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,comps)
 }
 
-// DeleteComponent handles DELETE /api/v1/workspaces/{wsID}/entities/{entityID}/components/{type}.
+// DeleteComponent handles DELETE /api/v1/organizations/{orgID}/entities/{entityID}/components/{type}.
 func (h *EntityHandler) DeleteComponent(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -234,7 +234,7 @@ func (h *EntityHandler) DeleteComponent(w http.ResponseWriter, r *http.Request) 
 	compType := chi.URLParam(r, "type")
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
-	if err := h.entitySvc.DeleteComponent(r.Context(), wsID, entityID, compType, &userID); err != nil {
+	if err := h.entitySvc.DeleteComponent(r.Context(), orgID, entityID, compType, &userID); err != nil {
 		respondError(w, err)
 		return
 	}

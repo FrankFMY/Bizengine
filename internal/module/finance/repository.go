@@ -14,31 +14,31 @@ import (
 type Repository interface {
 	// Accounts
 	CreateAccount(ctx context.Context, tx pgx.Tx, a *Account) error
-	GetAccount(ctx context.Context, wsID, accountID uuid.UUID) (*Account, error)
-	GetAccountByCode(ctx context.Context, wsID uuid.UUID, code string) (*Account, error)
-	ListAccounts(ctx context.Context, wsID uuid.UUID) ([]Account, error)
-	DeleteAccount(ctx context.Context, wsID, accountID uuid.UUID) error
+	GetAccount(ctx context.Context, orgID, accountID uuid.UUID) (*Account, error)
+	GetAccountByCode(ctx context.Context, orgID uuid.UUID, code string) (*Account, error)
+	ListAccounts(ctx context.Context, orgID uuid.UUID) ([]Account, error)
+	DeleteAccount(ctx context.Context, orgID, accountID uuid.UUID) error
 
 	// Transactions
 	CreateTransaction(ctx context.Context, tx pgx.Tx, t *Transaction) error
 	CreateTransactionLines(ctx context.Context, tx pgx.Tx, lines []TransactionLine) error
-	GetTransaction(ctx context.Context, wsID, txnID uuid.UUID) (*Transaction, error)
+	GetTransaction(ctx context.Context, orgID, txnID uuid.UUID) (*Transaction, error)
 	GetTransactionLines(ctx context.Context, txnID uuid.UUID) ([]TransactionLine, error)
-	ListTransactions(ctx context.Context, wsID uuid.UUID, filter TransactionFilter) ([]Transaction, int, error)
+	ListTransactions(ctx context.Context, orgID uuid.UUID, filter TransactionFilter) ([]Transaction, int, error)
 	UpdateTransaction(ctx context.Context, tx pgx.Tx, t *Transaction) error
 
 	// Invoices
 	CreateInvoice(ctx context.Context, inv *Invoice) error
-	GetInvoice(ctx context.Context, wsID, invoiceID uuid.UUID) (*Invoice, error)
-	ListInvoices(ctx context.Context, wsID uuid.UUID, filter InvoiceFilter) ([]Invoice, int, error)
+	GetInvoice(ctx context.Context, orgID, invoiceID uuid.UUID) (*Invoice, error)
+	ListInvoices(ctx context.Context, orgID uuid.UUID, filter InvoiceFilter) ([]Invoice, int, error)
 	UpdateInvoice(ctx context.Context, inv *Invoice) error
 
 	// Reports
-	GetTrialBalance(ctx context.Context, wsID uuid.UUID, date time.Time) ([]TrialBalanceRow, error)
-	GetAccountBalance(ctx context.Context, wsID, accountID uuid.UUID, from, to time.Time) (*AccountBalance, error)
+	GetTrialBalance(ctx context.Context, orgID uuid.UUID, date time.Time) ([]TrialBalanceRow, error)
+	GetAccountBalance(ctx context.Context, orgID, accountID uuid.UUID, from, to time.Time) (*AccountBalance, error)
 
 	// Has lines check for delete protection
-	HasTransactionLines(ctx context.Context, wsID, accountID uuid.UUID) (bool, error)
+	HasTransactionLines(ctx context.Context, orgID, accountID uuid.UUID) (bool, error)
 
 	WithTx(ctx context.Context, fn func(tx pgx.Tx) error) error
 }
@@ -46,7 +46,7 @@ type Repository interface {
 // Account represents a chart of accounts entry.
 type Account struct {
 	ID          uuid.UUID  `json:"id"`
-	WorkspaceID uuid.UUID  `json:"workspace_id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
 	Code        string     `json:"code"`
 	Name        string     `json:"name"`
 	Type        string     `json:"type"`
@@ -59,7 +59,7 @@ type Account struct {
 // Transaction represents a journal entry.
 type Transaction struct {
 	ID            uuid.UUID         `json:"id"`
-	WorkspaceID   uuid.UUID         `json:"workspace_id"`
+	OrganizationID   uuid.UUID         `json:"organization_id"`
 	Date          time.Time         `json:"date"`
 	Description   string            `json:"description"`
 	ReferenceType *string           `json:"reference_type,omitempty"`
@@ -74,7 +74,7 @@ type Transaction struct {
 type TransactionLine struct {
 	ID            uuid.UUID  `json:"id"`
 	TransactionID uuid.UUID  `json:"transaction_id"`
-	WorkspaceID   uuid.UUID  `json:"workspace_id"`
+	OrganizationID   uuid.UUID  `json:"organization_id"`
 	AccountID     uuid.UUID  `json:"account_id"`
 	Debit         int64      `json:"debit"`
 	Credit        int64      `json:"credit"`
@@ -85,7 +85,7 @@ type TransactionLine struct {
 // Invoice represents an incoming or outgoing invoice.
 type Invoice struct {
 	ID             uuid.UUID  `json:"id"`
-	WorkspaceID    uuid.UUID  `json:"workspace_id"`
+	OrganizationID    uuid.UUID  `json:"organization_id"`
 	Number         string     `json:"number"`
 	Type           string     `json:"type"`
 	CounterpartyID *uuid.UUID `json:"counterparty_id,omitempty"`
@@ -175,7 +175,7 @@ type CreateInvoiceInput struct {
 	DueAt          *time.Time `json:"due_at"`
 }
 
-// DefaultAccounts returns the default chart of accounts for a new workspace.
+// DefaultAccounts returns the default chart of accounts for a new organization.
 func DefaultAccounts() []CreateAccountInput {
 	return []CreateAccountInput{
 		{Code: "10", Name: "Materials", Type: "asset"},

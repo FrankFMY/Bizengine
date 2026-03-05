@@ -32,11 +32,11 @@ func TestPublisher_HandleEvent(t *testing.T) {
 
 	pub := NewPublisher(srv.URL, "test-key")
 
-	wsID := uuid.New()
+	orgID := uuid.New()
 	entityID := uuid.New()
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		EntityID:    &entityID,
 		Type:        "entity.created",
 		Data:        json.RawMessage(`{"name":"Widget"}`),
@@ -46,7 +46,7 @@ func TestPublisher_HandleEvent(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "publish", received.Method)
-	assert.Equal(t, "workspace:"+wsID.String(), received.Params.Channel)
+	assert.Equal(t, "org:"+orgID.String(), received.Params.Channel)
 }
 
 func TestPublisher_ServerError(t *testing.T) {
@@ -59,7 +59,7 @@ func TestPublisher_ServerError(t *testing.T) {
 
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: uuid.New(),
+		OrganizationID: uuid.New(),
 		Type:        "test.event",
 		Data:        json.RawMessage(`{}`),
 	}

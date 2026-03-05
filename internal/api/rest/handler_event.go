@@ -17,9 +17,9 @@ func NewEventHandler(store event.Store) *EventHandler {
 	return &EventHandler{store: store}
 }
 
-// List handles GET /api/v1/workspaces/{wsID}/events.
+// List handles GET /api/v1/organizations/{orgID}/events.
 func (h *EventHandler) List(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -37,7 +37,7 @@ func (h *EventHandler) List(w http.ResponseWriter, r *http.Request) {
 				since = &t
 			}
 		}
-		events, err := h.store.GetByType(r.Context(), wsID, *eventType, since, page.Limit)
+		events, err := h.store.GetByType(r.Context(), orgID, *eventType, since, page.Limit)
 		if err != nil {
 			respondError(w, err)
 			return
@@ -46,7 +46,7 @@ func (h *EventHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	events, total, err := h.store.GetByWorkspace(r.Context(), wsID, page.Limit, page.Offset)
+	events, total, err := h.store.GetByOrganization(r.Context(), orgID, page.Limit, page.Offset)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -60,9 +60,9 @@ func (h *EventHandler) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetByEntity handles GET /api/v1/workspaces/{wsID}/events/entity/{entityID}.
+// GetByEntity handles GET /api/v1/organizations/{orgID}/events/entity/{entityID}.
 func (h *EventHandler) GetByEntity(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -82,7 +82,7 @@ func (h *EventHandler) GetByEntity(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	events, err := h.store.GetByEntity(r.Context(), wsID, entityID, since, page.Limit)
+	events, err := h.store.GetByEntity(r.Context(), orgID, entityID, since, page.Limit)
 	if err != nil {
 		respondError(w, err)
 		return

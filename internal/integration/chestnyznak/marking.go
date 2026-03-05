@@ -20,8 +20,8 @@ type MarkingInfo struct {
 // MarkingService defines the interface for product marking operations.
 type MarkingService interface {
 	VerifyCode(ctx context.Context, code string) (*MarkingInfo, error)
-	RegisterReceipt(ctx context.Context, wsID uuid.UUID, codes []string, documentID string) error
-	RegisterShipment(ctx context.Context, wsID uuid.UUID, codes []string, counterpartyINN string) error
+	RegisterReceipt(ctx context.Context, orgID uuid.UUID, codes []string, documentID string) error
+	RegisterShipment(ctx context.Context, orgID uuid.UUID, codes []string, counterpartyINN string) error
 }
 
 // Stub is a stub implementation of MarkingService that logs calls and returns success.
@@ -43,13 +43,13 @@ func (s *Stub) VerifyCode(_ context.Context, code string) (*MarkingInfo, error) 
 }
 
 // RegisterReceipt logs the call and returns nil.
-func (s *Stub) RegisterReceipt(_ context.Context, wsID uuid.UUID, codes []string, documentID string) error {
-	log.Debug().Str("ws", wsID.String()).Int("codes", len(codes)).Str("doc_id", documentID).Msg("chestnyznak stub: RegisterReceipt")
+func (s *Stub) RegisterReceipt(_ context.Context, orgID uuid.UUID, codes []string, documentID string) error {
+	log.Debug().Str("org", orgID.String()).Int("codes", len(codes)).Str("doc_id", documentID).Msg("chestnyznak stub: RegisterReceipt")
 	return nil
 }
 
 // RegisterShipment logs the call and returns nil.
-func (s *Stub) RegisterShipment(_ context.Context, wsID uuid.UUID, codes []string, counterpartyINN string) error {
-	log.Debug().Str("ws", wsID.String()).Int("codes", len(codes)).Str("inn", counterpartyINN).Msg("chestnyznak stub: RegisterShipment")
+func (s *Stub) RegisterShipment(_ context.Context, orgID uuid.UUID, codes []string, counterpartyINN string) error {
+	log.Debug().Str("org", orgID.String()).Int("codes", len(codes)).Str("inn", counterpartyINN).Msg("chestnyznak stub: RegisterShipment")
 	return nil
 }

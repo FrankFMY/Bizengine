@@ -18,7 +18,7 @@ const idempTTL = 5 * time.Second
 
 // Idempotency middleware prevents duplicate mutations using Redis.
 // It reads the "idemp" value from context (set by UnwrapRequest).
-// Redis key: idemp:{workspace_id}:{idemp_value}, TTL 5s.
+// Redis key: idemp:{organization_id}:{idemp_value}, TTL 5s.
 func Idempotency(rdb *redis.Client) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -28,8 +28,8 @@ func Idempotency(rdb *redis.Client) func(http.Handler) http.Handler {
 				return
 			}
 
-			wsID, _ := auth.WorkspaceIDFromCtx(r.Context())
-			key := fmt.Sprintf("idemp:%s:%s", wsID.String(), idemp)
+			orgID, _ := auth.OrganizationIDFromCtx(r.Context())
+			key := fmt.Sprintf("idemp:%s:%s", orgID.String(), idemp)
 			ctx := r.Context()
 
 			// Try to set the key. NX = only if not exists.
@@ -102,6 +102,6 @@ func (rc *responseCapture) Write(b []byte) (int, error) {
 }
 
 // IdempotencyKey is a helper to generate idemp keys for testing.
-func IdempotencyKey(wsID uuid.UUID, idemp string) string {
-	return fmt.Sprintf("idemp:%s:%s", wsID.String(), idemp)
+func IdempotencyKey(orgID uuid.UUID, idemp string) string {
+	return fmt.Sprintf("idemp:%s:%s", orgID.String(), idemp)
 }

@@ -30,26 +30,26 @@ func (r *ProcessRepo) UpsertDefinition(ctx context.Context, def *process.Definit
 		return err
 	}
 	_, err = r.pool.Exec(ctx,
-		`INSERT INTO process_definitions (id, workspace_id, name, description, definition, is_active, version, created_at, updated_at)
+		`INSERT INTO process_definitions (id, organization_id, name, description, definition, is_active, version, created_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		 ON CONFLICT (id, COALESCE(workspace_id, '00000000-0000-0000-0000-000000000000'))
+		 ON CONFLICT (id, COALESCE(organization_id, '00000000-0000-0000-0000-000000000000'))
 		 DO UPDATE SET name = $3, description = $4, definition = $5, is_active = $6, version = $7, updated_at = $9`,
-		def.ID, def.WorkspaceID, def.Name, def.Description, defJSON, def.IsActive, def.Version, def.CreatedAt, def.UpdatedAt,
+		def.ID, def.OrganizationID, def.Name, def.Description, defJSON, def.IsActive, def.Version, def.CreatedAt, def.UpdatedAt,
 	)
 	return err
 }
 
-// GetDefinition returns a process definition by ID and optional workspace.
-func (r *ProcessRepo) GetDefinition(ctx context.Context, id string, wsID *uuid.UUID) (*process.DefinitionRecord, error) {
+// GetDefinition returns a process definition by ID and optional organization.
+func (r *ProcessRepo) GetDefinition(ctx context.Context, id string, orgID *uuid.UUID) (*process.DefinitionRecord, error) {
 	var def process.DefinitionRecord
 	var defJSON []byte
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, workspace_id, name, description, definition, is_active, version, created_at, updated_at
+		`SELECT id, organization_id, name, description, definition, is_active, version, created_at, updated_at
 		 FROM process_definitions
-		 WHERE id = $1 AND (workspace_id = $2 OR workspace_id IS NULL)
-		 ORDER BY workspace_id DESC NULLS LAST LIMIT 1`,
-		id, wsID,
-	).Scan(&def.ID, &def.WorkspaceID, &def.Name, &def.Description, &defJSON, &def.IsActive, &def.Version, &def.CreatedAt, &def.UpdatedAt)
+		 WHERE id = $1 AND (organization_id = $2 OR organization_id IS NULL)
+		 ORDER BY organization_id DESC NULLS LAST LIMIT 1`,
+		id, orgID,
+	).Scan(&def.ID, &def.OrganizationID, &def.Name, &def.Description, &defJSON, &def.IsActive, &def.Version, &def.CreatedAt, &def.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errs.NewNotFound("process definition not found")
@@ -62,14 +62,14 @@ func (r *ProcessRepo) GetDefinition(ctx context.Context, id string, wsID *uuid.U
 	return &def, nil
 }
 
-// ListDefinitions returns all definitions accessible to a workspace (own + system).
-func (r *ProcessRepo) ListDefinitions(ctx context.Context, wsID uuid.UUID) ([]process.DefinitionRecord, error) {
+// ListDefinitions returns all definitions accessible to an organization (own + system).
+func (r *ProcessRepo) ListDefinitions(ctx context.Context, orgID uuid.UUID) ([]process.DefinitionRecord, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, workspace_id, name, description, definition, is_active, version, created_at, updated_at
+		`SELECT id, organization_id, name, description, definition, is_active, version, created_at, updated_at
 		 FROM process_definitions
-		 WHERE workspace_id = $1 OR workspace_id IS NULL
+		 WHERE organization_id = $1 OR organization_id IS NULL
 		 ORDER BY name`,
-		wsID,
+		orgID,
 	)
 	if err != nil {
 		return nil, err
@@ -80,7 +80,7 @@ func (r *ProcessRepo) ListDefinitions(ctx context.Context, wsID uuid.UUID) ([]pr
 	for rows.Next() {
 		var def process.DefinitionRecord
 		var defJSON []byte
-		if err := rows.Scan(&def.ID, &def.WorkspaceID, &def.Name, &def.Description, &defJSON, &def.IsActive, &def.Version, &def.CreatedAt, &def.UpdatedAt); err != nil {
+		if err := rows.Scan(&def.ID, &def.OrganizationID, &def.Name, &def.Description, &defJSON, &def.IsActive, &def.Version, &def.CreatedAt, &def.UpdatedAt); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(defJSON, &def.Definition); err != nil {
@@ -94,9 +94,9 @@ func (r *ProcessRepo) ListDefinitions(ctx context.Context, wsID uuid.UUID) ([]pr
 // CreateInstance creates a new process instance.
 func (r *ProcessRepo) CreateInstance(ctx context.Context, inst *process.Instance) error {
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO process_instances (id, workspace_id, definition_id, entity_id, current_state, status, context, history, started_at, updated_at)
+		`INSERT INTO process_instances (id, organization_id, definition_id, entity_id, current_state, status, context, history, started_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-		inst.ID, inst.WorkspaceID, inst.DefinitionID, inst.EntityID, inst.CurrentState,
+		inst.ID, inst.OrganizationID, inst.DefinitionID, inst.EntityID, inst.CurrentState,
 		inst.Status, inst.Context, inst.History, inst.StartedAt, inst.UpdatedAt,
 	)
 	return err
@@ -106,10 +106,10 @@ func (r *ProcessRepo) CreateInstance(ctx context.Context, inst *process.Instance
 func (r *ProcessRepo) GetInstance(ctx context.Context, id uuid.UUID) (*process.Instance, error) {
 	var inst process.Instance
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, workspace_id, definition_id, entity_id, current_state, status, context, history, started_at, updated_at, completed_at
+		`SELECT id, organization_id, definition_id, entity_id, current_state, status, context, history, started_at, updated_at, completed_at
 		 FROM process_instances WHERE id = $1`,
 		id,
-	).Scan(&inst.ID, &inst.WorkspaceID, &inst.DefinitionID, &inst.EntityID, &inst.CurrentState,
+	).Scan(&inst.ID, &inst.OrganizationID, &inst.DefinitionID, &inst.EntityID, &inst.CurrentState,
 		&inst.Status, &inst.Context, &inst.History, &inst.StartedAt, &inst.UpdatedAt, &inst.CompletedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -123,7 +123,7 @@ func (r *ProcessRepo) GetInstance(ctx context.Context, id uuid.UUID) (*process.I
 // GetActiveByEntity returns active process instances for an entity.
 func (r *ProcessRepo) GetActiveByEntity(ctx context.Context, entityID uuid.UUID) ([]process.Instance, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, workspace_id, definition_id, entity_id, current_state, status, context, history, started_at, updated_at, completed_at
+		`SELECT id, organization_id, definition_id, entity_id, current_state, status, context, history, started_at, updated_at, completed_at
 		 FROM process_instances WHERE entity_id = $1 AND status = 'active'`,
 		entityID,
 	)
@@ -135,7 +135,7 @@ func (r *ProcessRepo) GetActiveByEntity(ctx context.Context, entityID uuid.UUID)
 	var instances []process.Instance
 	for rows.Next() {
 		var inst process.Instance
-		if err := rows.Scan(&inst.ID, &inst.WorkspaceID, &inst.DefinitionID, &inst.EntityID, &inst.CurrentState,
+		if err := rows.Scan(&inst.ID, &inst.OrganizationID, &inst.DefinitionID, &inst.EntityID, &inst.CurrentState,
 			&inst.Status, &inst.Context, &inst.History, &inst.StartedAt, &inst.UpdatedAt, &inst.CompletedAt); err != nil {
 			return nil, err
 		}
@@ -144,10 +144,10 @@ func (r *ProcessRepo) GetActiveByEntity(ctx context.Context, entityID uuid.UUID)
 	return instances, rows.Err()
 }
 
-// ListInstances returns process instances for a workspace.
-func (r *ProcessRepo) ListInstances(ctx context.Context, wsID uuid.UUID, status *string, limit, offset int) ([]process.Instance, int, error) {
-	baseWhere := "workspace_id = $1"
-	args := []any{wsID}
+// ListInstances returns process instances for an organization.
+func (r *ProcessRepo) ListInstances(ctx context.Context, orgID uuid.UUID, status *string, limit, offset int) ([]process.Instance, int, error) {
+	baseWhere := "organization_id = $1"
+	args := []any{orgID}
 	argIdx := 2
 
 	if status != nil {
@@ -161,7 +161,7 @@ func (r *ProcessRepo) ListInstances(ctx context.Context, wsID uuid.UUID, status 
 		return nil, 0, err
 	}
 
-	query := "SELECT id, workspace_id, definition_id, entity_id, current_state, status, context, history, started_at, updated_at, completed_at FROM process_instances WHERE " +
+	query := "SELECT id, organization_id, definition_id, entity_id, current_state, status, context, history, started_at, updated_at, completed_at FROM process_instances WHERE " +
 		baseWhere + " ORDER BY started_at DESC LIMIT $" + itoa(argIdx) + " OFFSET $" + itoa(argIdx+1)
 	args = append(args, limit, offset)
 
@@ -174,7 +174,7 @@ func (r *ProcessRepo) ListInstances(ctx context.Context, wsID uuid.UUID, status 
 	var instances []process.Instance
 	for rows.Next() {
 		var inst process.Instance
-		if err := rows.Scan(&inst.ID, &inst.WorkspaceID, &inst.DefinitionID, &inst.EntityID, &inst.CurrentState,
+		if err := rows.Scan(&inst.ID, &inst.OrganizationID, &inst.DefinitionID, &inst.EntityID, &inst.CurrentState,
 			&inst.Status, &inst.Context, &inst.History, &inst.StartedAt, &inst.UpdatedAt, &inst.CompletedAt); err != nil {
 			return nil, 0, err
 		}

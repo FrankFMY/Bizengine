@@ -79,14 +79,14 @@ func (m *mockSessionStore) DeleteSessionSeances(_ context.Context, _ string) err
 func TestConnectHandler_Success(t *testing.T) {
 	store := newMockStore()
 	userID := uuid.New()
-	wsID := uuid.New()
+	orgID := uuid.New()
 	sessID := uuid.New().String()
 	seanceID := uuid.New().String()
 
 	store.sessions[sessID] = &auth.Session{
 		ID:          sessID,
 		UserID:      userID,
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		Role:        "owner",
 		Email:       "test@example.com",
 		FullName:    "Test User",
@@ -111,7 +111,7 @@ func TestConnectHandler_Success(t *testing.T) {
 	assert.Nil(t, resp.Error)
 	require.NotNil(t, resp.Result)
 	assert.Equal(t, userID.String(), resp.Result.User)
-	assert.Contains(t, resp.Result.Channels, "workspace:"+wsID.String())
+	assert.Contains(t, resp.Result.Channels, "org:"+orgID.String())
 }
 
 func TestConnectHandler_MissingCookies(t *testing.T) {

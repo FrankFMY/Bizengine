@@ -51,8 +51,8 @@ type ReceiptStatus struct {
 
 // FiscalService defines the interface for fiscal receipt operations.
 type FiscalService interface {
-	SendReceipt(ctx context.Context, wsID uuid.UUID, receipt Receipt) (*ReceiptResult, error)
-	GetReceiptStatus(ctx context.Context, wsID uuid.UUID, receiptID string) (*ReceiptStatus, error)
+	SendReceipt(ctx context.Context, orgID uuid.UUID, receipt Receipt) (*ReceiptResult, error)
+	GetReceiptStatus(ctx context.Context, orgID uuid.UUID, receiptID string) (*ReceiptStatus, error)
 }
 
 // Stub is a stub implementation of FiscalService that logs calls and returns success.
@@ -62,8 +62,8 @@ type Stub struct{}
 func NewStub() *Stub { return &Stub{} }
 
 // SendReceipt logs the call and returns a fake success result.
-func (s *Stub) SendReceipt(_ context.Context, wsID uuid.UUID, receipt Receipt) (*ReceiptResult, error) {
-	log.Debug().Str("ws", wsID.String()).Str("type", receipt.Type).Int("items", len(receipt.Items)).Msg("fns stub: SendReceipt")
+func (s *Stub) SendReceipt(_ context.Context, orgID uuid.UUID, receipt Receipt) (*ReceiptResult, error) {
+	log.Debug().Str("org", orgID.String()).Str("type", receipt.Type).Int("items", len(receipt.Items)).Msg("fns stub: SendReceipt")
 	return &ReceiptResult{
 		ID:        uuid.New().String(),
 		Status:    "done",
@@ -73,8 +73,8 @@ func (s *Stub) SendReceipt(_ context.Context, wsID uuid.UUID, receipt Receipt) (
 }
 
 // GetReceiptStatus logs the call and returns a fake done status.
-func (s *Stub) GetReceiptStatus(_ context.Context, wsID uuid.UUID, receiptID string) (*ReceiptStatus, error) {
-	log.Debug().Str("ws", wsID.String()).Str("receipt_id", receiptID).Msg("fns stub: GetReceiptStatus")
+func (s *Stub) GetReceiptStatus(_ context.Context, orgID uuid.UUID, receiptID string) (*ReceiptStatus, error) {
+	log.Debug().Str("org", orgID.String()).Str("receipt_id", receiptID).Msg("fns stub: GetReceiptStatus")
 	return &ReceiptStatus{
 		ID:        receiptID,
 		Status:    "done",

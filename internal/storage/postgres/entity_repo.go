@@ -64,22 +64,22 @@ func (r *EntityRepo) createWith(ctx context.Context, q interface {
 	e.Status = "active"
 
 	return q.QueryRow(ctx,
-		`INSERT INTO entities (id, workspace_id, kind, name, status, parent_id, meta, sort_order, created_at, updated_at)
+		`INSERT INTO entities (id, organization_id, kind, name, status, parent_id, meta, sort_order, created_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		 RETURNING id, created_at, updated_at`,
-		e.ID, e.WorkspaceID, e.Kind, e.Name, e.Status, e.ParentID, e.Meta, e.SortOrder, e.CreatedAt, e.UpdatedAt,
+		e.ID, e.OrganizationID, e.Kind, e.Name, e.Status, e.ParentID, e.Meta, e.SortOrder, e.CreatedAt, e.UpdatedAt,
 	).Scan(&e.ID, &e.CreatedAt, &e.UpdatedAt)
 }
 
-// GetByID returns a single entity by ID within a workspace.
-func (r *EntityRepo) GetByID(ctx context.Context, wsID, id uuid.UUID) (*types.Entity, error) {
+// GetByID returns a single entity by ID within an organization.
+func (r *EntityRepo) GetByID(ctx context.Context, orgID, id uuid.UUID) (*types.Entity, error) {
 	var e types.Entity
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, workspace_id, kind, name, status, parent_id, meta, sort_order, created_at, updated_at, deleted_at
+		`SELECT id, organization_id, kind, name, status, parent_id, meta, sort_order, created_at, updated_at, deleted_at
 		 FROM entities
-		 WHERE workspace_id = $1 AND id = $2 AND deleted_at IS NULL`,
-		wsID, id,
-	).Scan(&e.ID, &e.WorkspaceID, &e.Kind, &e.Name, &e.Status, &e.ParentID, &e.Meta, &e.SortOrder, &e.CreatedAt, &e.UpdatedAt, &e.DeletedAt)
+		 WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL`,
+		orgID, id,
+	).Scan(&e.ID, &e.OrganizationID, &e.Kind, &e.Name, &e.Status, &e.ParentID, &e.Meta, &e.SortOrder, &e.CreatedAt, &e.UpdatedAt, &e.DeletedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errs.NewNotFound("entity not found")
@@ -90,15 +90,15 @@ func (r *EntityRepo) GetByID(ctx context.Context, wsID, id uuid.UUID) (*types.En
 }
 
 // List returns entities matching the filter.
-func (r *EntityRepo) List(ctx context.Context, wsID uuid.UUID, filter entity.ListFilter) ([]types.Entity, int, error) {
+func (r *EntityRepo) List(ctx context.Context, orgID uuid.UUID, filter entity.ListFilter) ([]types.Entity, int, error) {
 	filter.Page.Normalize()
 
 	var conditions []string
 	var args []any
 	argIdx := 1
 
-	conditions = append(conditions, fmt.Sprintf("workspace_id = $%d", argIdx))
-	args = append(args, wsID)
+	conditions = append(conditions, fmt.Sprintf("organization_id = $%d", argIdx))
+	args = append(args, orgID)
 	argIdx++
 
 	conditions = append(conditions, "deleted_at IS NULL")
@@ -146,7 +146,7 @@ func (r *EntityRepo) List(ctx context.Context, wsID uuid.UUID, filter entity.Lis
 	}
 
 	query := fmt.Sprintf(
-		`SELECT id, workspace_id, kind, name, status, parent_id, meta, sort_order, created_at, updated_at, deleted_at
+		`SELECT id, organization_id, kind, name, status, parent_id, meta, sort_order, created_at, updated_at, deleted_at
 		 FROM entities WHERE %s ORDER BY %s %s LIMIT $%d OFFSET $%d`,
 		where, sortCol, orderDir, argIdx, argIdx+1,
 	)
@@ -161,7 +161,7 @@ func (r *EntityRepo) List(ctx context.Context, wsID uuid.UUID, filter entity.Lis
 	var entities []types.Entity
 	for rows.Next() {
 		var e types.Entity
-		if err := rows.Scan(&e.ID, &e.WorkspaceID, &e.Kind, &e.Name, &e.Status, &e.ParentID, &e.Meta, &e.SortOrder, &e.CreatedAt, &e.UpdatedAt, &e.DeletedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.OrganizationID, &e.Kind, &e.Name, &e.Status, &e.ParentID, &e.Meta, &e.SortOrder, &e.CreatedAt, &e.UpdatedAt, &e.DeletedAt); err != nil {
 			return nil, 0, err
 		}
 		entities = append(entities, e)
@@ -175,8 +175,8 @@ func (r *EntityRepo) Update(ctx context.Context, e *types.Entity) error {
 	e.UpdatedAt = time.Now()
 	tag, err := r.pool.Exec(ctx,
 		`UPDATE entities SET name = $3, status = $4, parent_id = $5, meta = $6, sort_order = $7, updated_at = $8
-		 WHERE workspace_id = $1 AND id = $2 AND deleted_at IS NULL`,
-		e.WorkspaceID, e.ID, e.Name, e.Status, e.ParentID, e.Meta, e.SortOrder, e.UpdatedAt,
+		 WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL`,
+		e.OrganizationID, e.ID, e.Name, e.Status, e.ParentID, e.Meta, e.SortOrder, e.UpdatedAt,
 	)
 	if err != nil {
 		return err
@@ -188,11 +188,11 @@ func (r *EntityRepo) Update(ctx context.Context, e *types.Entity) error {
 }
 
 // SoftDelete marks an entity as deleted.
-func (r *EntityRepo) SoftDelete(ctx context.Context, wsID, id uuid.UUID) error {
+func (r *EntityRepo) SoftDelete(ctx context.Context, orgID, id uuid.UUID) error {
 	now := time.Now()
 	tag, err := r.pool.Exec(ctx,
-		`UPDATE entities SET deleted_at = $3, updated_at = $3 WHERE workspace_id = $1 AND id = $2 AND deleted_at IS NULL`,
-		wsID, id, now,
+		`UPDATE entities SET deleted_at = $3, updated_at = $3 WHERE organization_id = $1 AND id = $2 AND deleted_at IS NULL`,
+		orgID, id, now,
 	)
 	if err != nil {
 		return err
@@ -224,26 +224,26 @@ func (r *EntityRepo) setComponentWith(ctx context.Context, q interface {
 	c.UpdatedAt = now
 
 	return q.QueryRow(ctx,
-		`INSERT INTO components (id, entity_id, workspace_id, type, data, version, created_at, updated_at)
+		`INSERT INTO components (id, entity_id, organization_id, type, data, version, created_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, 1, $6, $7)
 		 ON CONFLICT (entity_id, type) DO UPDATE SET
 			data = EXCLUDED.data,
 			version = components.version + 1,
 			updated_at = EXCLUDED.updated_at
 		 RETURNING id, version, created_at, updated_at`,
-		c.ID, c.EntityID, c.WorkspaceID, c.Type, c.Data, c.CreatedAt, c.UpdatedAt,
+		c.ID, c.EntityID, c.OrganizationID, c.Type, c.Data, c.CreatedAt, c.UpdatedAt,
 	).Scan(&c.ID, &c.Version, &c.CreatedAt, &c.UpdatedAt)
 }
 
 // GetComponent returns a specific component by type.
-func (r *EntityRepo) GetComponent(ctx context.Context, wsID, entityID uuid.UUID, compType string) (*types.Component, error) {
+func (r *EntityRepo) GetComponent(ctx context.Context, orgID, entityID uuid.UUID, compType string) (*types.Component, error) {
 	var c types.Component
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, entity_id, workspace_id, type, data, version, created_at, updated_at
+		`SELECT id, entity_id, organization_id, type, data, version, created_at, updated_at
 		 FROM components
-		 WHERE workspace_id = $1 AND entity_id = $2 AND type = $3`,
-		wsID, entityID, compType,
-	).Scan(&c.ID, &c.EntityID, &c.WorkspaceID, &c.Type, &c.Data, &c.Version, &c.CreatedAt, &c.UpdatedAt)
+		 WHERE organization_id = $1 AND entity_id = $2 AND type = $3`,
+		orgID, entityID, compType,
+	).Scan(&c.ID, &c.EntityID, &c.OrganizationID, &c.Type, &c.Data, &c.Version, &c.CreatedAt, &c.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errs.NewNotFound("component not found")
@@ -254,13 +254,13 @@ func (r *EntityRepo) GetComponent(ctx context.Context, wsID, entityID uuid.UUID,
 }
 
 // ListComponents returns all components for an entity.
-func (r *EntityRepo) ListComponents(ctx context.Context, wsID, entityID uuid.UUID) ([]types.Component, error) {
+func (r *EntityRepo) ListComponents(ctx context.Context, orgID, entityID uuid.UUID) ([]types.Component, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, entity_id, workspace_id, type, data, version, created_at, updated_at
+		`SELECT id, entity_id, organization_id, type, data, version, created_at, updated_at
 		 FROM components
-		 WHERE workspace_id = $1 AND entity_id = $2
+		 WHERE organization_id = $1 AND entity_id = $2
 		 ORDER BY type`,
-		wsID, entityID,
+		orgID, entityID,
 	)
 	if err != nil {
 		return nil, err
@@ -270,7 +270,7 @@ func (r *EntityRepo) ListComponents(ctx context.Context, wsID, entityID uuid.UUI
 	var components []types.Component
 	for rows.Next() {
 		var c types.Component
-		if err := rows.Scan(&c.ID, &c.EntityID, &c.WorkspaceID, &c.Type, &c.Data, &c.Version, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		if err := rows.Scan(&c.ID, &c.EntityID, &c.OrganizationID, &c.Type, &c.Data, &c.Version, &c.CreatedAt, &c.UpdatedAt); err != nil {
 			return nil, err
 		}
 		components = append(components, c)
@@ -279,10 +279,10 @@ func (r *EntityRepo) ListComponents(ctx context.Context, wsID, entityID uuid.UUI
 }
 
 // DeleteComponent removes a component from an entity.
-func (r *EntityRepo) DeleteComponent(ctx context.Context, wsID, entityID uuid.UUID, compType string) error {
+func (r *EntityRepo) DeleteComponent(ctx context.Context, orgID, entityID uuid.UUID, compType string) error {
 	tag, err := r.pool.Exec(ctx,
-		`DELETE FROM components WHERE workspace_id = $1 AND entity_id = $2 AND type = $3`,
-		wsID, entityID, compType,
+		`DELETE FROM components WHERE organization_id = $1 AND entity_id = $2 AND type = $3`,
+		orgID, entityID, compType,
 	)
 	if err != nil {
 		return err

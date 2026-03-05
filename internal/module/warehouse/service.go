@@ -89,7 +89,7 @@ func NewService(repo Repository, eventBus event.Bus) *Service {
 }
 
 // Receive adds stock to a warehouse (incoming goods).
-func (s *Service) Receive(ctx context.Context, wsID uuid.UUID, input ReceiveInput) (*MovementResult, error) {
+func (s *Service) Receive(ctx context.Context, orgID uuid.UUID, input ReceiveInput) (*MovementResult, error) {
 	if input.Quantity <= 0 {
 		return nil, errs.NewBadRequest("quantity must be positive")
 	}
@@ -99,7 +99,7 @@ func (s *Service) Receive(ctx context.Context, wsID uuid.UUID, input ReceiveInpu
 
 	var result MovementResult
 	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
-		sl, err := s.getOrCreateStockLevel(ctx, tx, wsID, input.ProductID, input.WarehouseID, input.Unit)
+		sl, err := s.getOrCreateStockLevel(ctx, tx, orgID, input.ProductID, input.WarehouseID, input.Unit)
 		if err != nil {
 			return err
 		}
@@ -112,7 +112,7 @@ func (s *Service) Receive(ctx context.Context, wsID uuid.UUID, input ReceiveInpu
 
 		m := &StockMovement{
 			ID:          uuid.New(),
-			WorkspaceID: wsID,
+			OrganizationID: orgID,
 			ProductID:   input.ProductID,
 			WarehouseID: input.WarehouseID,
 			Type:        "receive",
@@ -136,7 +136,7 @@ func (s *Service) Receive(ctx context.Context, wsID uuid.UUID, input ReceiveInpu
 		return nil, err
 	}
 
-	s.publishEvent(ctx, wsID, input.ProductID, "warehouse.stock.received", input.ActorID, map[string]any{
+	s.publishEvent(ctx, orgID, input.ProductID, "warehouse.stock.received", input.ActorID, map[string]any{
 		"product_id":   input.ProductID,
 		"warehouse_id": input.WarehouseID,
 		"quantity":     input.Quantity,
@@ -147,7 +147,7 @@ func (s *Service) Receive(ctx context.Context, wsID uuid.UUID, input ReceiveInpu
 }
 
 // Ship removes stock from a warehouse (outgoing goods).
-func (s *Service) Ship(ctx context.Context, wsID uuid.UUID, input ShipInput) (*MovementResult, error) {
+func (s *Service) Ship(ctx context.Context, orgID uuid.UUID, input ShipInput) (*MovementResult, error) {
 	if input.Quantity <= 0 {
 		return nil, errs.NewBadRequest("quantity must be positive")
 	}
@@ -157,7 +157,7 @@ func (s *Service) Ship(ctx context.Context, wsID uuid.UUID, input ShipInput) (*M
 
 	var result MovementResult
 	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
-		sl, err := s.repo.GetStockLevel(ctx, wsID, input.ProductID, input.WarehouseID)
+		sl, err := s.repo.GetStockLevel(ctx, orgID, input.ProductID, input.WarehouseID)
 		if err != nil {
 			return errs.NewNotFound("stock level not found")
 		}
@@ -178,7 +178,7 @@ func (s *Service) Ship(ctx context.Context, wsID uuid.UUID, input ShipInput) (*M
 
 		m := &StockMovement{
 			ID:            uuid.New(),
-			WorkspaceID:   wsID,
+			OrganizationID:   orgID,
 			ProductID:     input.ProductID,
 			WarehouseID:   input.WarehouseID,
 			Type:          "ship",
@@ -202,7 +202,7 @@ func (s *Service) Ship(ctx context.Context, wsID uuid.UUID, input ShipInput) (*M
 		return nil, err
 	}
 
-	s.publishEvent(ctx, wsID, input.ProductID, "warehouse.stock.shipped", input.ActorID, map[string]any{
+	s.publishEvent(ctx, orgID, input.ProductID, "warehouse.stock.shipped", input.ActorID, map[string]any{
 		"product_id":   input.ProductID,
 		"warehouse_id": input.WarehouseID,
 		"quantity":     input.Quantity,
@@ -210,13 +210,13 @@ func (s *Service) Ship(ctx context.Context, wsID uuid.UUID, input ShipInput) (*M
 	})
 
 	// Check low stock
-	s.checkLowStock(ctx, wsID, input.ProductID, input.WarehouseID, input.ActorID)
+	s.checkLowStock(ctx, orgID, input.ProductID, input.WarehouseID, input.ActorID)
 
 	return &result, nil
 }
 
 // Transfer moves stock between warehouses atomically.
-func (s *Service) Transfer(ctx context.Context, wsID uuid.UUID, input TransferInput) (*MovementResult, error) {
+func (s *Service) Transfer(ctx context.Context, orgID uuid.UUID, input TransferInput) (*MovementResult, error) {
 	if input.Quantity <= 0 {
 		return nil, errs.NewBadRequest("quantity must be positive")
 	}
@@ -230,7 +230,7 @@ func (s *Service) Transfer(ctx context.Context, wsID uuid.UUID, input TransferIn
 	var result MovementResult
 	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
 		// Source
-		src, err := s.repo.GetStockLevel(ctx, wsID, input.ProductID, input.FromWarehouseID)
+		src, err := s.repo.GetStockLevel(ctx, orgID, input.ProductID, input.FromWarehouseID)
 		if err != nil {
 			return errs.NewNotFound("source stock level not found")
 		}
@@ -246,7 +246,7 @@ func (s *Service) Transfer(ctx context.Context, wsID uuid.UUID, input TransferIn
 		}
 
 		// Destination
-		dst, err := s.getOrCreateStockLevel(ctx, tx, wsID, input.ProductID, input.ToWarehouseID, input.Unit)
+		dst, err := s.getOrCreateStockLevel(ctx, tx, orgID, input.ProductID, input.ToWarehouseID, input.Unit)
 		if err != nil {
 			return err
 		}
@@ -258,7 +258,7 @@ func (s *Service) Transfer(ctx context.Context, wsID uuid.UUID, input TransferIn
 
 		m := &StockMovement{
 			ID:              uuid.New(),
-			WorkspaceID:     wsID,
+			OrganizationID:     orgID,
 			ProductID:       input.ProductID,
 			WarehouseID:     input.FromWarehouseID,
 			Type:            "transfer",
@@ -278,7 +278,7 @@ func (s *Service) Transfer(ctx context.Context, wsID uuid.UUID, input TransferIn
 		return nil, err
 	}
 
-	s.publishEvent(ctx, wsID, input.ProductID, "warehouse.stock.transferred", input.ActorID, map[string]any{
+	s.publishEvent(ctx, orgID, input.ProductID, "warehouse.stock.transferred", input.ActorID, map[string]any{
 		"product_id":       input.ProductID,
 		"from_warehouse":   input.FromWarehouseID,
 		"to_warehouse":     input.ToWarehouseID,
@@ -289,7 +289,7 @@ func (s *Service) Transfer(ctx context.Context, wsID uuid.UUID, input TransferIn
 }
 
 // Adjust sets stock to an absolute value (inventory count).
-func (s *Service) Adjust(ctx context.Context, wsID uuid.UUID, input AdjustInput) (*MovementResult, error) {
+func (s *Service) Adjust(ctx context.Context, orgID uuid.UUID, input AdjustInput) (*MovementResult, error) {
 	if input.NewQuantity < 0 {
 		return nil, errs.NewBadRequest("new_quantity cannot be negative")
 	}
@@ -299,7 +299,7 @@ func (s *Service) Adjust(ctx context.Context, wsID uuid.UUID, input AdjustInput)
 
 	var result MovementResult
 	if err := s.repo.WithTx(ctx, func(tx pgx.Tx) error {
-		sl, err := s.getOrCreateStockLevel(ctx, tx, wsID, input.ProductID, input.WarehouseID, "шт")
+		sl, err := s.getOrCreateStockLevel(ctx, tx, orgID, input.ProductID, input.WarehouseID, "шт")
 		if err != nil {
 			return err
 		}
@@ -315,7 +315,7 @@ func (s *Service) Adjust(ctx context.Context, wsID uuid.UUID, input AdjustInput)
 
 		m := &StockMovement{
 			ID:          uuid.New(),
-			WorkspaceID: wsID,
+			OrganizationID: orgID,
 			ProductID:   input.ProductID,
 			WarehouseID: input.WarehouseID,
 			Type:        "adjust",
@@ -339,7 +339,7 @@ func (s *Service) Adjust(ctx context.Context, wsID uuid.UUID, input AdjustInput)
 		return nil, err
 	}
 
-	s.publishEvent(ctx, wsID, input.ProductID, "warehouse.stock.adjusted", input.ActorID, map[string]any{
+	s.publishEvent(ctx, orgID, input.ProductID, "warehouse.stock.adjusted", input.ActorID, map[string]any{
 		"product_id":   input.ProductID,
 		"warehouse_id": input.WarehouseID,
 		"old_quantity": result.OldQuantity,
@@ -350,13 +350,13 @@ func (s *Service) Adjust(ctx context.Context, wsID uuid.UUID, input AdjustInput)
 }
 
 // Reserve increases reserved stock for a product.
-func (s *Service) Reserve(ctx context.Context, wsID uuid.UUID, input ReserveInput) error {
+func (s *Service) Reserve(ctx context.Context, orgID uuid.UUID, input ReserveInput) error {
 	if input.Quantity <= 0 {
 		return errs.NewBadRequest("quantity must be positive")
 	}
 
 	return s.repo.WithTx(ctx, func(tx pgx.Tx) error {
-		sl, err := s.repo.GetStockLevel(ctx, wsID, input.ProductID, input.WarehouseID)
+		sl, err := s.repo.GetStockLevel(ctx, orgID, input.ProductID, input.WarehouseID)
 		if err != nil {
 			return errs.NewNotFound("stock level not found")
 		}
@@ -372,7 +372,7 @@ func (s *Service) Reserve(ctx context.Context, wsID uuid.UUID, input ReserveInpu
 			return err
 		}
 
-		s.publishEvent(ctx, wsID, input.ProductID, "warehouse.stock.reserved", nil, map[string]any{
+		s.publishEvent(ctx, orgID, input.ProductID, "warehouse.stock.reserved", nil, map[string]any{
 			"product_id":   input.ProductID,
 			"warehouse_id": input.WarehouseID,
 			"quantity":     input.Quantity,
@@ -384,13 +384,13 @@ func (s *Service) Reserve(ctx context.Context, wsID uuid.UUID, input ReserveInpu
 }
 
 // Unreserve decreases reserved stock for a product.
-func (s *Service) Unreserve(ctx context.Context, wsID uuid.UUID, input UnreserveInput) error {
+func (s *Service) Unreserve(ctx context.Context, orgID uuid.UUID, input UnreserveInput) error {
 	if input.Quantity <= 0 {
 		return errs.NewBadRequest("quantity must be positive")
 	}
 
 	return s.repo.WithTx(ctx, func(tx pgx.Tx) error {
-		sl, err := s.repo.GetStockLevel(ctx, wsID, input.ProductID, input.WarehouseID)
+		sl, err := s.repo.GetStockLevel(ctx, orgID, input.ProductID, input.WarehouseID)
 		if err != nil {
 			return errs.NewNotFound("stock level not found")
 		}
@@ -405,7 +405,7 @@ func (s *Service) Unreserve(ctx context.Context, wsID uuid.UUID, input Unreserve
 			return err
 		}
 
-		s.publishEvent(ctx, wsID, input.ProductID, "warehouse.stock.unreserved", nil, map[string]any{
+		s.publishEvent(ctx, orgID, input.ProductID, "warehouse.stock.unreserved", nil, map[string]any{
 			"product_id":   input.ProductID,
 			"warehouse_id": input.WarehouseID,
 			"quantity":     input.Quantity,
@@ -417,8 +417,8 @@ func (s *Service) Unreserve(ctx context.Context, wsID uuid.UUID, input Unreserve
 }
 
 // GetStockLevel returns the stock level for a product in a warehouse.
-func (s *Service) GetStockLevel(ctx context.Context, wsID, productID, warehouseID uuid.UUID) (*StockLevel, error) {
-	sl, err := s.repo.GetStockLevel(ctx, wsID, productID, warehouseID)
+func (s *Service) GetStockLevel(ctx context.Context, orgID, productID, warehouseID uuid.UUID) (*StockLevel, error) {
+	sl, err := s.repo.GetStockLevel(ctx, orgID, productID, warehouseID)
 	if err != nil {
 		return nil, err
 	}
@@ -427,10 +427,10 @@ func (s *Service) GetStockLevel(ctx context.Context, wsID, productID, warehouseI
 }
 
 // ListStock returns stock levels for a warehouse.
-func (s *Service) ListStock(ctx context.Context, wsID, warehouseID uuid.UUID, filter StockFilter) (*types.PageResponse[StockLevel], error) {
+func (s *Service) ListStock(ctx context.Context, orgID, warehouseID uuid.UUID, filter StockFilter) (*types.PageResponse[StockLevel], error) {
 	filter.Page.Normalize()
 
-	items, total, err := s.repo.ListStock(ctx, wsID, warehouseID, filter)
+	items, total, err := s.repo.ListStock(ctx, orgID, warehouseID, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -452,8 +452,8 @@ func (s *Service) ListStock(ctx context.Context, wsID, warehouseID uuid.UUID, fi
 }
 
 // GetLowStock returns stock levels where available <= min_quantity.
-func (s *Service) GetLowStock(ctx context.Context, wsID uuid.UUID) ([]StockLevel, error) {
-	items, err := s.repo.GetLowStock(ctx, wsID)
+func (s *Service) GetLowStock(ctx context.Context, orgID uuid.UUID) ([]StockLevel, error) {
+	items, err := s.repo.GetLowStock(ctx, orgID)
 	if err != nil {
 		return nil, err
 	}
@@ -464,10 +464,10 @@ func (s *Service) GetLowStock(ctx context.Context, wsID uuid.UUID) ([]StockLevel
 }
 
 // GetMovements returns stock movements matching the filter.
-func (s *Service) GetMovements(ctx context.Context, wsID uuid.UUID, filter MovementFilter) (*types.PageResponse[StockMovement], error) {
+func (s *Service) GetMovements(ctx context.Context, orgID uuid.UUID, filter MovementFilter) (*types.PageResponse[StockMovement], error) {
 	filter.Page.Normalize()
 
-	items, total, err := s.repo.ListMovements(ctx, wsID, filter)
+	items, total, err := s.repo.ListMovements(ctx, orgID, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -484,9 +484,9 @@ func (s *Service) GetMovements(ctx context.Context, wsID uuid.UUID, filter Movem
 }
 
 // CheckAvailability checks if all items have sufficient stock.
-func (s *Service) CheckAvailability(ctx context.Context, wsID uuid.UUID, items []CheckItem) error {
+func (s *Service) CheckAvailability(ctx context.Context, orgID uuid.UUID, items []CheckItem) error {
 	for _, item := range items {
-		sl, err := s.repo.GetStockLevel(ctx, wsID, item.ProductID, item.WarehouseID)
+		sl, err := s.repo.GetStockLevel(ctx, orgID, item.ProductID, item.WarehouseID)
 		if err != nil {
 			return errs.NewConflict("stock not found for product " + item.ProductID.String())
 		}
@@ -500,11 +500,11 @@ func (s *Service) CheckAvailability(ctx context.Context, wsID uuid.UUID, items [
 
 // --- helpers ---
 
-func (s *Service) getOrCreateStockLevel(ctx context.Context, tx pgx.Tx, wsID, productID, warehouseID uuid.UUID, unit string) (*StockLevel, error) {
-	sl, err := s.repo.GetStockLevel(ctx, wsID, productID, warehouseID)
+func (s *Service) getOrCreateStockLevel(ctx context.Context, tx pgx.Tx, orgID, productID, warehouseID uuid.UUID, unit string) (*StockLevel, error) {
+	sl, err := s.repo.GetStockLevel(ctx, orgID, productID, warehouseID)
 	if err != nil {
 		sl = &StockLevel{
-			WorkspaceID: wsID,
+			OrganizationID: orgID,
 			ProductID:   productID,
 			WarehouseID: warehouseID,
 			Unit:        unit,
@@ -514,10 +514,10 @@ func (s *Service) getOrCreateStockLevel(ctx context.Context, tx pgx.Tx, wsID, pr
 	return sl, nil
 }
 
-func (s *Service) publishEvent(ctx context.Context, wsID uuid.UUID, productID uuid.UUID, eventType string, actorID *uuid.UUID, data map[string]any) {
+func (s *Service) publishEvent(ctx context.Context, orgID uuid.UUID, productID uuid.UUID, eventType string, actorID *uuid.UUID, data map[string]any) {
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		EntityID:    &productID,
 		Type:        eventType,
 		ActorID:     actorID,
@@ -528,14 +528,14 @@ func (s *Service) publishEvent(ctx context.Context, wsID uuid.UUID, productID uu
 	s.eventBus.Publish(ctx, ev)
 }
 
-func (s *Service) checkLowStock(ctx context.Context, wsID uuid.UUID, productID, warehouseID uuid.UUID, actorID *uuid.UUID) {
-	sl, err := s.repo.GetStockLevel(ctx, wsID, productID, warehouseID)
+func (s *Service) checkLowStock(ctx context.Context, orgID uuid.UUID, productID, warehouseID uuid.UUID, actorID *uuid.UUID) {
+	sl, err := s.repo.GetStockLevel(ctx, orgID, productID, warehouseID)
 	if err != nil {
 		return
 	}
 	available := sl.Quantity - sl.Reserved
 	if sl.MinQuantity > 0 && available <= sl.MinQuantity {
-		s.publishEvent(ctx, wsID, productID, "warehouse.stock.low", actorID, map[string]any{
+		s.publishEvent(ctx, orgID, productID, "warehouse.stock.low", actorID, map[string]any{
 			"product_id":   productID,
 			"warehouse_id": warehouseID,
 			"available":    available,

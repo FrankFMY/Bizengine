@@ -144,14 +144,15 @@ func main() {
 		Disconnector: centPub,
 		ViewUnsub:    viewManager,
 		RedisClient:  redisClient,
+		Pool:         pool,
 		EntityH:      rest.NewEntityHandler(entitySvc),
 		EventH:       rest.NewEventHandler(eventStore),
-		WorkspaceH: rest.NewWorkspaceHandler(authSvc, authRepo,
+		OrganizationH: rest.NewOrganizationHandler(authSvc, authRepo,
 			financeSvc.SeedDefaultAccounts,
-			func(ctx context.Context, wsID uuid.UUID) error {
+			func(ctx context.Context, orgID uuid.UUID) error {
 				_, err := pool.Exec(ctx,
-					`INSERT INTO order_number_sequences (workspace_id, last_number) VALUES ($1, 0) ON CONFLICT DO NOTHING`,
-					wsID)
+					`INSERT INTO order_number_sequences (organization_id, last_number) VALUES ($1, 0) ON CONFLICT DO NOTHING`,
+					orgID)
 				return err
 			},
 		),
@@ -249,7 +250,7 @@ func setupEventSubscriptions(eventBus event.Bus, warehouseSvc *warehouse.Service
 			return nil
 		}
 		for _, item := range data.Items {
-			if err := warehouseSvc.Reserve(ctx, ev.WorkspaceID, warehouse.ReserveInput{
+			if err := warehouseSvc.Reserve(ctx, ev.OrganizationID, warehouse.ReserveInput{
 				ProductID:   item.ProductID,
 				WarehouseID: *data.WarehouseID,
 				Quantity:    item.Quantity,
@@ -277,7 +278,7 @@ func setupEventSubscriptions(eventBus event.Bus, warehouseSvc *warehouse.Service
 			return nil
 		}
 		for _, item := range data.Items {
-			if err := warehouseSvc.Unreserve(ctx, ev.WorkspaceID, warehouse.UnreserveInput{
+			if err := warehouseSvc.Unreserve(ctx, ev.OrganizationID, warehouse.UnreserveInput{
 				ProductID:   item.ProductID,
 				WarehouseID: *data.WarehouseID,
 				Quantity:    item.Quantity,
@@ -296,7 +297,7 @@ func setupEventSubscriptions(eventBus event.Bus, warehouseSvc *warehouse.Service
 		if total > 0 {
 			date := ev.Timestamp.Format("2006-01-02")
 			refType := "order"
-			financeSvc.CreateAutoTransaction(ctx, ev.WorkspaceID, date, "Order created", "62", "90", int64(total), &refType, ev.EntityID)
+			financeSvc.CreateAutoTransaction(ctx, ev.OrganizationID, date, "Order created", "62", "90", int64(total), &refType, ev.EntityID)
 		}
 		return nil
 	}))
@@ -313,7 +314,7 @@ func setupEventSubscriptions(eventBus event.Bus, warehouseSvc *warehouse.Service
 			if method == "cash" {
 				debitCode = "50"
 			}
-			financeSvc.CreateAutoTransaction(ctx, ev.WorkspaceID, date, "Order payment", debitCode, "62", int64(amount), &refType, ev.EntityID)
+			financeSvc.CreateAutoTransaction(ctx, ev.OrganizationID, date, "Order payment", debitCode, "62", int64(amount), &refType, ev.EntityID)
 		}
 		return nil
 	}))
@@ -325,7 +326,7 @@ func setupEventSubscriptions(eventBus event.Bus, warehouseSvc *warehouse.Service
 		if cost > 0 {
 			date := ev.Timestamp.Format("2006-01-02")
 			refType := "stock"
-			financeSvc.CreateAutoTransaction(ctx, ev.WorkspaceID, date, "Stock received", "41", "60", int64(cost), &refType, ev.EntityID)
+			financeSvc.CreateAutoTransaction(ctx, ev.OrganizationID, date, "Stock received", "41", "60", int64(cost), &refType, ev.EntityID)
 		}
 		return nil
 	}))
@@ -341,7 +342,7 @@ type warehouseAdapter struct {
 	svc *warehouse.Service
 }
 
-func (a *warehouseAdapter) CheckAvailability(ctx context.Context, wsID uuid.UUID, items []order.CheckItem) error {
+func (a *warehouseAdapter) CheckAvailability(ctx context.Context, orgID uuid.UUID, items []order.CheckItem) error {
 	wItems := make([]warehouse.CheckItem, len(items))
 	for i, item := range items {
 		wItems[i] = warehouse.CheckItem{
@@ -350,7 +351,7 @@ func (a *warehouseAdapter) CheckAvailability(ctx context.Context, wsID uuid.UUID
 			Quantity:    item.Quantity,
 		}
 	}
-	return a.svc.CheckAvailability(ctx, wsID, wItems)
+	return a.svc.CheckAvailability(ctx, orgID, wItems)
 }
 
 func setupLogger(level, env string) {

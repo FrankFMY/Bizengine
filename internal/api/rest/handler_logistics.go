@@ -19,9 +19,9 @@ func NewLogisticsHandler(svc *logistics.Service) *LogisticsHandler {
 	return &LogisticsHandler{svc: svc}
 }
 
-// CreateRoute handles POST /api/v1/workspaces/{wsID}/logistics/routes.
+// CreateRoute handles POST /api/v1/organizations/{orgID}/logistics/routes.
 func (h *LogisticsHandler) CreateRoute(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -34,7 +34,7 @@ func (h *LogisticsHandler) CreateRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	route, err := h.svc.CreateRoute(r.Context(), wsID, input, &userID)
+	route, err := h.svc.CreateRoute(r.Context(), orgID, input, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -43,9 +43,9 @@ func (h *LogisticsHandler) CreateRoute(w http.ResponseWriter, r *http.Request) {
 	respondCreated(w,route)
 }
 
-// ListRoutes handles GET /api/v1/workspaces/{wsID}/logistics/routes.
+// ListRoutes handles GET /api/v1/organizations/{orgID}/logistics/routes.
 func (h *LogisticsHandler) ListRoutes(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -57,7 +57,7 @@ func (h *LogisticsHandler) ListRoutes(w http.ResponseWriter, r *http.Request) {
 		Page:     parsePage(r),
 	}
 
-	routes, total, err := h.svc.ListRoutes(r.Context(), wsID, filter)
+	routes, total, err := h.svc.ListRoutes(r.Context(), orgID, filter)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -71,9 +71,9 @@ func (h *LogisticsHandler) ListRoutes(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetRoute handles GET /api/v1/workspaces/{wsID}/logistics/routes/{id}.
+// GetRoute handles GET /api/v1/organizations/{orgID}/logistics/routes/{id}.
 func (h *LogisticsHandler) GetRoute(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -84,7 +84,7 @@ func (h *LogisticsHandler) GetRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	route, err := h.svc.GetRoute(r.Context(), wsID, routeID)
+	route, err := h.svc.GetRoute(r.Context(), orgID, routeID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -93,9 +93,9 @@ func (h *LogisticsHandler) GetRoute(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,route)
 }
 
-// StartRoute handles POST /api/v1/workspaces/{wsID}/logistics/routes/{id}/start.
+// StartRoute handles POST /api/v1/organizations/{orgID}/logistics/routes/{id}/start.
 func (h *LogisticsHandler) StartRoute(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -107,7 +107,7 @@ func (h *LogisticsHandler) StartRoute(w http.ResponseWriter, r *http.Request) {
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
-	route, err := h.svc.StartRoute(r.Context(), wsID, routeID, &userID)
+	route, err := h.svc.StartRoute(r.Context(), orgID, routeID, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -116,9 +116,9 @@ func (h *LogisticsHandler) StartRoute(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,route)
 }
 
-// CompleteRoute handles POST /api/v1/workspaces/{wsID}/logistics/routes/{id}/complete.
+// CompleteRoute handles POST /api/v1/organizations/{orgID}/logistics/routes/{id}/complete.
 func (h *LogisticsHandler) CompleteRoute(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -130,7 +130,7 @@ func (h *LogisticsHandler) CompleteRoute(w http.ResponseWriter, r *http.Request)
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
-	route, err := h.svc.CompleteRoute(r.Context(), wsID, routeID, &userID)
+	route, err := h.svc.CompleteRoute(r.Context(), orgID, routeID, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -139,9 +139,9 @@ func (h *LogisticsHandler) CompleteRoute(w http.ResponseWriter, r *http.Request)
 	respondOK(w, http.StatusOK,route)
 }
 
-// ArriveAtStop handles POST /api/v1/workspaces/{wsID}/logistics/routes/{id}/stops/{stopID}/arrive.
+// ArriveAtStop handles POST /api/v1/organizations/{orgID}/logistics/routes/{id}/stops/{stopID}/arrive.
 func (h *LogisticsHandler) ArriveAtStop(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -158,7 +158,7 @@ func (h *LogisticsHandler) ArriveAtStop(w http.ResponseWriter, r *http.Request) 
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
-	stop, err := h.svc.ArriveAtStop(r.Context(), wsID, routeID, stopID, &userID)
+	stop, err := h.svc.ArriveAtStop(r.Context(), orgID, routeID, stopID, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -167,9 +167,9 @@ func (h *LogisticsHandler) ArriveAtStop(w http.ResponseWriter, r *http.Request) 
 	respondOK(w, http.StatusOK,stop)
 }
 
-// CompleteStop handles POST /api/v1/workspaces/{wsID}/logistics/routes/{id}/stops/{stopID}/complete.
+// CompleteStop handles POST /api/v1/organizations/{orgID}/logistics/routes/{id}/stops/{stopID}/complete.
 func (h *LogisticsHandler) CompleteStop(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -186,7 +186,7 @@ func (h *LogisticsHandler) CompleteStop(w http.ResponseWriter, r *http.Request) 
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
-	stop, err := h.svc.CompleteStop(r.Context(), wsID, routeID, stopID, &userID)
+	stop, err := h.svc.CompleteStop(r.Context(), orgID, routeID, stopID, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -195,9 +195,9 @@ func (h *LogisticsHandler) CompleteStop(w http.ResponseWriter, r *http.Request) 
 	respondOK(w, http.StatusOK,stop)
 }
 
-// UpdateGeo handles POST /api/v1/workspaces/{wsID}/logistics/geo.
+// UpdateGeo handles POST /api/v1/organizations/{orgID}/logistics/geo.
 func (h *LogisticsHandler) UpdateGeo(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -233,7 +233,7 @@ func (h *LogisticsHandler) UpdateGeo(w http.ResponseWriter, r *http.Request) {
 		point.RecordedAt = *body.RecordedAt
 	}
 
-	if err := h.svc.UpdateGeo(r.Context(), wsID, entityID, point, &userID); err != nil {
+	if err := h.svc.UpdateGeo(r.Context(), orgID, entityID, point, &userID); err != nil {
 		respondError(w, err)
 		return
 	}
@@ -241,9 +241,9 @@ func (h *LogisticsHandler) UpdateGeo(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK, nil)
 }
 
-// GetTrack handles GET /api/v1/workspaces/{wsID}/logistics/geo/{entityID}/track.
+// GetTrack handles GET /api/v1/organizations/{orgID}/logistics/geo/{entityID}/track.
 func (h *LogisticsHandler) GetTrack(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -272,7 +272,7 @@ func (h *LogisticsHandler) GetTrack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	points, err := h.svc.GetTrack(r.Context(), wsID, entityID, from, to)
+	points, err := h.svc.GetTrack(r.Context(), orgID, entityID, from, to)
 	if err != nil {
 		respondError(w, err)
 		return

@@ -20,9 +20,9 @@ func NewHRHandler(hrSvc *hr.Service) *HRHandler {
 	return &HRHandler{hrSvc: hrSvc}
 }
 
-// HireEmployee handles POST /api/v1/workspaces/{wsID}/hr/employees.
+// HireEmployee handles POST /api/v1/organizations/{orgID}/hr/employees.
 func (h *HRHandler) HireEmployee(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -35,7 +35,7 @@ func (h *HRHandler) HireEmployee(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	emp, err := h.hrSvc.HireEmployee(r.Context(), wsID, input, &userID)
+	emp, err := h.hrSvc.HireEmployee(r.Context(), orgID, input, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -44,9 +44,9 @@ func (h *HRHandler) HireEmployee(w http.ResponseWriter, r *http.Request) {
 	respondCreated(w,emp)
 }
 
-// ListEmployees handles GET /api/v1/workspaces/{wsID}/hr/employees.
+// ListEmployees handles GET /api/v1/organizations/{orgID}/hr/employees.
 func (h *HRHandler) ListEmployees(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -58,7 +58,7 @@ func (h *HRHandler) ListEmployees(w http.ResponseWriter, r *http.Request) {
 		Page:         parsePage(r),
 	}
 
-	employees, total, err := h.hrSvc.ListEmployees(r.Context(), wsID, filter)
+	employees, total, err := h.hrSvc.ListEmployees(r.Context(), orgID, filter)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -72,9 +72,9 @@ func (h *HRHandler) ListEmployees(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetEmployee handles GET /api/v1/workspaces/{wsID}/hr/employees/{id}.
+// GetEmployee handles GET /api/v1/organizations/{orgID}/hr/employees/{id}.
 func (h *HRHandler) GetEmployee(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -85,7 +85,7 @@ func (h *HRHandler) GetEmployee(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	emp, err := h.hrSvc.GetEmployee(r.Context(), wsID, id)
+	emp, err := h.hrSvc.GetEmployee(r.Context(), orgID, id)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -94,9 +94,9 @@ func (h *HRHandler) GetEmployee(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,emp)
 }
 
-// UpdateEmployee handles PUT /api/v1/workspaces/{wsID}/hr/employees/{id}.
+// UpdateEmployee handles PUT /api/v1/organizations/{orgID}/hr/employees/{id}.
 func (h *HRHandler) UpdateEmployee(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -114,7 +114,7 @@ func (h *HRHandler) UpdateEmployee(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	emp, err := h.hrSvc.UpdateEmployee(r.Context(), wsID, id, input, &userID)
+	emp, err := h.hrSvc.UpdateEmployee(r.Context(), orgID, id, input, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -123,9 +123,9 @@ func (h *HRHandler) UpdateEmployee(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,emp)
 }
 
-// TerminateEmployee handles POST /api/v1/workspaces/{wsID}/hr/employees/{id}/terminate.
+// TerminateEmployee handles POST /api/v1/organizations/{orgID}/hr/employees/{id}/terminate.
 func (h *HRHandler) TerminateEmployee(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -145,7 +145,7 @@ func (h *HRHandler) TerminateEmployee(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.hrSvc.TerminateEmployee(r.Context(), wsID, id, input.Reason, &userID); err != nil {
+	if err := h.hrSvc.TerminateEmployee(r.Context(), orgID, id, input.Reason, &userID); err != nil {
 		respondError(w, err)
 		return
 	}
@@ -153,9 +153,9 @@ func (h *HRHandler) TerminateEmployee(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK, nil)
 }
 
-// CreateShift handles POST /api/v1/workspaces/{wsID}/hr/shifts.
+// CreateShift handles POST /api/v1/organizations/{orgID}/hr/shifts.
 func (h *HRHandler) CreateShift(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -168,7 +168,7 @@ func (h *HRHandler) CreateShift(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shift, err := h.hrSvc.CreateShift(r.Context(), wsID, input, &userID)
+	shift, err := h.hrSvc.CreateShift(r.Context(), orgID, input, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -177,9 +177,9 @@ func (h *HRHandler) CreateShift(w http.ResponseWriter, r *http.Request) {
 	respondCreated(w,shift)
 }
 
-// ListShifts handles GET /api/v1/workspaces/{wsID}/hr/shifts.
+// ListShifts handles GET /api/v1/organizations/{orgID}/hr/shifts.
 func (h *HRHandler) ListShifts(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -206,7 +206,7 @@ func (h *HRHandler) ListShifts(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	shifts, total, err := h.hrSvc.ListShifts(r.Context(), wsID, filter)
+	shifts, total, err := h.hrSvc.ListShifts(r.Context(), orgID, filter)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -220,9 +220,9 @@ func (h *HRHandler) ListShifts(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// UpdateShift handles PUT /api/v1/workspaces/{wsID}/hr/shifts/{id}.
+// UpdateShift handles PUT /api/v1/organizations/{orgID}/hr/shifts/{id}.
 func (h *HRHandler) UpdateShift(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -240,7 +240,7 @@ func (h *HRHandler) UpdateShift(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shift, err := h.hrSvc.UpdateShift(r.Context(), wsID, id, input, &userID)
+	shift, err := h.hrSvc.UpdateShift(r.Context(), orgID, id, input, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -249,9 +249,9 @@ func (h *HRHandler) UpdateShift(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,shift)
 }
 
-// DeleteShift handles DELETE /api/v1/workspaces/{wsID}/hr/shifts/{id}.
+// DeleteShift handles DELETE /api/v1/organizations/{orgID}/hr/shifts/{id}.
 func (h *HRHandler) DeleteShift(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -262,7 +262,7 @@ func (h *HRHandler) DeleteShift(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.hrSvc.DeleteShift(r.Context(), wsID, id); err != nil {
+	if err := h.hrSvc.DeleteShift(r.Context(), orgID, id); err != nil {
 		respondError(w, err)
 		return
 	}
@@ -270,9 +270,9 @@ func (h *HRHandler) DeleteShift(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK, nil)
 }
 
-// ClockIn handles POST /api/v1/workspaces/{wsID}/hr/timesheets/clock-in.
+// ClockIn handles POST /api/v1/organizations/{orgID}/hr/timesheets/clock-in.
 func (h *HRHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -304,7 +304,7 @@ func (h *HRHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 		shiftID = &id
 	}
 
-	ts, err := h.hrSvc.ClockIn(r.Context(), wsID, empID, shiftID, &userID)
+	ts, err := h.hrSvc.ClockIn(r.Context(), orgID, empID, shiftID, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -313,9 +313,9 @@ func (h *HRHandler) ClockIn(w http.ResponseWriter, r *http.Request) {
 	respondCreated(w,ts)
 }
 
-// ClockOut handles POST /api/v1/workspaces/{wsID}/hr/timesheets/{id}/clock-out.
+// ClockOut handles POST /api/v1/organizations/{orgID}/hr/timesheets/{id}/clock-out.
 func (h *HRHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -327,7 +327,7 @@ func (h *HRHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
-	ts, err := h.hrSvc.ClockOut(r.Context(), wsID, id, &userID)
+	ts, err := h.hrSvc.ClockOut(r.Context(), orgID, id, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -336,9 +336,9 @@ func (h *HRHandler) ClockOut(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,ts)
 }
 
-// ListTimesheets handles GET /api/v1/workspaces/{wsID}/hr/timesheets.
+// ListTimesheets handles GET /api/v1/organizations/{orgID}/hr/timesheets.
 func (h *HRHandler) ListTimesheets(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -365,7 +365,7 @@ func (h *HRHandler) ListTimesheets(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	timesheets, total, err := h.hrSvc.ListTimesheets(r.Context(), wsID, filter)
+	timesheets, total, err := h.hrSvc.ListTimesheets(r.Context(), orgID, filter)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -379,9 +379,9 @@ func (h *HRHandler) ListTimesheets(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// ApproveTimesheet handles POST /api/v1/workspaces/{wsID}/hr/timesheets/{id}/approve.
+// ApproveTimesheet handles POST /api/v1/organizations/{orgID}/hr/timesheets/{id}/approve.
 func (h *HRHandler) ApproveTimesheet(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -393,7 +393,7 @@ func (h *HRHandler) ApproveTimesheet(w http.ResponseWriter, r *http.Request) {
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
-	if err := h.hrSvc.ApproveTimesheet(r.Context(), wsID, id, &userID); err != nil {
+	if err := h.hrSvc.ApproveTimesheet(r.Context(), orgID, id, &userID); err != nil {
 		respondError(w, err)
 		return
 	}

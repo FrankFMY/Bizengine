@@ -31,8 +31,8 @@ func NewEngine(repo Repository, eventBus event.Bus) *Engine {
 }
 
 // LoadDefinitions reads definitions from the repository and indexes them by trigger_on.
-func (e *Engine) LoadDefinitions(ctx context.Context, wsID uuid.UUID) error {
-	defs, err := e.repo.ListDefinitions(ctx, wsID)
+func (e *Engine) LoadDefinitions(ctx context.Context, orgID uuid.UUID) error {
+	defs, err := e.repo.ListDefinitions(ctx, orgID)
 	if err != nil {
 		return err
 	}
@@ -86,26 +86,26 @@ func (e *Engine) GetInstancesByEntity(ctx context.Context, entityID uuid.UUID) (
 	return e.repo.GetActiveByEntity(ctx, entityID)
 }
 
-// ListInstances returns process instances for a workspace.
-func (e *Engine) ListInstances(ctx context.Context, wsID uuid.UUID, status *string, limit, offset int) ([]Instance, int, error) {
-	return e.repo.ListInstances(ctx, wsID, status, limit, offset)
+// ListInstances returns process instances for an organization.
+func (e *Engine) ListInstances(ctx context.Context, orgID uuid.UUID, status *string, limit, offset int) ([]Instance, int, error) {
+	return e.repo.ListInstances(ctx, orgID, status, limit, offset)
 }
 
-// ListDefinitions returns all definitions for a workspace.
-func (e *Engine) ListDefinitions(ctx context.Context, wsID uuid.UUID) ([]DefinitionRecord, error) {
-	return e.repo.ListDefinitions(ctx, wsID)
+// ListDefinitions returns all definitions for an organization.
+func (e *Engine) ListDefinitions(ctx context.Context, orgID uuid.UUID) ([]DefinitionRecord, error) {
+	return e.repo.ListDefinitions(ctx, orgID)
 }
 
 // GetDefinition returns a definition by ID.
-func (e *Engine) GetDefinition(ctx context.Context, id string, wsID *uuid.UUID) (*DefinitionRecord, error) {
-	return e.repo.GetDefinition(ctx, id, wsID)
+func (e *Engine) GetDefinition(ctx context.Context, id string, orgID *uuid.UUID) (*DefinitionRecord, error) {
+	return e.repo.GetDefinition(ctx, id, orgID)
 }
 
 func (e *Engine) startProcess(ctx context.Context, ev types.Event, def *dsl.ProcessDefinition) error {
 	now := time.Now()
 	inst := &Instance{
 		ID:           uuid.New(),
-		WorkspaceID:  ev.WorkspaceID,
+		OrganizationID:  ev.OrganizationID,
 		DefinitionID: def.ID,
 		EntityID:     *ev.EntityID,
 		CurrentState: def.InitState,
@@ -228,7 +228,7 @@ func (e *Engine) executeEmitEvent(ctx context.Context, source types.Event, param
 
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: source.WorkspaceID,
+		OrganizationID: source.OrganizationID,
 		EntityID:    source.EntityID,
 		Type:        eventType,
 		Timestamp:   time.Now(),
@@ -245,7 +245,7 @@ func (e *Engine) executeUpdateStatus(ctx context.Context, source types.Event, pa
 	}
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: source.WorkspaceID,
+		OrganizationID: source.OrganizationID,
 		EntityID:    source.EntityID,
 		Type:        "entity.status_update_requested",
 		Timestamp:   time.Now(),
@@ -258,7 +258,7 @@ func (e *Engine) executeUpdateStatus(ctx context.Context, source types.Event, pa
 func (e *Engine) executeNotify(ctx context.Context, source types.Event, params map[string]any) {
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: source.WorkspaceID,
+		OrganizationID: source.OrganizationID,
 		EntityID:    source.EntityID,
 		Type:        "notification.created",
 		Timestamp:   time.Now(),
@@ -269,10 +269,10 @@ func (e *Engine) executeNotify(ctx context.Context, source types.Event, params m
 }
 
 // TriggerManual allows manual triggering of an event for process advancement.
-func (e *Engine) TriggerManual(ctx context.Context, wsID uuid.UUID, entityID uuid.UUID, eventType string, data json.RawMessage) error {
+func (e *Engine) TriggerManual(ctx context.Context, orgID uuid.UUID, entityID uuid.UUID, eventType string, data json.RawMessage) error {
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		EntityID:    &entityID,
 		Type:        eventType,
 		Timestamp:   time.Now(),

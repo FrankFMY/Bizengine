@@ -13,23 +13,23 @@ import (
 	"github.com/bizengine/engine/pkg/types"
 )
 
-// WorkspaceSeedFunc is called after a workspace is created to seed initial data.
-type WorkspaceSeedFunc func(ctx context.Context, wsID uuid.UUID) error
+// OrganizationSeedFunc is called after an organization is created to seed initial data.
+type OrganizationSeedFunc func(ctx context.Context, orgID uuid.UUID) error
 
-// WorkspaceHandler handles workspace endpoints.
-type WorkspaceHandler struct {
+// OrganizationHandler handles organization endpoints.
+type OrganizationHandler struct {
 	authSvc *auth.Service
 	repo    auth.Repository
-	seeders []WorkspaceSeedFunc
+	seeders []OrganizationSeedFunc
 }
 
-// NewWorkspaceHandler creates a new WorkspaceHandler.
-func NewWorkspaceHandler(authSvc *auth.Service, repo auth.Repository, seeders ...WorkspaceSeedFunc) *WorkspaceHandler {
-	return &WorkspaceHandler{authSvc: authSvc, repo: repo, seeders: seeders}
+// NewOrganizationHandler creates a new OrganizationHandler.
+func NewOrganizationHandler(authSvc *auth.Service, repo auth.Repository, seeders ...OrganizationSeedFunc) *OrganizationHandler {
+	return &OrganizationHandler{authSvc: authSvc, repo: repo, seeders: seeders}
 }
 
-// Create handles POST /api/v1/workspaces.
-func (h *WorkspaceHandler) Create(w http.ResponseWriter, r *http.Request) {
+// Create handles POST /api/v1/organizations.
+func (h *OrganizationHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.UserIDFromCtx(r.Context())
 	if !ok {
 		respondError(w, errs.NewUnauthorized("not authenticated"))
@@ -45,68 +45,68 @@ func (h *WorkspaceHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ws, err := h.authSvc.CreateWorkspace(r.Context(), userID, input.Name, input.Slug)
+	org, err := h.authSvc.CreateOrganization(r.Context(), userID, input.Name, input.Slug)
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
 	for _, seed := range h.seeders {
-		if err := seed(r.Context(), ws.ID); err != nil {
-			log.Error().Err(err).Str("workspace_id", ws.ID.String()).Msg("workspace seed failed")
+		if err := seed(r.Context(), org.ID); err != nil {
+			log.Error().Err(err).Str("organization_id", org.ID.String()).Msg("organization seed failed")
 		}
 	}
 
-	respondCreated(w,ws)
+	respondCreated(w,org)
 }
 
-// List handles GET /api/v1/workspaces.
-func (h *WorkspaceHandler) List(w http.ResponseWriter, r *http.Request) {
+// List handles GET /api/v1/organizations.
+func (h *OrganizationHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.UserIDFromCtx(r.Context())
 	if !ok {
 		respondError(w, errs.NewUnauthorized("not authenticated"))
 		return
 	}
 
-	workspaces, err := h.repo.ListUserWorkspaces(r.Context(), userID)
+	organizations, err := h.repo.ListUserOrganizations(r.Context(), userID)
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
-	if workspaces == nil {
-		workspaces = []types.Workspace{}
+	if organizations == nil {
+		organizations = []types.Organization{}
 	}
 
-	respondOK(w, http.StatusOK,workspaces)
+	respondOK(w, http.StatusOK,organizations)
 }
 
-// Get handles GET /api/v1/workspaces/{wsID}.
-func (h *WorkspaceHandler) Get(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+// Get handles GET /api/v1/organizations/{orgID}.
+func (h *OrganizationHandler) Get(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
-	ws, err := h.repo.GetWorkspace(r.Context(), wsID)
+	org, err := h.repo.GetOrganization(r.Context(), orgID)
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
-	respondOK(w, http.StatusOK,ws)
+	respondOK(w, http.StatusOK,org)
 }
 
-// Update handles PUT /api/v1/workspaces/{wsID}.
-func (h *WorkspaceHandler) Update(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+// Update handles PUT /api/v1/organizations/{orgID}.
+func (h *OrganizationHandler) Update(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
-	ws, err := h.repo.GetWorkspace(r.Context(), wsID)
+	org, err := h.repo.GetOrganization(r.Context(), orgID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -122,23 +122,23 @@ func (h *WorkspaceHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if input.Name != nil {
-		ws.Name = *input.Name
+		org.Name = *input.Name
 	}
 	if input.Settings != nil {
-		ws.Settings = input.Settings
+		org.Settings = input.Settings
 	}
 
-	if err := h.repo.UpdateWorkspace(r.Context(), ws); err != nil {
+	if err := h.repo.UpdateOrganization(r.Context(), org); err != nil {
 		respondError(w, err)
 		return
 	}
 
-	respondOK(w, http.StatusOK,ws)
+	respondOK(w, http.StatusOK,org)
 }
 
-// AddMember handles POST /api/v1/workspaces/{wsID}/members.
-func (h *WorkspaceHandler) AddMember(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+// AddMember handles POST /api/v1/organizations/{orgID}/members.
+func (h *OrganizationHandler) AddMember(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -159,8 +159,8 @@ func (h *WorkspaceHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	member := &types.WorkspaceMember{
-		WorkspaceID: wsID,
+	member := &types.Labor{
+		OrganizationID: orgID,
 		UserID:      user.ID,
 		Role:        input.Role,
 	}
@@ -172,15 +172,15 @@ func (h *WorkspaceHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 	respondCreated(w,member)
 }
 
-// ListMembers handles GET /api/v1/workspaces/{wsID}/members.
-func (h *WorkspaceHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+// ListMembers handles GET /api/v1/organizations/{orgID}/members.
+func (h *OrganizationHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
-	members, err := h.repo.ListMembers(r.Context(), wsID)
+	members, err := h.repo.ListMembers(r.Context(), orgID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -189,9 +189,9 @@ func (h *WorkspaceHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,members)
 }
 
-// UpdateMember handles PUT /api/v1/workspaces/{wsID}/members/{userID}.
-func (h *WorkspaceHandler) UpdateMember(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+// UpdateMember handles PUT /api/v1/organizations/{orgID}/members/{userID}.
+func (h *OrganizationHandler) UpdateMember(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -210,18 +210,18 @@ func (h *WorkspaceHandler) UpdateMember(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := h.repo.UpdateMemberRole(r.Context(), wsID, userID, input.Role); err != nil {
+	if err := h.repo.UpdateMemberRole(r.Context(), orgID, userID, input.Role); err != nil {
 		respondError(w, err)
 		return
 	}
 
-	member, _ := h.repo.GetMember(r.Context(), wsID, userID)
+	member, _ := h.repo.GetMember(r.Context(), orgID, userID)
 	respondOK(w, http.StatusOK,member)
 }
 
-// RemoveMember handles DELETE /api/v1/workspaces/{wsID}/members/{userID}.
-func (h *WorkspaceHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+// RemoveMember handles DELETE /api/v1/organizations/{orgID}/members/{userID}.
+func (h *OrganizationHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -232,7 +232,7 @@ func (h *WorkspaceHandler) RemoveMember(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	if err := h.repo.RemoveMember(r.Context(), wsID, userID); err != nil {
+	if err := h.repo.RemoveMember(r.Context(), orgID, userID); err != nil {
 		respondError(w, err)
 		return
 	}

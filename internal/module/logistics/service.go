@@ -24,14 +24,14 @@ func NewService(repo Repository, bus event.Bus) *Service {
 }
 
 // CreateRoute creates a new delivery route with stops.
-func (s *Service) CreateRoute(ctx context.Context, wsID uuid.UUID, input CreateRouteInput, actorID *uuid.UUID) (*Route, error) {
+func (s *Service) CreateRoute(ctx context.Context, orgID uuid.UUID, input CreateRouteInput, actorID *uuid.UUID) (*Route, error) {
 	if input.Name == "" {
 		return nil, errs.NewBadRequest("name is required")
 	}
 
 	route := &Route{
 		ID:           uuid.New(),
-		WorkspaceID:  wsID,
+		OrganizationID:  orgID,
 		Name:         input.Name,
 		VehicleID:    input.VehicleID,
 		DriverID:     input.DriverID,
@@ -51,7 +51,7 @@ func (s *Service) CreateRoute(ctx context.Context, wsID uuid.UUID, input CreateR
 			stops[i] = RouteStop{
 				ID:             uuid.New(),
 				RouteID:        route.ID,
-				WorkspaceID:    wsID,
+				OrganizationID:    orgID,
 				LocationID:     stopInput.LocationID,
 				Address:        stopInput.Address,
 				Latitude:       stopInput.Latitude,
@@ -69,7 +69,7 @@ func (s *Service) CreateRoute(ctx context.Context, wsID uuid.UUID, input CreateR
 		route.Stops = stops
 	}
 
-	s.publishEvent(ctx, wsID, "logistics.route.created", map[string]any{
+	s.publishEvent(ctx, orgID, "logistics.route.created", map[string]any{
 		"route_id": route.ID.String(),
 		"name":     route.Name,
 	}, actorID)
@@ -78,8 +78,8 @@ func (s *Service) CreateRoute(ctx context.Context, wsID uuid.UUID, input CreateR
 }
 
 // GetRoute returns a route with its stops.
-func (s *Service) GetRoute(ctx context.Context, wsID, routeID uuid.UUID) (*Route, error) {
-	route, err := s.repo.GetRoute(ctx, wsID, routeID)
+func (s *Service) GetRoute(ctx context.Context, orgID, routeID uuid.UUID) (*Route, error) {
+	route, err := s.repo.GetRoute(ctx, orgID, routeID)
 	if err != nil {
 		return nil, err
 	}
@@ -92,14 +92,14 @@ func (s *Service) GetRoute(ctx context.Context, wsID, routeID uuid.UUID) (*Route
 }
 
 // ListRoutes returns routes matching the filter.
-func (s *Service) ListRoutes(ctx context.Context, wsID uuid.UUID, filter RouteFilter) ([]Route, int, error) {
+func (s *Service) ListRoutes(ctx context.Context, orgID uuid.UUID, filter RouteFilter) ([]Route, int, error) {
 	filter.Page.Normalize()
-	return s.repo.ListRoutes(ctx, wsID, filter)
+	return s.repo.ListRoutes(ctx, orgID, filter)
 }
 
 // StartRoute transitions a route from planned to in_progress.
-func (s *Service) StartRoute(ctx context.Context, wsID, routeID uuid.UUID, actorID *uuid.UUID) (*Route, error) {
-	route, err := s.repo.GetRoute(ctx, wsID, routeID)
+func (s *Service) StartRoute(ctx context.Context, orgID, routeID uuid.UUID, actorID *uuid.UUID) (*Route, error) {
+	route, err := s.repo.GetRoute(ctx, orgID, routeID)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func (s *Service) StartRoute(ctx context.Context, wsID, routeID uuid.UUID, actor
 		return nil, err
 	}
 
-	s.publishEvent(ctx, wsID, "logistics.route.started", map[string]any{
+	s.publishEvent(ctx, orgID, "logistics.route.started", map[string]any{
 		"route_id": routeID.String(),
 	}, actorID)
 
@@ -123,8 +123,8 @@ func (s *Service) StartRoute(ctx context.Context, wsID, routeID uuid.UUID, actor
 }
 
 // CompleteRoute transitions a route to completed.
-func (s *Service) CompleteRoute(ctx context.Context, wsID, routeID uuid.UUID, actorID *uuid.UUID) (*Route, error) {
-	route, err := s.repo.GetRoute(ctx, wsID, routeID)
+func (s *Service) CompleteRoute(ctx context.Context, orgID, routeID uuid.UUID, actorID *uuid.UUID) (*Route, error) {
+	route, err := s.repo.GetRoute(ctx, orgID, routeID)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +140,7 @@ func (s *Service) CompleteRoute(ctx context.Context, wsID, routeID uuid.UUID, ac
 		return nil, err
 	}
 
-	s.publishEvent(ctx, wsID, "logistics.route.completed", map[string]any{
+	s.publishEvent(ctx, orgID, "logistics.route.completed", map[string]any{
 		"route_id": routeID.String(),
 	}, actorID)
 
@@ -148,8 +148,8 @@ func (s *Service) CompleteRoute(ctx context.Context, wsID, routeID uuid.UUID, ac
 }
 
 // ArriveAtStop marks arrival at a route stop.
-func (s *Service) ArriveAtStop(ctx context.Context, wsID, routeID, stopID uuid.UUID, actorID *uuid.UUID) (*RouteStop, error) {
-	stop, err := s.repo.GetStop(ctx, wsID, stopID)
+func (s *Service) ArriveAtStop(ctx context.Context, orgID, routeID, stopID uuid.UUID, actorID *uuid.UUID) (*RouteStop, error) {
+	stop, err := s.repo.GetStop(ctx, orgID, stopID)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +168,7 @@ func (s *Service) ArriveAtStop(ctx context.Context, wsID, routeID, stopID uuid.U
 		return nil, err
 	}
 
-	s.publishEvent(ctx, wsID, "logistics.stop.arrived", map[string]any{
+	s.publishEvent(ctx, orgID, "logistics.stop.arrived", map[string]any{
 		"route_id": routeID.String(),
 		"stop_id":  stopID.String(),
 	}, actorID)
@@ -177,8 +177,8 @@ func (s *Service) ArriveAtStop(ctx context.Context, wsID, routeID, stopID uuid.U
 }
 
 // CompleteStop marks a route stop as completed.
-func (s *Service) CompleteStop(ctx context.Context, wsID, routeID, stopID uuid.UUID, actorID *uuid.UUID) (*RouteStop, error) {
-	stop, err := s.repo.GetStop(ctx, wsID, stopID)
+func (s *Service) CompleteStop(ctx context.Context, orgID, routeID, stopID uuid.UUID, actorID *uuid.UUID) (*RouteStop, error) {
+	stop, err := s.repo.GetStop(ctx, orgID, stopID)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +194,7 @@ func (s *Service) CompleteStop(ctx context.Context, wsID, routeID, stopID uuid.U
 		return nil, err
 	}
 
-	s.publishEvent(ctx, wsID, "logistics.stop.completed", map[string]any{
+	s.publishEvent(ctx, orgID, "logistics.stop.completed", map[string]any{
 		"route_id":     routeID.String(),
 		"stop_id":      stopID.String(),
 		"delivery_ids": stop.DeliveryIDs,
@@ -204,16 +204,16 @@ func (s *Service) CompleteStop(ctx context.Context, wsID, routeID, stopID uuid.U
 }
 
 // UpdateGeo records a GPS data point and publishes an event.
-func (s *Service) UpdateGeo(ctx context.Context, wsID, entityID uuid.UUID, point GeoPoint, actorID *uuid.UUID) error {
+func (s *Service) UpdateGeo(ctx context.Context, orgID, entityID uuid.UUID, point GeoPoint, actorID *uuid.UUID) error {
 	if point.RecordedAt.IsZero() {
 		point.RecordedAt = time.Now()
 	}
 
-	if err := s.repo.InsertGeoPoint(ctx, wsID, entityID, point); err != nil {
+	if err := s.repo.InsertGeoPoint(ctx, orgID, entityID, point); err != nil {
 		return err
 	}
 
-	s.publishEvent(ctx, wsID, "logistics.geo.updated", map[string]any{
+	s.publishEvent(ctx, orgID, "logistics.geo.updated", map[string]any{
 		"entity_id": entityID.String(),
 		"latitude":  point.Latitude,
 		"longitude": point.Longitude,
@@ -225,15 +225,15 @@ func (s *Service) UpdateGeo(ctx context.Context, wsID, entityID uuid.UUID, point
 }
 
 // GetTrack returns GPS track for an entity in a time range.
-func (s *Service) GetTrack(ctx context.Context, wsID, entityID uuid.UUID, from, to time.Time) ([]GeoPoint, error) {
-	return s.repo.GetTrack(ctx, wsID, entityID, from, to)
+func (s *Service) GetTrack(ctx context.Context, orgID, entityID uuid.UUID, from, to time.Time) ([]GeoPoint, error) {
+	return s.repo.GetTrack(ctx, orgID, entityID, from, to)
 }
 
-func (s *Service) publishEvent(ctx context.Context, wsID uuid.UUID, eventType string, data map[string]any, actorID *uuid.UUID) {
+func (s *Service) publishEvent(ctx context.Context, orgID uuid.UUID, eventType string, data map[string]any, actorID *uuid.UUID) {
 	payload, _ := json.Marshal(data)
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		Type:        eventType,
 		Data:        payload,
 		Timestamp:   time.Now(),

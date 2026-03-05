@@ -16,7 +16,7 @@ import (
 func newTestEvent(eventType string) types.Event {
 	return types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: uuid.New(),
+		OrganizationID: uuid.New(),
 		Type:        eventType,
 		Data:        []byte(`{}`),
 		Timestamp:   time.Now(),

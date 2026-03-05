@@ -26,9 +26,9 @@ func NewOrderRepo(pool *pgxpool.Pool) *OrderRepo {
 // CreateOrder inserts an order record.
 func (r *OrderRepo) CreateOrder(ctx context.Context, tx pgx.Tx, o *order.Order) error {
 	_, err := tx.Exec(ctx,
-		`INSERT INTO orders (id, workspace_id, entity_id, number, customer_id, status, subtotal, discount, tax, total, currency, notes, source, warehouse_id, assigned_to, created_at, updated_at)
+		`INSERT INTO orders (id, organization_id, entity_id, number, customer_id, status, subtotal, discount, tax, total, currency, notes, source, warehouse_id, assigned_to, created_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
-		o.ID, o.WorkspaceID, o.EntityID, o.Number, o.CustomerID, o.Status,
+		o.ID, o.OrganizationID, o.EntityID, o.Number, o.CustomerID, o.Status,
 		o.Subtotal, o.Discount, o.Tax, o.Total, o.Currency, o.Notes, o.Source,
 		o.WarehouseID, o.AssignedTo, o.CreatedAt, o.UpdatedAt,
 	)
@@ -39,9 +39,9 @@ func (r *OrderRepo) CreateOrder(ctx context.Context, tx pgx.Tx, o *order.Order) 
 func (r *OrderRepo) CreateOrderItems(ctx context.Context, tx pgx.Tx, items []order.OrderItem) error {
 	for _, item := range items {
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO order_items (id, order_id, workspace_id, product_id, name, sku, quantity, unit, unit_price, discount, tax, total, sort_order, created_at)
+			`INSERT INTO order_items (id, order_id, organization_id, product_id, name, sku, quantity, unit, unit_price, discount, tax, total, sort_order, created_at)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-			item.ID, item.OrderID, item.WorkspaceID, item.ProductID, item.Name, item.SKU,
+			item.ID, item.OrderID, item.OrganizationID, item.ProductID, item.Name, item.SKU,
 			item.Quantity, item.Unit, item.UnitPrice, item.Discount, item.Tax, item.Total,
 			item.SortOrder, item.CreatedAt,
 		); err != nil {
@@ -52,14 +52,14 @@ func (r *OrderRepo) CreateOrderItems(ctx context.Context, tx pgx.Tx, items []ord
 }
 
 // GetOrder returns an order by ID.
-func (r *OrderRepo) GetOrder(ctx context.Context, wsID, orderID uuid.UUID) (*order.Order, error) {
+func (r *OrderRepo) GetOrder(ctx context.Context, orgID, orderID uuid.UUID) (*order.Order, error) {
 	var o order.Order
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, workspace_id, entity_id, number, customer_id, status, subtotal, discount, tax, total, currency, notes, source,
+		`SELECT id, organization_id, entity_id, number, customer_id, status, subtotal, discount, tax, total, currency, notes, source,
 		        warehouse_id, assigned_to, paid_at, shipped_at, delivered_at, cancelled_at, created_at, updated_at
-		 FROM orders WHERE workspace_id = $1 AND id = $2`,
-		wsID, orderID,
-	).Scan(&o.ID, &o.WorkspaceID, &o.EntityID, &o.Number, &o.CustomerID, &o.Status,
+		 FROM orders WHERE organization_id = $1 AND id = $2`,
+		orgID, orderID,
+	).Scan(&o.ID, &o.OrganizationID, &o.EntityID, &o.Number, &o.CustomerID, &o.Status,
 		&o.Subtotal, &o.Discount, &o.Tax, &o.Total, &o.Currency, &o.Notes, &o.Source,
 		&o.WarehouseID, &o.AssignedTo, &o.PaidAt, &o.ShippedAt, &o.DeliveredAt, &o.CancelledAt,
 		&o.CreatedAt, &o.UpdatedAt)
@@ -75,7 +75,7 @@ func (r *OrderRepo) GetOrder(ctx context.Context, wsID, orderID uuid.UUID) (*ord
 // GetOrderItems returns items for an order.
 func (r *OrderRepo) GetOrderItems(ctx context.Context, orderID uuid.UUID) ([]order.OrderItem, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, order_id, workspace_id, product_id, name, sku, quantity, unit, unit_price, discount, tax, total, sort_order, created_at
+		`SELECT id, order_id, organization_id, product_id, name, sku, quantity, unit, unit_price, discount, tax, total, sort_order, created_at
 		 FROM order_items WHERE order_id = $1 ORDER BY sort_order`,
 		orderID,
 	)
@@ -87,7 +87,7 @@ func (r *OrderRepo) GetOrderItems(ctx context.Context, orderID uuid.UUID) ([]ord
 	var items []order.OrderItem
 	for rows.Next() {
 		var item order.OrderItem
-		if err := rows.Scan(&item.ID, &item.OrderID, &item.WorkspaceID, &item.ProductID, &item.Name, &item.SKU,
+		if err := rows.Scan(&item.ID, &item.OrderID, &item.OrganizationID, &item.ProductID, &item.Name, &item.SKU,
 			&item.Quantity, &item.Unit, &item.UnitPrice, &item.Discount, &item.Tax, &item.Total,
 			&item.SortOrder, &item.CreatedAt); err != nil {
 			return nil, err
@@ -98,15 +98,15 @@ func (r *OrderRepo) GetOrderItems(ctx context.Context, orderID uuid.UUID) ([]ord
 }
 
 // ListOrders returns orders matching the filter.
-func (r *OrderRepo) ListOrders(ctx context.Context, wsID uuid.UUID, filter order.OrderFilter) ([]order.Order, int, error) {
+func (r *OrderRepo) ListOrders(ctx context.Context, orgID uuid.UUID, filter order.OrderFilter) ([]order.Order, int, error) {
 	filter.Page.Normalize()
 
 	var conditions []string
 	var args []any
 	argIdx := 1
 
-	conditions = append(conditions, fmt.Sprintf("workspace_id = $%d", argIdx))
-	args = append(args, wsID)
+	conditions = append(conditions, fmt.Sprintf("organization_id = $%d", argIdx))
+	args = append(args, orgID)
 	argIdx++
 
 	if filter.Status != nil {
@@ -143,7 +143,7 @@ func (r *OrderRepo) ListOrders(ctx context.Context, wsID uuid.UUID, filter order
 	}
 
 	query := fmt.Sprintf(
-		`SELECT id, workspace_id, entity_id, number, customer_id, status, subtotal, discount, tax, total, currency, notes, source,
+		`SELECT id, organization_id, entity_id, number, customer_id, status, subtotal, discount, tax, total, currency, notes, source,
 		        warehouse_id, assigned_to, paid_at, shipped_at, delivered_at, cancelled_at, created_at, updated_at
 		 FROM orders WHERE %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d`,
 		where, argIdx, argIdx+1,
@@ -159,7 +159,7 @@ func (r *OrderRepo) ListOrders(ctx context.Context, wsID uuid.UUID, filter order
 	var orders []order.Order
 	for rows.Next() {
 		var o order.Order
-		if err := rows.Scan(&o.ID, &o.WorkspaceID, &o.EntityID, &o.Number, &o.CustomerID, &o.Status,
+		if err := rows.Scan(&o.ID, &o.OrganizationID, &o.EntityID, &o.Number, &o.CustomerID, &o.Status,
 			&o.Subtotal, &o.Discount, &o.Tax, &o.Total, &o.Currency, &o.Notes, &o.Source,
 			&o.WarehouseID, &o.AssignedTo, &o.PaidAt, &o.ShippedAt, &o.DeliveredAt, &o.CancelledAt,
 			&o.CreatedAt, &o.UpdatedAt); err != nil {
@@ -191,12 +191,12 @@ func (r *OrderRepo) UpdateOrderItems(ctx context.Context, tx pgx.Tx, orderID uui
 }
 
 // NextOrderNumber atomically generates the next order number.
-func (r *OrderRepo) NextOrderNumber(ctx context.Context, tx pgx.Tx, wsID uuid.UUID) (int64, error) {
+func (r *OrderRepo) NextOrderNumber(ctx context.Context, tx pgx.Tx, orgID uuid.UUID) (int64, error) {
 	// Ensure sequence row exists
 	_, err := tx.Exec(ctx,
-		`INSERT INTO order_number_sequences (workspace_id, last_number) VALUES ($1, 0)
-		 ON CONFLICT (workspace_id) DO NOTHING`,
-		wsID,
+		`INSERT INTO order_number_sequences (organization_id, last_number) VALUES ($1, 0)
+		 ON CONFLICT (organization_id) DO NOTHING`,
+		orgID,
 	)
 	if err != nil {
 		return 0, err
@@ -205,8 +205,8 @@ func (r *OrderRepo) NextOrderNumber(ctx context.Context, tx pgx.Tx, wsID uuid.UU
 	var num int64
 	err = tx.QueryRow(ctx,
 		`UPDATE order_number_sequences SET last_number = last_number + 1
-		 WHERE workspace_id = $1 RETURNING last_number`,
-		wsID,
+		 WHERE organization_id = $1 RETURNING last_number`,
+		orgID,
 	).Scan(&num)
 	return num, err
 }

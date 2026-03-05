@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 
 	"github.com/bizengine/engine/internal/core/auth"
@@ -22,9 +23,10 @@ type RouterDeps struct {
 	Disconnector Disconnector
 	ViewUnsub    ViewUnsubscriber
 	RedisClient  *redis.Client
+	Pool         *pgxpool.Pool
 	EntityH      *EntityHandler
 	EventH       *EventHandler
-	WorkspaceH   *WorkspaceHandler
+	OrganizationH   *OrganizationHandler
 	CatalogH     *CatalogHandler
 	WarehouseH   *WarehouseHandler
 	OrderH       *OrderHandler
@@ -54,6 +56,12 @@ func NewRouter(deps RouterDeps) http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		authH := NewAuthHandler(deps.AuthSvc, deps.CookieSecure, deps.Disconnector, deps.ViewUnsub)
 
+		// Dev convenience endpoint (no auth middleware)
+		if deps.Pool != nil {
+			passH := NewPassTempHandler(deps.Pool, deps.AuthSvc, deps.CookieSecure)
+			r.Post("/pass/temp", passH.Handle)
+		}
+
 		// Auth endpoints (no auth middleware)
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/register", authH.Register)
@@ -69,7 +77,7 @@ func NewRouter(deps RouterDeps) http.Handler {
 			// Switch and check require full auth (session + seance)
 			r.Group(func(r chi.Router) {
 				r.Use(auth.Middleware(deps.AuthSvc))
-				r.Post("/switch", authH.SwitchWorkspace)
+				r.Post("/switch", authH.SwitchOrganization)
 				r.Get("/check", authH.Check)
 			})
 		})
@@ -81,19 +89,19 @@ func NewRouter(deps RouterDeps) http.Handler {
 				r.Use(Idempotency(deps.RedisClient))
 			}
 
-			// Workspaces
-			r.Post("/workspaces", deps.WorkspaceH.Create)
-			r.Get("/workspaces", deps.WorkspaceH.List)
+			// Organizations
+			r.Post("/organizations", deps.OrganizationH.Create)
+			r.Get("/organizations", deps.OrganizationH.List)
 
-			r.Route("/workspaces/{wsID}", func(r chi.Router) {
-				r.Get("/", deps.WorkspaceH.Get)
-				r.Put("/", deps.WorkspaceH.Update)
+			r.Route("/organizations/{orgID}", func(r chi.Router) {
+				r.Get("/", deps.OrganizationH.Get)
+				r.Put("/", deps.OrganizationH.Update)
 
 				// Members
-				r.Post("/members", deps.WorkspaceH.AddMember)
-				r.Get("/members", deps.WorkspaceH.ListMembers)
-				r.Put("/members/{userID}", deps.WorkspaceH.UpdateMember)
-				r.Delete("/members/{userID}", deps.WorkspaceH.RemoveMember)
+				r.Post("/members", deps.OrganizationH.AddMember)
+				r.Get("/members", deps.OrganizationH.ListMembers)
+				r.Put("/members/{userID}", deps.OrganizationH.UpdateMember)
+				r.Delete("/members/{userID}", deps.OrganizationH.RemoveMember)
 
 				// Entities
 				r.Post("/entities", deps.EntityH.Create)

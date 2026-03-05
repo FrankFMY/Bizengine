@@ -49,19 +49,19 @@ func (m *mockEntityRepo) CreateTx(_ context.Context, _ pgx.Tx, e *types.Entity) 
 	return nil
 }
 
-func (m *mockEntityRepo) GetByID(_ context.Context, wsID, id uuid.UUID) (*types.Entity, error) {
+func (m *mockEntityRepo) GetByID(_ context.Context, orgID, id uuid.UUID) (*types.Entity, error) {
 	e, ok := m.entities[id]
-	if !ok || e.WorkspaceID != wsID {
+	if !ok || e.OrganizationID != orgID {
 		return nil, errs.NewNotFound("entity not found")
 	}
 	cp := *e
 	return &cp, nil
 }
 
-func (m *mockEntityRepo) List(_ context.Context, wsID uuid.UUID, filter entity.ListFilter) ([]types.Entity, int, error) {
+func (m *mockEntityRepo) List(_ context.Context, orgID uuid.UUID, filter entity.ListFilter) ([]types.Entity, int, error) {
 	var result []types.Entity
 	for _, e := range m.entities {
-		if e.WorkspaceID != wsID {
+		if e.OrganizationID != orgID {
 			continue
 		}
 		if filter.Kind != nil && e.Kind != *filter.Kind {
@@ -81,9 +81,9 @@ func (m *mockEntityRepo) Update(_ context.Context, e *types.Entity) error {
 	return nil
 }
 
-func (m *mockEntityRepo) SoftDelete(_ context.Context, wsID, id uuid.UUID) error {
+func (m *mockEntityRepo) SoftDelete(_ context.Context, orgID, id uuid.UUID) error {
 	e, ok := m.entities[id]
-	if !ok || e.WorkspaceID != wsID {
+	if !ok || e.OrganizationID != orgID {
 		return errs.NewNotFound("entity not found")
 	}
 	delete(m.entities, id)
@@ -158,7 +158,7 @@ func (m *mockEntityEventStore) GetByEntity(_ context.Context, _, _ uuid.UUID, _ 
 	return nil, nil
 }
 
-func (m *mockEntityEventStore) GetByWorkspace(_ context.Context, _ uuid.UUID, _, _ int) ([]types.Event, int, error) {
+func (m *mockEntityEventStore) GetByOrganization(_ context.Context, _ uuid.UUID, _, _ int) ([]types.Event, int, error) {
 	return nil, 0, nil
 }
 
@@ -179,12 +179,12 @@ func (m *mockEntityBus) SubscribeAll(_ event.Subscriber)               {}
 
 // injectAuthContext is a middleware that injects auth context directly,
 // bypassing cookie-based auth for entity handler tests.
-func injectAuthContext(userID, wsID uuid.UUID, role string) func(http.Handler) http.Handler {
+func injectAuthContext(userID, orgID uuid.UUID, role string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx := r.Context()
 			ctx = context.WithValue(ctx, auth.ExportedCtxKeyUserID, userID)
-			ctx = context.WithValue(ctx, auth.ExportedCtxKeyWorkspaceID, wsID)
+			ctx = context.WithValue(ctx, auth.ExportedCtxKeyOrganizationID, orgID)
 			ctx = context.WithValue(ctx, auth.ExportedCtxKeyRole, role)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -196,12 +196,12 @@ func setupEntityRouter(repo *mockEntityRepo) (http.Handler, uuid.UUID) {
 	bus := &mockEntityBus{}
 	svc := entity.NewService(repo, store, bus)
 	h := NewEntityHandler(svc)
-	wsID := uuid.New()
+	orgID := uuid.New()
 	userID := uuid.New()
 
 	r := chi.NewRouter()
-	r.Use(injectAuthContext(userID, wsID, "owner"))
-	r.Route("/workspaces/{wsID}", func(r chi.Router) {
+	r.Use(injectAuthContext(userID, orgID, "owner"))
+	r.Route("/organizations/{orgID}", func(r chi.Router) {
 		r.Post("/entities", h.Create)
 		r.Get("/entities", h.List)
 		r.Get("/entities/{id}", h.Get)
@@ -209,7 +209,7 @@ func setupEntityRouter(repo *mockEntityRepo) (http.Handler, uuid.UUID) {
 		r.Delete("/entities/{id}", h.Delete)
 	})
 
-	return r, wsID
+	return r, orgID
 }
 
 func doGet(handler http.Handler, path string) *httptest.ResponseRecorder {
@@ -253,9 +253,9 @@ func unwrapData(t *testing.T, w *httptest.ResponseRecorder) json.RawMessage {
 
 func TestEntityCreateSuccess(t *testing.T) {
 	repo := newMockEntityRepo()
-	router, wsID := setupEntityRouter(repo)
+	router, orgID := setupEntityRouter(repo)
 
-	w := doPost(router, fmt.Sprintf("/workspaces/%s/entities", wsID), map[string]string{
+	w := doPost(router, fmt.Sprintf("/organizations/%s/entities", orgID), map[string]string{
 		"kind": "product",
 		"name": "Widget",
 	})
@@ -265,14 +265,14 @@ func TestEntityCreateSuccess(t *testing.T) {
 	require.NoError(t, json.Unmarshal(unwrapData(t, w), &e))
 	assert.Equal(t, "product", e.Kind)
 	assert.Equal(t, "Widget", e.Name)
-	assert.Equal(t, wsID, e.WorkspaceID)
+	assert.Equal(t, orgID, e.OrganizationID)
 }
 
 func TestEntityCreateMissingKind(t *testing.T) {
 	repo := newMockEntityRepo()
-	router, wsID := setupEntityRouter(repo)
+	router, orgID := setupEntityRouter(repo)
 
-	w := doPost(router, fmt.Sprintf("/workspaces/%s/entities", wsID), map[string]string{
+	w := doPost(router, fmt.Sprintf("/organizations/%s/entities", orgID), map[string]string{
 		"name": "Widget",
 	})
 
@@ -291,12 +291,12 @@ func TestEntityCreateUnauthorized(t *testing.T) {
 
 	r := chi.NewRouter()
 	r.Use(auth.Middleware(authSvc))
-	r.Post("/workspaces/{wsID}/entities", h.Create)
+	r.Post("/organizations/{orgID}/entities", h.Create)
 
 	// Send request without cookies
-	wsID := uuid.New()
+	orgID := uuid.New()
 	b, _ := json.Marshal(map[string]string{"kind": "product", "name": "W"})
-	req := httptest.NewRequest("POST", fmt.Sprintf("/workspaces/%s/entities", wsID), bytes.NewReader(b))
+	req := httptest.NewRequest("POST", fmt.Sprintf("/organizations/%s/entities", orgID), bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -306,14 +306,14 @@ func TestEntityCreateUnauthorized(t *testing.T) {
 
 func TestEntityListSuccess(t *testing.T) {
 	repo := newMockEntityRepo()
-	router, wsID := setupEntityRouter(repo)
+	router, orgID := setupEntityRouter(repo)
 
 	for i := 0; i < 3; i++ {
 		id := uuid.New()
-		repo.entities[id] = &types.Entity{ID: id, WorkspaceID: wsID, Kind: "product", Name: fmt.Sprintf("P%d", i)}
+		repo.entities[id] = &types.Entity{ID: id, OrganizationID: orgID, Kind: "product", Name: fmt.Sprintf("P%d", i)}
 	}
 
-	w := doGet(router, fmt.Sprintf("/workspaces/%s/entities", wsID))
+	w := doGet(router, fmt.Sprintf("/organizations/%s/entities", orgID))
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var result types.PageResponse[types.Entity]
@@ -324,16 +324,16 @@ func TestEntityListSuccess(t *testing.T) {
 
 func TestEntityListFilterByKind(t *testing.T) {
 	repo := newMockEntityRepo()
-	router, wsID := setupEntityRouter(repo)
+	router, orgID := setupEntityRouter(repo)
 
 	for i := 0; i < 2; i++ {
 		id := uuid.New()
-		repo.entities[id] = &types.Entity{ID: id, WorkspaceID: wsID, Kind: "product", Name: fmt.Sprintf("P%d", i)}
+		repo.entities[id] = &types.Entity{ID: id, OrganizationID: orgID, Kind: "product", Name: fmt.Sprintf("P%d", i)}
 	}
 	otherId := uuid.New()
-	repo.entities[otherId] = &types.Entity{ID: otherId, WorkspaceID: wsID, Kind: "vehicle", Name: "V"}
+	repo.entities[otherId] = &types.Entity{ID: otherId, OrganizationID: orgID, Kind: "vehicle", Name: "V"}
 
-	w := doGet(router, fmt.Sprintf("/workspaces/%s/entities?kind=product", wsID))
+	w := doGet(router, fmt.Sprintf("/organizations/%s/entities?kind=product", orgID))
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var result types.PageResponse[types.Entity]
@@ -343,12 +343,12 @@ func TestEntityListFilterByKind(t *testing.T) {
 
 func TestEntityGetSuccess(t *testing.T) {
 	repo := newMockEntityRepo()
-	router, wsID := setupEntityRouter(repo)
+	router, orgID := setupEntityRouter(repo)
 
 	id := uuid.New()
-	repo.entities[id] = &types.Entity{ID: id, WorkspaceID: wsID, Kind: "product", Name: "Widget"}
+	repo.entities[id] = &types.Entity{ID: id, OrganizationID: orgID, Kind: "product", Name: "Widget"}
 
-	w := doGet(router, fmt.Sprintf("/workspaces/%s/entities/%s", wsID, id))
+	w := doGet(router, fmt.Sprintf("/organizations/%s/entities/%s", orgID, id))
 	assert.Equal(t, http.StatusOK, w.Code)
 
 	var e types.Entity
@@ -358,21 +358,21 @@ func TestEntityGetSuccess(t *testing.T) {
 
 func TestEntityGetNotFound(t *testing.T) {
 	repo := newMockEntityRepo()
-	router, wsID := setupEntityRouter(repo)
+	router, orgID := setupEntityRouter(repo)
 
-	w := doGet(router, fmt.Sprintf("/workspaces/%s/entities/%s", wsID, uuid.New()))
+	w := doGet(router, fmt.Sprintf("/organizations/%s/entities/%s", orgID, uuid.New()))
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestEntityUpdateSuccess(t *testing.T) {
 	repo := newMockEntityRepo()
-	router, wsID := setupEntityRouter(repo)
+	router, orgID := setupEntityRouter(repo)
 
 	id := uuid.New()
-	repo.entities[id] = &types.Entity{ID: id, WorkspaceID: wsID, Kind: "product", Name: "Old"}
+	repo.entities[id] = &types.Entity{ID: id, OrganizationID: orgID, Kind: "product", Name: "Old"}
 
 	newName := "New"
-	w := doPut(router, fmt.Sprintf("/workspaces/%s/entities/%s", wsID, id), entity.UpdateEntityInput{
+	w := doPut(router, fmt.Sprintf("/organizations/%s/entities/%s", orgID, id), entity.UpdateEntityInput{
 		Name: &newName,
 	})
 
@@ -384,12 +384,12 @@ func TestEntityUpdateSuccess(t *testing.T) {
 
 func TestEntityDeleteSuccess(t *testing.T) {
 	repo := newMockEntityRepo()
-	router, wsID := setupEntityRouter(repo)
+	router, orgID := setupEntityRouter(repo)
 
 	id := uuid.New()
-	repo.entities[id] = &types.Entity{ID: id, WorkspaceID: wsID, Kind: "product", Name: "W"}
+	repo.entities[id] = &types.Entity{ID: id, OrganizationID: orgID, Kind: "product", Name: "W"}
 
-	w := doDelete(router, fmt.Sprintf("/workspaces/%s/entities/%s", wsID, id))
+	w := doDelete(router, fmt.Sprintf("/organizations/%s/entities/%s", orgID, id))
 	assert.Equal(t, http.StatusOK, w.Code)
 	unwrapData(t, w)
 }

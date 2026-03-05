@@ -67,11 +67,11 @@ func TestManager_Subscribe_Snapshot(t *testing.T) {
 	})
 
 	mgr := NewManager(reg, nil, pub)
-	wsID := uuid.New()
+	orgID := uuid.New()
 	userID := uuid.New()
 	seanceID := "seance-1"
 
-	result, err := mgr.Subscribe(context.Background(), seanceID, wsID, userID, "orders_list", nil)
+	result, err := mgr.Subscribe(context.Background(), seanceID, orgID, userID, "orders_list", nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, result.ParamsHash)
 	assert.Equal(t, int64(1), result.Version)
@@ -98,13 +98,13 @@ func TestManager_Subscribe_Duplicate(t *testing.T) {
 	})
 
 	mgr := NewManager(reg, nil, pub)
-	wsID := uuid.New()
+	orgID := uuid.New()
 	seanceID := "s1"
 
-	r1, err := mgr.Subscribe(context.Background(), seanceID, wsID, uuid.New(), "test_view", nil)
+	r1, err := mgr.Subscribe(context.Background(), seanceID, orgID, uuid.New(), "test_view", nil)
 	require.NoError(t, err)
 
-	r2, err := mgr.Subscribe(context.Background(), seanceID, wsID, uuid.New(), "test_view", nil)
+	r2, err := mgr.Subscribe(context.Background(), seanceID, orgID, uuid.New(), "test_view", nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, r1.ParamsHash, r2.ParamsHash)
@@ -134,10 +134,10 @@ func TestManager_Unsubscribe(t *testing.T) {
 	})
 
 	mgr := NewManager(reg, nil, pub)
-	wsID := uuid.New()
+	orgID := uuid.New()
 	seanceID := "s1"
 
-	result, _ := mgr.Subscribe(context.Background(), seanceID, wsID, uuid.New(), "orders_list", nil)
+	result, _ := mgr.Subscribe(context.Background(), seanceID, orgID, uuid.New(), "orders_list", nil)
 	mgr.Unsubscribe(seanceID, result.ParamsHash)
 
 	assert.Empty(t, mgr.ActiveSubscriptions(seanceID))
@@ -160,11 +160,11 @@ func TestManager_UnsubscribeAll(t *testing.T) {
 	})
 
 	mgr := NewManager(reg, nil, pub)
-	wsID := uuid.New()
+	orgID := uuid.New()
 	seanceID := "s1"
 
-	mgr.Subscribe(context.Background(), seanceID, wsID, uuid.New(), "v1", nil)
-	mgr.Subscribe(context.Background(), seanceID, wsID, uuid.New(), "v2", map[string]any{"x": "val"})
+	mgr.Subscribe(context.Background(), seanceID, orgID, uuid.New(), "v1", nil)
+	mgr.Subscribe(context.Background(), seanceID, orgID, uuid.New(), "v2", map[string]any{"x": "val"})
 
 	assert.Len(t, mgr.ActiveSubscriptions(seanceID), 2)
 
@@ -202,7 +202,7 @@ func TestManager_Invalidate_ViewDiff(t *testing.T) {
 		}, nil
 	}
 
-	wsID := uuid.New()
+	orgID := uuid.New()
 	reg.Register(&ViewDef{
 		Key:     "orders_list",
 		Tables:  []TableDep{{Table: "orders", Columns: []string{"status"}}},
@@ -212,14 +212,14 @@ func TestManager_Invalidate_ViewDiff(t *testing.T) {
 	mgr := NewManager(reg, nil, pub)
 	seanceID := "s1"
 
-	mgr.Subscribe(context.Background(), seanceID, wsID, uuid.New(), "orders_list", nil)
+	mgr.Subscribe(context.Background(), seanceID, orgID, uuid.New(), "orders_list", nil)
 	require.Len(t, pub.snapshots, 1)
 
 	// Trigger invalidation.
 	mgr.Invalidate(context.Background(), ChangeEvent{
 		Table:       "orders",
 		RowID:       "1",
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 	})
 
 	// view_diff sent because refs changed.

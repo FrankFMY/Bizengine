@@ -24,16 +24,16 @@ import (
 type mockAuthRepo struct {
 	users      map[string]*types.User
 	usersById  map[uuid.UUID]*types.User
-	workspaces map[uuid.UUID]*types.Workspace
-	members    map[string]*types.WorkspaceMember
+	organizations map[uuid.UUID]*types.Organization
+	members    map[string]*types.Labor
 }
 
 func newMockAuthRepo() *mockAuthRepo {
 	return &mockAuthRepo{
 		users:      make(map[string]*types.User),
 		usersById:  make(map[uuid.UUID]*types.User),
-		workspaces: make(map[uuid.UUID]*types.Workspace),
-		members:    make(map[string]*types.WorkspaceMember),
+		organizations: make(map[uuid.UUID]*types.Organization),
+		members:    make(map[string]*types.Labor),
 	}
 }
 
@@ -65,57 +65,57 @@ func (m *mockAuthRepo) GetUserByID(_ context.Context, id uuid.UUID) (*types.User
 	return &cp, nil
 }
 
-func (m *mockAuthRepo) CreateWorkspace(_ context.Context, ws *types.Workspace) error {
-	cp := *ws
-	m.workspaces[ws.ID] = &cp
+func (m *mockAuthRepo) CreateOrganization(_ context.Context, org *types.Organization) error {
+	cp := *org
+	m.organizations[org.ID] = &cp
 	return nil
 }
 
-func (m *mockAuthRepo) GetWorkspace(_ context.Context, id uuid.UUID) (*types.Workspace, error) {
-	ws, ok := m.workspaces[id]
+func (m *mockAuthRepo) GetOrganization(_ context.Context, id uuid.UUID) (*types.Organization, error) {
+	org, ok := m.organizations[id]
 	if !ok {
-		return nil, errs.NewNotFound("workspace not found")
+		return nil, errs.NewNotFound("organization not found")
 	}
-	cp := *ws
+	cp := *org
 	return &cp, nil
 }
 
-func (m *mockAuthRepo) GetWorkspaceBySlug(_ context.Context, slug string) (*types.Workspace, error) {
-	for _, ws := range m.workspaces {
-		if ws.Slug == slug {
-			cp := *ws
+func (m *mockAuthRepo) GetOrganizationBySlug(_ context.Context, slug string) (*types.Organization, error) {
+	for _, org := range m.organizations {
+		if org.Slug == slug {
+			cp := *org
 			return &cp, nil
 		}
 	}
-	return nil, errs.NewNotFound("workspace not found")
+	return nil, errs.NewNotFound("organization not found")
 }
 
-func (m *mockAuthRepo) ListUserWorkspaces(_ context.Context, userID uuid.UUID) ([]types.Workspace, error) {
-	var result []types.Workspace
+func (m *mockAuthRepo) ListUserOrganizations(_ context.Context, userID uuid.UUID) ([]types.Organization, error) {
+	var result []types.Organization
 	for _, mem := range m.members {
 		if mem.UserID == userID {
-			if ws, ok := m.workspaces[mem.WorkspaceID]; ok {
-				result = append(result, *ws)
+			if org, ok := m.organizations[mem.OrganizationID]; ok {
+				result = append(result, *org)
 			}
 		}
 	}
 	return result, nil
 }
 
-func (m *mockAuthRepo) UpdateWorkspace(_ context.Context, ws *types.Workspace) error {
-	m.workspaces[ws.ID] = ws
+func (m *mockAuthRepo) UpdateOrganization(_ context.Context, org *types.Organization) error {
+	m.organizations[org.ID] = org
 	return nil
 }
 
-func (m *mockAuthRepo) AddMember(_ context.Context, mem *types.WorkspaceMember) error {
-	key := mem.WorkspaceID.String() + ":" + mem.UserID.String()
+func (m *mockAuthRepo) AddMember(_ context.Context, mem *types.Labor) error {
+	key := mem.OrganizationID.String() + ":" + mem.UserID.String()
 	cp := *mem
 	m.members[key] = &cp
 	return nil
 }
 
-func (m *mockAuthRepo) GetMember(_ context.Context, wsID, userID uuid.UUID) (*types.WorkspaceMember, error) {
-	key := wsID.String() + ":" + userID.String()
+func (m *mockAuthRepo) GetMember(_ context.Context, orgID, userID uuid.UUID) (*types.Labor, error) {
+	key := orgID.String() + ":" + userID.String()
 	mem, ok := m.members[key]
 	if !ok {
 		return nil, errs.NewNotFound("member not found")
@@ -124,7 +124,7 @@ func (m *mockAuthRepo) GetMember(_ context.Context, wsID, userID uuid.UUID) (*ty
 	return &cp, nil
 }
 
-func (m *mockAuthRepo) ListMembers(_ context.Context, _ uuid.UUID) ([]types.WorkspaceMember, error) {
+func (m *mockAuthRepo) ListMembers(_ context.Context, _ uuid.UUID) ([]types.Labor, error) {
 	return nil, nil
 }
 
@@ -356,7 +356,7 @@ func TestLoginSuccess(t *testing.T) {
 
 	data := unwrapOK(t, w)
 	assert.Contains(t, data, "user")
-	assert.Contains(t, data, "workspaces")
+	assert.Contains(t, data, "organizations")
 }
 
 func TestLoginWrongPassword(t *testing.T) {
@@ -425,8 +425,8 @@ func TestCheckWithAuth(t *testing.T) {
 	assert.Contains(t, data, "user_id")
 	assert.Contains(t, data, "session_id")
 	assert.Contains(t, data, "seance_id")
-	assert.Contains(t, data, "phone_id")
-	assert.Contains(t, data, "role")
+	assert.Contains(t, data, "organization_id")
+	assert.Contains(t, data, "admin")
 }
 
 func TestCheckWithoutAuth(t *testing.T) {

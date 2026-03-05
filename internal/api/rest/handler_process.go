@@ -19,15 +19,15 @@ func NewProcessHandler(engine *process.Engine) *ProcessHandler {
 	return &ProcessHandler{engine: engine}
 }
 
-// ListDefinitions handles GET /api/v1/workspaces/{wsID}/processes/definitions.
+// ListDefinitions handles GET /api/v1/organizations/{orgID}/processes/definitions.
 func (h *ProcessHandler) ListDefinitions(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
-	defs, err := h.engine.ListDefinitions(r.Context(), wsID)
+	defs, err := h.engine.ListDefinitions(r.Context(), orgID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -36,16 +36,16 @@ func (h *ProcessHandler) ListDefinitions(w http.ResponseWriter, r *http.Request)
 	respondOK(w, http.StatusOK,defs)
 }
 
-// GetDefinition handles GET /api/v1/workspaces/{wsID}/processes/definitions/{defID}.
+// GetDefinition handles GET /api/v1/organizations/{orgID}/processes/definitions/{defID}.
 func (h *ProcessHandler) GetDefinition(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 	defID := chi.URLParam(r, "defID")
 
-	def, err := h.engine.GetDefinition(r.Context(), defID, &wsID)
+	def, err := h.engine.GetDefinition(r.Context(), defID, &orgID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -54,9 +54,9 @@ func (h *ProcessHandler) GetDefinition(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,def)
 }
 
-// ListInstances handles GET /api/v1/workspaces/{wsID}/processes/instances.
+// ListInstances handles GET /api/v1/organizations/{orgID}/processes/instances.
 func (h *ProcessHandler) ListInstances(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -65,7 +65,7 @@ func (h *ProcessHandler) ListInstances(w http.ResponseWriter, r *http.Request) {
 	page := parsePage(r)
 	status := queryString(r, "status")
 
-	instances, total, err := h.engine.ListInstances(r.Context(), wsID, status, page.Limit, page.Offset)
+	instances, total, err := h.engine.ListInstances(r.Context(), orgID, status, page.Limit, page.Offset)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -79,7 +79,7 @@ func (h *ProcessHandler) ListInstances(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetInstance handles GET /api/v1/workspaces/{wsID}/processes/instances/{instID}.
+// GetInstance handles GET /api/v1/organizations/{orgID}/processes/instances/{instID}.
 func (h *ProcessHandler) GetInstance(w http.ResponseWriter, r *http.Request) {
 	instID, err := parseUUID(r, "instID")
 	if err != nil {
@@ -96,7 +96,7 @@ func (h *ProcessHandler) GetInstance(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,inst)
 }
 
-// GetByEntity handles GET /api/v1/workspaces/{wsID}/processes/entity/{entityID}.
+// GetByEntity handles GET /api/v1/organizations/{orgID}/processes/entity/{entityID}.
 func (h *ProcessHandler) GetByEntity(w http.ResponseWriter, r *http.Request) {
 	entityID, err := parseUUID(r, "entityID")
 	if err != nil {
@@ -113,9 +113,9 @@ func (h *ProcessHandler) GetByEntity(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,instances)
 }
 
-// Trigger handles POST /api/v1/workspaces/{wsID}/processes/trigger.
+// Trigger handles POST /api/v1/organizations/{orgID}/processes/trigger.
 func (h *ProcessHandler) Trigger(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -136,7 +136,7 @@ func (h *ProcessHandler) Trigger(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.engine.TriggerManual(r.Context(), wsID, entityID, input.EventType, input.Data); err != nil {
+	if err := h.engine.TriggerManual(r.Context(), orgID, entityID, input.EventType, input.Data); err != nil {
 		respondError(w, err)
 		return
 	}

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 
 	"github.com/bizengine/engine/pkg/errs"
 	"github.com/bizengine/engine/pkg/types"
@@ -49,7 +48,7 @@ type LoginInput struct {
 // LoginResult is the response for register/login.
 type LoginResult struct {
 	User       *types.User       `json:"user"`
-	Workspaces []types.Workspace `json:"workspaces,omitempty"`
+	Organizations []types.Organization `json:"organizations,omitempty"`
 	Session    *Session          `json:"-"`
 	Seance     *Seance           `json:"-"`
 }
@@ -63,7 +62,7 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (*LoginResu
 		return nil, errs.NewBadRequest("password must be at least 8 characters")
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(input.Password), 12)
+	hash, err := HashSecret(input.Password)
 	if err != nil {
 		return nil, errs.Wrap(err, errs.CodeInternal, "failed to hash password")
 	}
@@ -71,7 +70,7 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (*LoginResu
 	user := &types.User{
 		ID:           uuid.New(),
 		Email:        input.Email,
-		PasswordHash: string(hash),
+		PasswordHash: hash,
 		FullName:     input.FullName,
 		IsActive:     true,
 	}
@@ -108,22 +107,26 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*LoginResult, er
 		return nil, errs.NewUnauthorized("account is deactivated")
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(input.Password)); err != nil {
+	match, err := VerifySecret(input.Password, user.PasswordHash)
+	if err != nil || !match {
 		return nil, errs.NewUnauthorized("invalid credentials")
 	}
 
-	workspaces, err := s.repo.ListUserWorkspaces(ctx, user.ID)
+	organizations, err := s.repo.ListUserOrganizations(ctx, user.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	var wsID uuid.UUID
+	var orgID uuid.UUID
 	var role string
-	if len(workspaces) > 0 {
-		wsID = workspaces[0].ID
-		member, err := s.repo.GetMember(ctx, workspaces[0].ID, user.ID)
+	if len(organizations) > 0 {
+		orgID = organizations[0].ID
+		member, err := s.repo.GetMember(ctx, organizations[0].ID, user.ID)
 		if err == nil {
 			role = member.Role
+			if member.Admin {
+				role = "owner"
+			}
 		}
 	}
 
@@ -132,14 +135,14 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*LoginResult, er
 		phoneID = uuid.New()
 	}
 
-	sess, seance, err := s.createSessionAndSeance(ctx, user, phoneID, wsID, role)
+	sess, seance, err := s.createSessionAndSeance(ctx, user, phoneID, orgID, role)
 	if err != nil {
 		return nil, err
 	}
 
 	return &LoginResult{
 		User:       user,
-		Workspaces: workspaces,
+		Organizations: organizations,
 		Session:    sess,
 		Seance:     seance,
 	}, nil
@@ -165,7 +168,8 @@ func (s *Service) Unlock(ctx context.Context, sessionID, password string) (*Sean
 		return nil, err
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
+	match, err := VerifySecret(password, user.PasswordHash)
+	if err != nil || !match {
 		return nil, errs.NewUnauthorized("invalid password")
 	}
 
@@ -181,20 +185,23 @@ func (s *Service) Unlock(ctx context.Context, sessionID, password string) (*Sean
 	return seance, nil
 }
 
-// SwitchWorkspace updates the session's workspace and role.
-func (s *Service) SwitchWorkspace(ctx context.Context, sessionID string, wsID uuid.UUID) (*Session, error) {
+// SwitchOrganization updates the session's organization and role.
+func (s *Service) SwitchOrganization(ctx context.Context, sessionID string, orgID uuid.UUID) (*Session, error) {
 	sess, err := s.sessionStore.GetSession(ctx, sessionID)
 	if err != nil {
 		return nil, err
 	}
 
-	member, err := s.repo.GetMember(ctx, wsID, sess.UserID)
+	member, err := s.repo.GetMember(ctx, orgID, sess.UserID)
 	if err != nil {
-		return nil, errs.NewForbidden("not a member of this workspace")
+		return nil, errs.NewForbidden("not a member of this organization")
 	}
 
-	sess.WorkspaceID = wsID
+	sess.OrganizationID = orgID
 	sess.Role = member.Role
+	if member.Admin {
+		sess.Role = "owner"
+	}
 
 	if err := s.sessionStore.UpdateSession(ctx, sess, s.sessionTTL); err != nil {
 		return nil, err
@@ -208,13 +215,13 @@ func (s *Service) GetSessionInfo(ctx context.Context, sessionID string) (*Sessio
 	return s.sessionStore.GetSession(ctx, sessionID)
 }
 
-// CreateWorkspace creates a new workspace and adds the owner as a member.
-func (s *Service) CreateWorkspace(ctx context.Context, userID uuid.UUID, name, slug string) (*types.Workspace, error) {
+// CreateOrganization creates a new organization and adds the owner as a member.
+func (s *Service) CreateOrganization(ctx context.Context, userID uuid.UUID, name, slug string) (*types.Organization, error) {
 	if name == "" || slug == "" {
 		return nil, errs.NewBadRequest("name and slug are required")
 	}
 
-	ws := &types.Workspace{
+	org := &types.Organization{
 		ID:       uuid.New(),
 		Name:     name,
 		Slug:     slug,
@@ -223,12 +230,12 @@ func (s *Service) CreateWorkspace(ctx context.Context, userID uuid.UUID, name, s
 		Settings: json.RawMessage(`{}`),
 	}
 
-	if err := s.repo.CreateWorkspace(ctx, ws); err != nil {
+	if err := s.repo.CreateOrganization(ctx, org); err != nil {
 		return nil, err
 	}
 
-	member := &types.WorkspaceMember{
-		WorkspaceID: ws.ID,
+	member := &types.Labor{
+		OrganizationID: org.ID,
 		UserID:      userID,
 		Role:        "owner",
 		Permissions: json.RawMessage(`[]`),
@@ -237,7 +244,7 @@ func (s *Service) CreateWorkspace(ctx context.Context, userID uuid.UUID, name, s
 		return nil, err
 	}
 
-	return ws, nil
+	return org, nil
 }
 
 // SessionTTL returns the configured session TTL.
@@ -255,12 +262,17 @@ func (s *Service) Store() SessionStore {
 	return s.sessionStore
 }
 
-func (s *Service) createSessionAndSeance(ctx context.Context, user *types.User, phoneID, wsID uuid.UUID, role string) (*Session, *Seance, error) {
+// CreateSessionAndSeance creates a session and seance for the given user.
+func (s *Service) CreateSessionAndSeance(ctx context.Context, user *types.User, phoneID, orgID uuid.UUID, role string) (*Session, *Seance, error) {
+	return s.createSessionAndSeance(ctx, user, phoneID, orgID, role)
+}
+
+func (s *Service) createSessionAndSeance(ctx context.Context, user *types.User, phoneID, orgID uuid.UUID, role string) (*Session, *Seance, error) {
 	sess := &Session{
 		ID:          uuid.New().String(),
 		UserID:      user.ID,
 		PhoneID:     phoneID,
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		Role:        role,
 		Email:       user.Email,
 		FullName:    user.FullName,

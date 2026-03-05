@@ -26,16 +26,16 @@ func NewCatalogRepo(pool *pgxpool.Pool) *CatalogRepo {
 }
 
 // FindBySKU returns a product entity by its internal barcode/SKU.
-func (r *CatalogRepo) FindBySKU(ctx context.Context, wsID uuid.UUID, sku string) (*types.Entity, error) {
+func (r *CatalogRepo) FindBySKU(ctx context.Context, orgID uuid.UUID, sku string) (*types.Entity, error) {
 	var e types.Entity
 	err := r.pool.QueryRow(ctx,
-		`SELECT e.id, e.workspace_id, e.kind, e.name, e.status, e.parent_id, e.meta, e.sort_order, e.created_at, e.updated_at, e.deleted_at
+		`SELECT e.id, e.organization_id, e.kind, e.name, e.status, e.parent_id, e.meta, e.sort_order, e.created_at, e.updated_at, e.deleted_at
 		 FROM entities e
 		 JOIN components c ON c.entity_id = e.id AND c.type = 'barcode'
-		 WHERE e.workspace_id = $1 AND e.kind = 'product' AND e.deleted_at IS NULL
+		 WHERE e.organization_id = $1 AND e.kind = 'product' AND e.deleted_at IS NULL
 		   AND c.data->>'internal' = $2`,
-		wsID, sku,
-	).Scan(&e.ID, &e.WorkspaceID, &e.Kind, &e.Name, &e.Status, &e.ParentID, &e.Meta, &e.SortOrder, &e.CreatedAt, &e.UpdatedAt, &e.DeletedAt)
+		orgID, sku,
+	).Scan(&e.ID, &e.OrganizationID, &e.Kind, &e.Name, &e.Status, &e.ParentID, &e.Meta, &e.SortOrder, &e.CreatedAt, &e.UpdatedAt, &e.DeletedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errs.NewNotFound("product not found by SKU")
@@ -46,15 +46,15 @@ func (r *CatalogRepo) FindBySKU(ctx context.Context, wsID uuid.UUID, sku string)
 }
 
 // ListProductsWithComponents returns products with their components.
-func (r *CatalogRepo) ListProductsWithComponents(ctx context.Context, wsID uuid.UUID, filter catalog.ProductFilter) ([]catalog.Product, int, error) {
+func (r *CatalogRepo) ListProductsWithComponents(ctx context.Context, orgID uuid.UUID, filter catalog.ProductFilter) ([]catalog.Product, int, error) {
 	filter.Page.Normalize()
 
 	var conditions []string
 	var args []any
 	argIdx := 1
 
-	conditions = append(conditions, fmt.Sprintf("e.workspace_id = $%d", argIdx))
-	args = append(args, wsID)
+	conditions = append(conditions, fmt.Sprintf("e.organization_id = $%d", argIdx))
+	args = append(args, orgID)
 	argIdx++
 
 	conditions = append(conditions, "e.kind = 'product'")
@@ -89,7 +89,7 @@ func (r *CatalogRepo) ListProductsWithComponents(ctx context.Context, wsID uuid.
 	}
 
 	query := fmt.Sprintf(
-		`SELECT e.id, e.workspace_id, e.kind, e.name, e.status, e.parent_id, e.meta, e.sort_order, e.created_at, e.updated_at
+		`SELECT e.id, e.organization_id, e.kind, e.name, e.status, e.parent_id, e.meta, e.sort_order, e.created_at, e.updated_at
 		 FROM entities e WHERE %s ORDER BY e.created_at DESC LIMIT $%d OFFSET $%d`,
 		where, argIdx, argIdx+1,
 	)
@@ -104,7 +104,7 @@ func (r *CatalogRepo) ListProductsWithComponents(ctx context.Context, wsID uuid.
 	var products []catalog.Product
 	for rows.Next() {
 		var e types.Entity
-		if err := rows.Scan(&e.ID, &e.WorkspaceID, &e.Kind, &e.Name, &e.Status, &e.ParentID, &e.Meta, &e.SortOrder, &e.CreatedAt, &e.UpdatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.OrganizationID, &e.Kind, &e.Name, &e.Status, &e.ParentID, &e.Meta, &e.SortOrder, &e.CreatedAt, &e.UpdatedAt); err != nil {
 			return nil, 0, err
 		}
 		products = append(products, catalog.Product{Entity: e})
@@ -121,8 +121,8 @@ func (r *CatalogRepo) ListProductsWithComponents(ctx context.Context, wsID uuid.
 		}
 
 		compRows, err := r.pool.Query(ctx,
-			`SELECT entity_id, type, data FROM components WHERE workspace_id = $1 AND entity_id = ANY($2)`,
-			wsID, ids,
+			`SELECT entity_id, type, data FROM components WHERE organization_id = $1 AND entity_id = ANY($2)`,
+			orgID, ids,
 		)
 		if err != nil {
 			return nil, 0, err

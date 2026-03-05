@@ -53,11 +53,11 @@ func (h *SubscribeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate channel format: "workspace:{uuid}" or "views:{seance_id}"
+	// Validate channel format: "org:{uuid}" or "views:{seance_id}"
 	switch {
-	case strings.HasPrefix(req.Channel, "workspace:"):
-		wsID := strings.TrimPrefix(req.Channel, "workspace:")
-		if err := h.authorizeWorkspace(r, wsID); err != nil {
+	case strings.HasPrefix(req.Channel, "org:"):
+		orgID := strings.TrimPrefix(req.Channel, "org:")
+		if err := h.authorizeOrganization(r, orgID); err != nil {
 			writeSubscribeError(w, err)
 			return
 		}
@@ -83,7 +83,7 @@ func (h *SubscribeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *SubscribeHandler) authorizeWorkspace(r *http.Request, wsID string) *proxyError {
+func (h *SubscribeHandler) authorizeOrganization(r *http.Request, orgID string) *proxyError {
 	sessionID := cookieValue(r, "teco_session")
 	if sessionID == "" {
 		return &proxyError{Code: 401, Message: "no session"}
@@ -92,8 +92,8 @@ func (h *SubscribeHandler) authorizeWorkspace(r *http.Request, wsID string) *pro
 	if err != nil {
 		return &proxyError{Code: 401, Message: "session expired"}
 	}
-	if sess.WorkspaceID.String() != wsID {
-		return &proxyError{Code: 403, Message: "workspace mismatch"}
+	if sess.OrganizationID.String() != orgID {
+		return &proxyError{Code: 403, Message: "organization mismatch"}
 	}
 	return nil
 }

@@ -12,7 +12,7 @@ type Session struct {
 	ID          string    `json:"id"`
 	UserID      uuid.UUID `json:"user_id"`
 	PhoneID     uuid.UUID `json:"phone_id"`
-	WorkspaceID uuid.UUID `json:"workspace_id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
 	Role        string    `json:"role"`
 	Email       string    `json:"email"`
 	FullName    string    `json:"full_name"`

@@ -19,9 +19,9 @@ func NewWarehouseHandler(warehouseSvc *warehouse.Service) *WarehouseHandler {
 	return &WarehouseHandler{warehouseSvc: warehouseSvc}
 }
 
-// Receive handles POST /api/v1/workspaces/{wsID}/warehouse/receive.
+// Receive handles POST /api/v1/organizations/{orgID}/warehouse/receive.
 func (h *WarehouseHandler) Receive(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -35,7 +35,7 @@ func (h *WarehouseHandler) Receive(w http.ResponseWriter, r *http.Request) {
 	}
 	input.ActorID = &userID
 
-	result, err := h.warehouseSvc.Receive(r.Context(), wsID, input)
+	result, err := h.warehouseSvc.Receive(r.Context(), orgID, input)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -44,9 +44,9 @@ func (h *WarehouseHandler) Receive(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,result)
 }
 
-// Ship handles POST /api/v1/workspaces/{wsID}/warehouse/ship.
+// Ship handles POST /api/v1/organizations/{orgID}/warehouse/ship.
 func (h *WarehouseHandler) Ship(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -60,7 +60,7 @@ func (h *WarehouseHandler) Ship(w http.ResponseWriter, r *http.Request) {
 	}
 	input.ActorID = &userID
 
-	result, err := h.warehouseSvc.Ship(r.Context(), wsID, input)
+	result, err := h.warehouseSvc.Ship(r.Context(), orgID, input)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -69,9 +69,9 @@ func (h *WarehouseHandler) Ship(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,result)
 }
 
-// Transfer handles POST /api/v1/workspaces/{wsID}/warehouse/transfer.
+// Transfer handles POST /api/v1/organizations/{orgID}/warehouse/transfer.
 func (h *WarehouseHandler) Transfer(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -85,7 +85,7 @@ func (h *WarehouseHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 	}
 	input.ActorID = &userID
 
-	result, err := h.warehouseSvc.Transfer(r.Context(), wsID, input)
+	result, err := h.warehouseSvc.Transfer(r.Context(), orgID, input)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -94,9 +94,9 @@ func (h *WarehouseHandler) Transfer(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,result)
 }
 
-// Adjust handles POST /api/v1/workspaces/{wsID}/warehouse/adjust.
+// Adjust handles POST /api/v1/organizations/{orgID}/warehouse/adjust.
 func (h *WarehouseHandler) Adjust(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -110,7 +110,7 @@ func (h *WarehouseHandler) Adjust(w http.ResponseWriter, r *http.Request) {
 	}
 	input.ActorID = &userID
 
-	result, err := h.warehouseSvc.Adjust(r.Context(), wsID, input)
+	result, err := h.warehouseSvc.Adjust(r.Context(), orgID, input)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -119,9 +119,9 @@ func (h *WarehouseHandler) Adjust(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,result)
 }
 
-// ListStock handles GET /api/v1/workspaces/{wsID}/warehouse/{warehouseID}/stock.
+// ListStock handles GET /api/v1/organizations/{orgID}/warehouse/{warehouseID}/stock.
 func (h *WarehouseHandler) ListStock(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -138,7 +138,7 @@ func (h *WarehouseHandler) ListStock(w http.ResponseWriter, r *http.Request) {
 		Page:     parsePage(r),
 	}
 
-	result, err := h.warehouseSvc.ListStock(r.Context(), wsID, warehouseID, filter)
+	result, err := h.warehouseSvc.ListStock(r.Context(), orgID, warehouseID, filter)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -147,9 +147,9 @@ func (h *WarehouseHandler) ListStock(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,result)
 }
 
-// GetStockLevel handles GET /api/v1/workspaces/{wsID}/warehouse/{warehouseID}/stock/{productID}.
+// GetStockLevel handles GET /api/v1/organizations/{orgID}/warehouse/{warehouseID}/stock/{productID}.
 func (h *WarehouseHandler) GetStockLevel(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -165,7 +165,7 @@ func (h *WarehouseHandler) GetStockLevel(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	sl, err := h.warehouseSvc.GetStockLevel(r.Context(), wsID, productID, warehouseID)
+	sl, err := h.warehouseSvc.GetStockLevel(r.Context(), orgID, productID, warehouseID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -174,15 +174,15 @@ func (h *WarehouseHandler) GetStockLevel(w http.ResponseWriter, r *http.Request)
 	respondOK(w, http.StatusOK,sl)
 }
 
-// GetLowStock handles GET /api/v1/workspaces/{wsID}/warehouse/low-stock.
+// GetLowStock handles GET /api/v1/organizations/{orgID}/warehouse/low-stock.
 func (h *WarehouseHandler) GetLowStock(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
-	items, err := h.warehouseSvc.GetLowStock(r.Context(), wsID)
+	items, err := h.warehouseSvc.GetLowStock(r.Context(), orgID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -191,9 +191,9 @@ func (h *WarehouseHandler) GetLowStock(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,items)
 }
 
-// ListMovements handles GET /api/v1/workspaces/{wsID}/warehouse/movements.
+// ListMovements handles GET /api/v1/organizations/{orgID}/warehouse/movements.
 func (h *WarehouseHandler) ListMovements(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -218,7 +218,7 @@ func (h *WarehouseHandler) ListMovements(w http.ResponseWriter, r *http.Request)
 		filter.Since = &t
 	}
 
-	result, err := h.warehouseSvc.GetMovements(r.Context(), wsID, filter)
+	result, err := h.warehouseSvc.GetMovements(r.Context(), orgID, filter)
 	if err != nil {
 		respondError(w, err)
 		return

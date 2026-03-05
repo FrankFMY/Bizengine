@@ -17,9 +17,9 @@ func NewOrderHandler(orderSvc *order.Service) *OrderHandler {
 	return &OrderHandler{orderSvc: orderSvc}
 }
 
-// Create handles POST /api/v1/workspaces/{wsID}/orders.
+// Create handles POST /api/v1/organizations/{orgID}/orders.
 func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -32,7 +32,7 @@ func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	o, err := h.orderSvc.Create(r.Context(), wsID, input, &userID)
+	o, err := h.orderSvc.Create(r.Context(), orgID, input, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -41,9 +41,9 @@ func (h *OrderHandler) Create(w http.ResponseWriter, r *http.Request) {
 	respondCreated(w,o)
 }
 
-// List handles GET /api/v1/workspaces/{wsID}/orders.
+// List handles GET /api/v1/organizations/{orgID}/orders.
 func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -56,7 +56,7 @@ func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
 		Page:       parsePage(r),
 	}
 
-	result, err := h.orderSvc.List(r.Context(), wsID, filter)
+	result, err := h.orderSvc.List(r.Context(), orgID, filter)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -65,9 +65,9 @@ func (h *OrderHandler) List(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,result)
 }
 
-// Get handles GET /api/v1/workspaces/{wsID}/orders/{id}.
+// Get handles GET /api/v1/organizations/{orgID}/orders/{id}.
 func (h *OrderHandler) Get(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -79,7 +79,7 @@ func (h *OrderHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	include := r.URL.Query().Get("include")
-	o, err := h.orderSvc.Get(r.Context(), wsID, id, include == "items")
+	o, err := h.orderSvc.Get(r.Context(), orgID, id, include == "items")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -88,9 +88,9 @@ func (h *OrderHandler) Get(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,o)
 }
 
-// Update handles PUT /api/v1/workspaces/{wsID}/orders/{id}.
+// Update handles PUT /api/v1/organizations/{orgID}/orders/{id}.
 func (h *OrderHandler) Update(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -108,7 +108,7 @@ func (h *OrderHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	o, err := h.orderSvc.Update(r.Context(), wsID, id, input, &userID)
+	o, err := h.orderSvc.Update(r.Context(), orgID, id, input, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -117,9 +117,9 @@ func (h *OrderHandler) Update(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,o)
 }
 
-// Confirm handles POST /api/v1/workspaces/{wsID}/orders/{id}/confirm.
+// Confirm handles POST /api/v1/organizations/{orgID}/orders/{id}/confirm.
 func (h *OrderHandler) Confirm(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -131,7 +131,7 @@ func (h *OrderHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
-	o, err := h.orderSvc.Confirm(r.Context(), wsID, id, &userID)
+	o, err := h.orderSvc.Confirm(r.Context(), orgID, id, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -140,9 +140,9 @@ func (h *OrderHandler) Confirm(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,o)
 }
 
-// Pay handles POST /api/v1/workspaces/{wsID}/orders/{id}/pay.
+// Pay handles POST /api/v1/organizations/{orgID}/orders/{id}/pay.
 func (h *OrderHandler) Pay(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -160,7 +160,7 @@ func (h *OrderHandler) Pay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	o, err := h.orderSvc.Pay(r.Context(), wsID, id, input, &userID)
+	o, err := h.orderSvc.Pay(r.Context(), orgID, id, input, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -169,9 +169,9 @@ func (h *OrderHandler) Pay(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,o)
 }
 
-// Ship handles POST /api/v1/workspaces/{wsID}/orders/{id}/ship.
+// Ship handles POST /api/v1/organizations/{orgID}/orders/{id}/ship.
 func (h *OrderHandler) Ship(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -189,7 +189,7 @@ func (h *OrderHandler) Ship(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	o, err := h.orderSvc.Ship(r.Context(), wsID, id, input, &userID)
+	o, err := h.orderSvc.Ship(r.Context(), orgID, id, input, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -198,9 +198,9 @@ func (h *OrderHandler) Ship(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,o)
 }
 
-// Deliver handles POST /api/v1/workspaces/{wsID}/orders/{id}/deliver.
+// Deliver handles POST /api/v1/organizations/{orgID}/orders/{id}/deliver.
 func (h *OrderHandler) Deliver(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -212,7 +212,7 @@ func (h *OrderHandler) Deliver(w http.ResponseWriter, r *http.Request) {
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
-	o, err := h.orderSvc.Deliver(r.Context(), wsID, id, &userID)
+	o, err := h.orderSvc.Deliver(r.Context(), orgID, id, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -221,9 +221,9 @@ func (h *OrderHandler) Deliver(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,o)
 }
 
-// Cancel handles POST /api/v1/workspaces/{wsID}/orders/{id}/cancel.
+// Cancel handles POST /api/v1/organizations/{orgID}/orders/{id}/cancel.
 func (h *OrderHandler) Cancel(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -243,7 +243,7 @@ func (h *OrderHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	o, err := h.orderSvc.Cancel(r.Context(), wsID, id, input.Reason, &userID)
+	o, err := h.orderSvc.Cancel(r.Context(), orgID, id, input.Reason, &userID)
 	if err != nil {
 		respondError(w, err)
 		return

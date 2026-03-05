@@ -27,7 +27,7 @@ func NewService(repo Repository, entitySvc *entity.Service, bus event.Bus) *Serv
 }
 
 // HireEmployee creates a new employee entity with components.
-func (s *Service) HireEmployee(ctx context.Context, wsID uuid.UUID, input HireInput, actorID *uuid.UUID) (*Employee, error) {
+func (s *Service) HireEmployee(ctx context.Context, orgID uuid.UUID, input HireInput, actorID *uuid.UUID) (*Employee, error) {
 	if input.Name == "" {
 		return nil, errs.NewBadRequest("name is required")
 	}
@@ -35,7 +35,7 @@ func (s *Service) HireEmployee(ctx context.Context, wsID uuid.UUID, input HireIn
 		return nil, errs.NewBadRequest("position is required")
 	}
 
-	e, err := s.entitySvc.Create(ctx, wsID, entity.CreateEntityInput{
+	e, err := s.entitySvc.Create(ctx, orgID, entity.CreateEntityInput{
 		Kind: "employee",
 		Name: input.Name,
 	}, actorID)
@@ -56,25 +56,25 @@ func (s *Service) HireEmployee(ctx context.Context, wsID uuid.UUID, input HireIn
 	}
 
 	empData, _ := json.Marshal(employment)
-	if _, err := s.entitySvc.SetComponent(ctx, wsID, e.ID, "employment", empData, actorID); err != nil {
+	if _, err := s.entitySvc.SetComponent(ctx, orgID, e.ID, "employment", empData, actorID); err != nil {
 		return nil, err
 	}
 
 	if input.Salary != nil {
 		salData, _ := json.Marshal(input.Salary)
-		if _, err := s.entitySvc.SetComponent(ctx, wsID, e.ID, "salary", salData, actorID); err != nil {
+		if _, err := s.entitySvc.SetComponent(ctx, orgID, e.ID, "salary", salData, actorID); err != nil {
 			return nil, err
 		}
 	}
 
 	if input.Contact != nil {
 		conData, _ := json.Marshal(input.Contact)
-		if _, err := s.entitySvc.SetComponent(ctx, wsID, e.ID, "contact", conData, actorID); err != nil {
+		if _, err := s.entitySvc.SetComponent(ctx, orgID, e.ID, "contact", conData, actorID); err != nil {
 			return nil, err
 		}
 	}
 
-	s.publishEvent(ctx, wsID, e.ID, "hr.employee.hired", map[string]any{
+	s.publishEvent(ctx, orgID, e.ID, "hr.employee.hired", map[string]any{
 		"employee_id": e.ID.String(),
 		"name":        input.Name,
 		"position":    input.Position,
@@ -89,8 +89,8 @@ func (s *Service) HireEmployee(ctx context.Context, wsID uuid.UUID, input HireIn
 }
 
 // GetEmployee returns an employee with components.
-func (s *Service) GetEmployee(ctx context.Context, wsID, employeeID uuid.UUID) (*Employee, error) {
-	e, err := s.entitySvc.Get(ctx, wsID, employeeID, true)
+func (s *Service) GetEmployee(ctx context.Context, orgID, employeeID uuid.UUID) (*Employee, error) {
+	e, err := s.entitySvc.Get(ctx, orgID, employeeID, true)
 	if err != nil {
 		return nil, err
 	}
@@ -115,14 +115,14 @@ func (s *Service) GetEmployee(ctx context.Context, wsID, employeeID uuid.UUID) (
 }
 
 // ListEmployees returns employees matching the filter.
-func (s *Service) ListEmployees(ctx context.Context, wsID uuid.UUID, filter EmployeeFilter) ([]Employee, int, error) {
+func (s *Service) ListEmployees(ctx context.Context, orgID uuid.UUID, filter EmployeeFilter) ([]Employee, int, error) {
 	filter.Page.Normalize()
 	status := "active"
 	if filter.Status != nil {
 		status = *filter.Status
 	}
 
-	page, err := s.entitySvc.List(ctx, wsID, entity.ListFilter{
+	page, err := s.entitySvc.List(ctx, orgID, entity.ListFilter{
 		Kind:   strPtr("employee"),
 		Status: &status,
 		Page:   filter.Page,
@@ -139,8 +139,8 @@ func (s *Service) ListEmployees(ctx context.Context, wsID uuid.UUID, filter Empl
 }
 
 // UpdateEmployee updates employee entity and components.
-func (s *Service) UpdateEmployee(ctx context.Context, wsID, employeeID uuid.UUID, input UpdateEmployeeInput, actorID *uuid.UUID) (*Employee, error) {
-	e, err := s.entitySvc.Get(ctx, wsID, employeeID, false)
+func (s *Service) UpdateEmployee(ctx context.Context, orgID, employeeID uuid.UUID, input UpdateEmployeeInput, actorID *uuid.UUID) (*Employee, error) {
+	e, err := s.entitySvc.Get(ctx, orgID, employeeID, false)
 	if err != nil {
 		return nil, err
 	}
@@ -149,36 +149,36 @@ func (s *Service) UpdateEmployee(ctx context.Context, wsID, employeeID uuid.UUID
 	}
 
 	if input.Name != nil {
-		if _, err := s.entitySvc.Update(ctx, wsID, e.ID, entity.UpdateEntityInput{Name: input.Name}, actorID); err != nil {
+		if _, err := s.entitySvc.Update(ctx, orgID, e.ID, entity.UpdateEntityInput{Name: input.Name}, actorID); err != nil {
 			return nil, err
 		}
 	}
 
 	if input.Employment != nil {
 		data, _ := json.Marshal(input.Employment)
-		if _, err := s.entitySvc.SetComponent(ctx, wsID, e.ID, "employment", data, actorID); err != nil {
+		if _, err := s.entitySvc.SetComponent(ctx, orgID, e.ID, "employment", data, actorID); err != nil {
 			return nil, err
 		}
 	}
 	if input.Salary != nil {
 		data, _ := json.Marshal(input.Salary)
-		if _, err := s.entitySvc.SetComponent(ctx, wsID, e.ID, "salary", data, actorID); err != nil {
+		if _, err := s.entitySvc.SetComponent(ctx, orgID, e.ID, "salary", data, actorID); err != nil {
 			return nil, err
 		}
 	}
 	if input.Contact != nil {
 		data, _ := json.Marshal(input.Contact)
-		if _, err := s.entitySvc.SetComponent(ctx, wsID, e.ID, "contact", data, actorID); err != nil {
+		if _, err := s.entitySvc.SetComponent(ctx, orgID, e.ID, "contact", data, actorID); err != nil {
 			return nil, err
 		}
 	}
 
-	return s.GetEmployee(ctx, wsID, employeeID)
+	return s.GetEmployee(ctx, orgID, employeeID)
 }
 
 // TerminateEmployee soft-deletes the employee entity.
-func (s *Service) TerminateEmployee(ctx context.Context, wsID, employeeID uuid.UUID, reason string, actorID *uuid.UUID) error {
-	e, err := s.entitySvc.Get(ctx, wsID, employeeID, false)
+func (s *Service) TerminateEmployee(ctx context.Context, orgID, employeeID uuid.UUID, reason string, actorID *uuid.UUID) error {
+	e, err := s.entitySvc.Get(ctx, orgID, employeeID, false)
 	if err != nil {
 		return err
 	}
@@ -190,11 +190,11 @@ func (s *Service) TerminateEmployee(ctx context.Context, wsID, employeeID uuid.U
 	}
 
 	terminated := "terminated"
-	if _, err := s.entitySvc.Update(ctx, wsID, employeeID, entity.UpdateEntityInput{Status: &terminated}, actorID); err != nil {
+	if _, err := s.entitySvc.Update(ctx, orgID, employeeID, entity.UpdateEntityInput{Status: &terminated}, actorID); err != nil {
 		return err
 	}
 
-	s.publishEvent(ctx, wsID, employeeID, "hr.employee.terminated", map[string]any{
+	s.publishEvent(ctx, orgID, employeeID, "hr.employee.terminated", map[string]any{
 		"employee_id": employeeID.String(),
 		"reason":      reason,
 	}, actorID)
@@ -202,7 +202,7 @@ func (s *Service) TerminateEmployee(ctx context.Context, wsID, employeeID uuid.U
 }
 
 // CreateShift creates a new planned shift.
-func (s *Service) CreateShift(ctx context.Context, wsID uuid.UUID, input CreateShiftInput, actorID *uuid.UUID) (*Shift, error) {
+func (s *Service) CreateShift(ctx context.Context, orgID uuid.UUID, input CreateShiftInput, actorID *uuid.UUID) (*Shift, error) {
 	if input.EmployeeID == uuid.Nil {
 		return nil, errs.NewBadRequest("employee_id is required")
 	}
@@ -213,7 +213,7 @@ func (s *Service) CreateShift(ctx context.Context, wsID uuid.UUID, input CreateS
 		return nil, errs.NewBadRequest("end_time must be after start_time")
 	}
 
-	overlap, err := s.repo.HasOverlappingShift(ctx, wsID, input.EmployeeID, input.StartTime, input.EndTime, nil)
+	overlap, err := s.repo.HasOverlappingShift(ctx, orgID, input.EmployeeID, input.StartTime, input.EndTime, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -223,7 +223,7 @@ func (s *Service) CreateShift(ctx context.Context, wsID uuid.UUID, input CreateS
 
 	shift := &Shift{
 		ID:           uuid.New(),
-		WorkspaceID:  wsID,
+		OrganizationID:  orgID,
 		EmployeeID:   input.EmployeeID,
 		LocationID:   input.LocationID,
 		StartTime:    input.StartTime,
@@ -237,7 +237,7 @@ func (s *Service) CreateShift(ctx context.Context, wsID uuid.UUID, input CreateS
 		return nil, err
 	}
 
-	s.publishEvent(ctx, wsID, input.EmployeeID, "hr.shift.created", map[string]any{
+	s.publishEvent(ctx, orgID, input.EmployeeID, "hr.shift.created", map[string]any{
 		"shift_id":    shift.ID.String(),
 		"employee_id": input.EmployeeID.String(),
 		"start_time":  input.StartTime.Format(time.RFC3339),
@@ -248,14 +248,14 @@ func (s *Service) CreateShift(ctx context.Context, wsID uuid.UUID, input CreateS
 }
 
 // ListShifts returns shifts matching the filter.
-func (s *Service) ListShifts(ctx context.Context, wsID uuid.UUID, filter ShiftFilter) ([]Shift, int, error) {
+func (s *Service) ListShifts(ctx context.Context, orgID uuid.UUID, filter ShiftFilter) ([]Shift, int, error) {
 	filter.Page.Normalize()
-	return s.repo.ListShifts(ctx, wsID, filter)
+	return s.repo.ListShifts(ctx, orgID, filter)
 }
 
 // UpdateShift updates a shift.
-func (s *Service) UpdateShift(ctx context.Context, wsID, shiftID uuid.UUID, input UpdateShiftInput, actorID *uuid.UUID) (*Shift, error) {
-	shift, err := s.repo.GetShift(ctx, wsID, shiftID)
+func (s *Service) UpdateShift(ctx context.Context, orgID, shiftID uuid.UUID, input UpdateShiftInput, actorID *uuid.UUID) (*Shift, error) {
+	shift, err := s.repo.GetShift(ctx, orgID, shiftID)
 	if err != nil {
 		return nil, err
 	}
@@ -280,7 +280,7 @@ func (s *Service) UpdateShift(ctx context.Context, wsID, shiftID uuid.UUID, inpu
 		return nil, errs.NewBadRequest("end_time must be after start_time")
 	}
 
-	overlap, err := s.repo.HasOverlappingShift(ctx, wsID, shift.EmployeeID, shift.StartTime, shift.EndTime, &shiftID)
+	overlap, err := s.repo.HasOverlappingShift(ctx, orgID, shift.EmployeeID, shift.StartTime, shift.EndTime, &shiftID)
 	if err != nil {
 		return nil, err
 	}
@@ -295,17 +295,17 @@ func (s *Service) UpdateShift(ctx context.Context, wsID, shiftID uuid.UUID, inpu
 }
 
 // DeleteShift deletes a shift.
-func (s *Service) DeleteShift(ctx context.Context, wsID, shiftID uuid.UUID) error {
-	return s.repo.DeleteShift(ctx, wsID, shiftID)
+func (s *Service) DeleteShift(ctx context.Context, orgID, shiftID uuid.UUID) error {
+	return s.repo.DeleteShift(ctx, orgID, shiftID)
 }
 
 // ClockIn creates a new timesheet entry.
-func (s *Service) ClockIn(ctx context.Context, wsID, employeeID uuid.UUID, shiftID *uuid.UUID, actorID *uuid.UUID) (*Timesheet, error) {
+func (s *Service) ClockIn(ctx context.Context, orgID, employeeID uuid.UUID, shiftID *uuid.UUID, actorID *uuid.UUID) (*Timesheet, error) {
 	if employeeID == uuid.Nil {
 		return nil, errs.NewBadRequest("employee_id is required")
 	}
 
-	existing, err := s.repo.GetOpenTimesheet(ctx, wsID, employeeID)
+	existing, err := s.repo.GetOpenTimesheet(ctx, orgID, employeeID)
 	if err != nil {
 		return nil, err
 	}
@@ -315,7 +315,7 @@ func (s *Service) ClockIn(ctx context.Context, wsID, employeeID uuid.UUID, shift
 
 	ts := &Timesheet{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		EmployeeID:  employeeID,
 		ShiftID:     shiftID,
 		ClockIn:     time.Now(),
@@ -326,7 +326,7 @@ func (s *Service) ClockIn(ctx context.Context, wsID, employeeID uuid.UUID, shift
 		return nil, err
 	}
 
-	s.publishEvent(ctx, wsID, employeeID, "hr.shift.started", map[string]any{
+	s.publishEvent(ctx, orgID, employeeID, "hr.shift.started", map[string]any{
 		"timesheet_id": ts.ID.String(),
 		"employee_id":  employeeID.String(),
 	}, actorID)
@@ -335,8 +335,8 @@ func (s *Service) ClockIn(ctx context.Context, wsID, employeeID uuid.UUID, shift
 }
 
 // ClockOut closes a timesheet and calculates hours worked.
-func (s *Service) ClockOut(ctx context.Context, wsID, tsID uuid.UUID, actorID *uuid.UUID) (*Timesheet, error) {
-	ts, err := s.repo.GetTimesheet(ctx, wsID, tsID)
+func (s *Service) ClockOut(ctx context.Context, orgID, tsID uuid.UUID, actorID *uuid.UUID) (*Timesheet, error) {
+	ts, err := s.repo.GetTimesheet(ctx, orgID, tsID)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +350,7 @@ func (s *Service) ClockOut(ctx context.Context, wsID, tsID uuid.UUID, actorID *u
 
 	breakDuration := time.Duration(0)
 	if ts.ShiftID != nil {
-		shift, err := s.repo.GetShift(ctx, wsID, *ts.ShiftID)
+		shift, err := s.repo.GetShift(ctx, orgID, *ts.ShiftID)
 		if err == nil {
 			breakDuration = time.Duration(shift.BreakMinutes) * time.Minute
 		}
@@ -367,7 +367,7 @@ func (s *Service) ClockOut(ctx context.Context, wsID, tsID uuid.UUID, actorID *u
 		return nil, err
 	}
 
-	s.publishEvent(ctx, wsID, ts.EmployeeID, "hr.shift.completed", map[string]any{
+	s.publishEvent(ctx, orgID, ts.EmployeeID, "hr.shift.completed", map[string]any{
 		"timesheet_id": ts.ID.String(),
 		"employee_id":  ts.EmployeeID.String(),
 		"hours_worked": hours,
@@ -377,14 +377,14 @@ func (s *Service) ClockOut(ctx context.Context, wsID, tsID uuid.UUID, actorID *u
 }
 
 // ListTimesheets returns timesheets matching the filter.
-func (s *Service) ListTimesheets(ctx context.Context, wsID uuid.UUID, filter TimesheetFilter) ([]Timesheet, int, error) {
+func (s *Service) ListTimesheets(ctx context.Context, orgID uuid.UUID, filter TimesheetFilter) ([]Timesheet, int, error) {
 	filter.Page.Normalize()
-	return s.repo.ListTimesheets(ctx, wsID, filter)
+	return s.repo.ListTimesheets(ctx, orgID, filter)
 }
 
 // ApproveTimesheet approves a closed timesheet.
-func (s *Service) ApproveTimesheet(ctx context.Context, wsID, tsID uuid.UUID, actorID *uuid.UUID) error {
-	ts, err := s.repo.GetTimesheet(ctx, wsID, tsID)
+func (s *Service) ApproveTimesheet(ctx context.Context, orgID, tsID uuid.UUID, actorID *uuid.UUID) error {
+	ts, err := s.repo.GetTimesheet(ctx, orgID, tsID)
 	if err != nil {
 		return err
 	}
@@ -397,7 +397,7 @@ func (s *Service) ApproveTimesheet(ctx context.Context, wsID, tsID uuid.UUID, ac
 		return err
 	}
 
-	s.publishEvent(ctx, wsID, ts.EmployeeID, "hr.timesheet.approved", map[string]any{
+	s.publishEvent(ctx, orgID, ts.EmployeeID, "hr.timesheet.approved", map[string]any{
 		"timesheet_id": ts.ID.String(),
 		"employee_id":  ts.EmployeeID.String(),
 		"hours_worked": ts.HoursWorked,
@@ -406,11 +406,11 @@ func (s *Service) ApproveTimesheet(ctx context.Context, wsID, tsID uuid.UUID, ac
 	return nil
 }
 
-func (s *Service) publishEvent(ctx context.Context, wsID uuid.UUID, entityID uuid.UUID, eventType string, data map[string]any, actorID *uuid.UUID) {
+func (s *Service) publishEvent(ctx context.Context, orgID uuid.UUID, entityID uuid.UUID, eventType string, data map[string]any, actorID *uuid.UUID) {
 	payload, _ := json.Marshal(data)
 	ev := types.Event{
 		ID:          uuid.New(),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 		EntityID:    &entityID,
 		Type:        eventType,
 		Data:        payload,

@@ -4,6 +4,8 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/google/uuid"
+
 	"github.com/bizengine/engine/internal/core/auth"
 	"github.com/bizengine/engine/pkg/errs"
 )
@@ -65,7 +67,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	respondOK(w, http.StatusOK, map[string]any{
 		"user":       result.User,
-		"workspaces": result.Workspaces,
+		"organizations": result.Organizations,
 	})
 }
 
@@ -148,18 +150,22 @@ func (h *AuthHandler) Check(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondOK(w, http.StatusOK, map[string]any{
-		"seance_id":    seanceID,
-		"session_id":   sess.ID,
-		"user_id":      sess.UserID,
-		"phone_id":     sess.PhoneID,
-		"workspace_id": sess.WorkspaceID,
-		"role":         sess.Role,
-	})
+	isAdmin := sess.Role == "owner" || sess.Role == "admin"
+	result := map[string]any{
+		"seance_id":       seanceID,
+		"session_id":      sess.ID,
+		"user_id":         sess.UserID,
+		"organization_id": sess.OrganizationID,
+		"admin":           isAdmin,
+	}
+	if sess.PhoneID != (uuid.UUID{}) {
+		result["phone_id"] = sess.PhoneID
+	}
+	respondOK(w, http.StatusOK, result)
 }
 
-// SwitchWorkspace handles POST /api/v1/auth/switch.
-func (h *AuthHandler) SwitchWorkspace(w http.ResponseWriter, r *http.Request) {
+// SwitchOrganization handles POST /api/v1/auth/switch.
+func (h *AuthHandler) SwitchOrganization(w http.ResponseWriter, r *http.Request) {
 	sessionID, ok := auth.SessionIDFromCtx(r.Context())
 	if !ok {
 		respondError(w, errs.NewUnauthorized("not authenticated"))
@@ -167,27 +173,27 @@ func (h *AuthHandler) SwitchWorkspace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input struct {
-		WorkspaceID string `json:"workspace_id"`
+		OrganizationID string `json:"organization_id"`
 	}
 	if err := decodeJSON(r, &input); err != nil {
 		respondError(w, err)
 		return
 	}
 
-	wsID, err := parseUUIDString(input.WorkspaceID)
+	orgID, err := parseUUIDString(input.OrganizationID)
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
-	sess, err := h.authSvc.SwitchWorkspace(r.Context(), sessionID, wsID)
+	sess, err := h.authSvc.SwitchOrganization(r.Context(), sessionID, orgID)
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
 	respondOK(w, http.StatusOK, map[string]any{
-		"workspace_id": sess.WorkspaceID,
+		"organization_id": sess.OrganizationID,
 		"role":         sess.Role,
 	})
 }

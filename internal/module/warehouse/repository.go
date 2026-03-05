@@ -14,13 +14,13 @@ import (
 // Repository defines warehouse-specific storage operations.
 type Repository interface {
 	// GetStockLevel returns a stock level for a product in a warehouse.
-	GetStockLevel(ctx context.Context, wsID, productID, warehouseID uuid.UUID) (*StockLevel, error)
+	GetStockLevel(ctx context.Context, orgID, productID, warehouseID uuid.UUID) (*StockLevel, error)
 
 	// ListStock returns stock levels for a warehouse with optional filters.
-	ListStock(ctx context.Context, wsID, warehouseID uuid.UUID, filter StockFilter) ([]StockLevel, int, error)
+	ListStock(ctx context.Context, orgID, warehouseID uuid.UUID, filter StockFilter) ([]StockLevel, int, error)
 
 	// GetLowStock returns stock levels where available <= min_quantity.
-	GetLowStock(ctx context.Context, wsID uuid.UUID) ([]StockLevel, error)
+	GetLowStock(ctx context.Context, orgID uuid.UUID) ([]StockLevel, error)
 
 	// UpsertStockLevel creates or updates a stock level.
 	UpsertStockLevel(ctx context.Context, tx pgx.Tx, sl *StockLevel) error
@@ -29,7 +29,7 @@ type Repository interface {
 	InsertMovement(ctx context.Context, tx pgx.Tx, m *StockMovement) error
 
 	// ListMovements returns stock movements with optional filters.
-	ListMovements(ctx context.Context, wsID uuid.UUID, filter MovementFilter) ([]StockMovement, int, error)
+	ListMovements(ctx context.Context, orgID uuid.UUID, filter MovementFilter) ([]StockMovement, int, error)
 
 	// WithTx executes fn within a transaction.
 	WithTx(ctx context.Context, fn func(tx pgx.Tx) error) error
@@ -37,7 +37,7 @@ type Repository interface {
 
 // StockLevel represents current stock for a product in a warehouse.
 type StockLevel struct {
-	WorkspaceID uuid.UUID `json:"workspace_id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
 	ProductID   uuid.UUID `json:"product_id"`
 	WarehouseID uuid.UUID `json:"warehouse_id"`
 	Quantity    float64   `json:"quantity"`
@@ -52,7 +52,7 @@ type StockLevel struct {
 // StockMovement represents a stock movement record.
 type StockMovement struct {
 	ID              uuid.UUID  `json:"id"`
-	WorkspaceID     uuid.UUID  `json:"workspace_id"`
+	OrganizationID     uuid.UUID  `json:"organization_id"`
 	ProductID       uuid.UUID  `json:"product_id"`
 	WarehouseID     uuid.UUID  `json:"warehouse_id"`
 	Type            string     `json:"type"`

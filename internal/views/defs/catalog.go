@@ -24,7 +24,7 @@ var CatalogProductsList = &views.ViewDef{
 	Factory: catalogProductsListFactory,
 }
 
-func catalogProductsListFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
+func catalogProductsListFactory(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
 	limit := intParam(params, "limit", 50)
 	offset := intParam(params, "offset", 0)
 	search, _ := params["search"].(string)
@@ -36,12 +36,12 @@ func catalogProductsListFactory(ctx context.Context, pool *pgxpool.Pool, wsID uu
 		       COALESCE(cat.name, '') AS category_name,
 		       e.status, COUNT(*) OVER() AS total_count
 		FROM entities e
-		LEFT JOIN components pc ON pc.entity_id = e.id AND pc.type = 'price' AND pc.workspace_id = $1
-		LEFT JOIN components bc ON bc.entity_id = e.id AND bc.type = 'barcode' AND bc.workspace_id = $1
-		LEFT JOIN entities cat ON cat.id = e.parent_id AND cat.workspace_id = $1 AND cat.kind = 'category'
-		WHERE e.workspace_id = $1 AND e.kind = 'product' AND e.deleted_at IS NULL
+		LEFT JOIN components pc ON pc.entity_id = e.id AND pc.type = 'price' AND pc.organization_id = $1
+		LEFT JOIN components bc ON bc.entity_id = e.id AND bc.type = 'barcode' AND bc.organization_id = $1
+		LEFT JOIN entities cat ON cat.id = e.parent_id AND cat.organization_id = $1 AND cat.kind = 'category'
+		WHERE e.organization_id = $1 AND e.kind = 'product' AND e.deleted_at IS NULL
 	`
-	args := []any{wsID}
+	args := []any{orgID}
 	argIdx := 2
 
 	if search != "" {
@@ -106,7 +106,7 @@ var CatalogProductDetail = &views.ViewDef{
 	Factory: catalogProductDetailFactory,
 }
 
-func catalogProductDetailFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
+func catalogProductDetailFactory(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, params map[string]any) (*views.ViewResult, error) {
 	productID, _ := params["product_id"].(string)
 
 	tables := map[string]map[string]any{"catalog_products": {}, "stock_levels": {}}
@@ -116,8 +116,8 @@ func catalogProductDetailFactory(ctx context.Context, pool *pgxpool.Pool, wsID u
 	var id, name, status string
 	err := pool.QueryRow(ctx, `
 		SELECT id, name, status FROM entities
-		WHERE workspace_id = $1 AND id = $2 AND kind = 'product' AND deleted_at IS NULL
-	`, wsID, productID).Scan(&id, &name, &status)
+		WHERE organization_id = $1 AND id = $2 AND kind = 'product' AND deleted_at IS NULL
+	`, orgID, productID).Scan(&id, &name, &status)
 	if err != nil {
 		return nil, err
 	}
@@ -126,8 +126,8 @@ func catalogProductDetailFactory(ctx context.Context, pool *pgxpool.Pool, wsID u
 
 	// Load all components for this product
 	compRows, err := pool.Query(ctx, `
-		SELECT type, data FROM components WHERE workspace_id = $1 AND entity_id = $2
-	`, wsID, productID)
+		SELECT type, data FROM components WHERE organization_id = $1 AND entity_id = $2
+	`, orgID, productID)
 	if err != nil {
 		return nil, err
 	}
@@ -149,9 +149,9 @@ func catalogProductDetailFactory(ctx context.Context, pool *pgxpool.Pool, wsID u
 	stockRows, err := pool.Query(ctx, `
 		SELECT sl.warehouse_id, e.name, sl.quantity, sl.quantity - sl.reserved AS available
 		FROM stock_levels sl
-		JOIN entities e ON e.id = sl.warehouse_id AND e.workspace_id = $1
-		WHERE sl.workspace_id = $1 AND sl.product_id = $2
-	`, wsID, productID)
+		JOIN entities e ON e.id = sl.warehouse_id AND e.organization_id = $1
+		WHERE sl.organization_id = $1 AND sl.product_id = $2
+	`, orgID, productID)
 	if err != nil {
 		return nil, err
 	}
@@ -186,13 +186,13 @@ var CatalogCategoriesTree = &views.ViewDef{
 	Factory: catalogCategoriesTreeFactory,
 }
 
-func catalogCategoriesTreeFactory(ctx context.Context, pool *pgxpool.Pool, wsID uuid.UUID, _ map[string]any) (*views.ViewResult, error) {
+func catalogCategoriesTreeFactory(ctx context.Context, pool *pgxpool.Pool, orgID uuid.UUID, _ map[string]any) (*views.ViewResult, error) {
 	rows, err := pool.Query(ctx, `
 		SELECT id, name, parent_id, sort_order
 		FROM entities
-		WHERE workspace_id = $1 AND kind = 'category' AND deleted_at IS NULL
+		WHERE organization_id = $1 AND kind = 'category' AND deleted_at IS NULL
 		ORDER BY sort_order, name
-	`, wsID)
+	`, orgID)
 	if err != nil {
 		return nil, err
 	}

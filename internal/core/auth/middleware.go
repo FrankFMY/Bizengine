@@ -12,7 +12,7 @@ type contextKey string
 
 const (
 	ctxKeyUserID      contextKey = "user_id"
-	ctxKeyWorkspaceID contextKey = "workspace_id"
+	ctxKeyOrganizationID contextKey = "organization_id"
 	ctxKeyRole        contextKey = "role"
 	ctxKeySessionID   contextKey = "session_id"
 	ctxKeySeanceID    contextKey = "seance_id"
@@ -21,7 +21,7 @@ const (
 // Exported context keys for testing.
 var (
 	ExportedCtxKeyUserID      = ctxKeyUserID
-	ExportedCtxKeyWorkspaceID = ctxKeyWorkspaceID
+	ExportedCtxKeyOrganizationID = ctxKeyOrganizationID
 	ExportedCtxKeyRole        = ctxKeyRole
 )
 
@@ -76,8 +76,8 @@ func Middleware(svc *Service) func(http.Handler) http.Handler {
 			ctx = context.WithValue(ctx, ctxKeySessionID, sess.ID)
 			ctx = context.WithValue(ctx, ctxKeySeanceID, seanceCookie.Value)
 
-			if sess.WorkspaceID != uuid.Nil {
-				ctx = context.WithValue(ctx, ctxKeyWorkspaceID, sess.WorkspaceID)
+			if sess.OrganizationID != uuid.Nil {
+				ctx = context.WithValue(ctx, ctxKeyOrganizationID, sess.OrganizationID)
 			}
 
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -105,8 +105,8 @@ func SessionOnlyMiddleware(svc *Service) func(http.Handler) http.Handler {
 			ctx = context.WithValue(ctx, ctxKeySessionID, sess.ID)
 			ctx = context.WithValue(ctx, ctxKeyRole, sess.Role)
 
-			if sess.WorkspaceID != uuid.Nil {
-				ctx = context.WithValue(ctx, ctxKeyWorkspaceID, sess.WorkspaceID)
+			if sess.OrganizationID != uuid.Nil {
+				ctx = context.WithValue(ctx, ctxKeyOrganizationID, sess.OrganizationID)
 			}
 
 			next.ServeHTTP(w, r.WithContext(ctx))
@@ -162,9 +162,9 @@ func UserIDFromCtx(ctx context.Context) (uuid.UUID, bool) {
 	return id, ok
 }
 
-// WorkspaceIDFromCtx extracts workspace_id from context.
-func WorkspaceIDFromCtx(ctx context.Context) (uuid.UUID, bool) {
-	id, ok := ctx.Value(ctxKeyWorkspaceID).(uuid.UUID)
+// OrganizationIDFromCtx extracts organization_id from context.
+func OrganizationIDFromCtx(ctx context.Context) (uuid.UUID, bool) {
+	id, ok := ctx.Value(ctxKeyOrganizationID).(uuid.UUID)
 	return id, ok
 }
 

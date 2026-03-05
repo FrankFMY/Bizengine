@@ -78,70 +78,70 @@ func (r *AuthRepo) GetUserByID(ctx context.Context, id uuid.UUID) (*types.User, 
 	return &u, nil
 }
 
-// CreateWorkspace inserts a new workspace.
-func (r *AuthRepo) CreateWorkspace(ctx context.Context, ws *types.Workspace) error {
-	if ws.ID == uuid.Nil {
-		ws.ID = uuid.New()
+// CreateOrganization inserts a new organization.
+func (r *AuthRepo) CreateOrganization(ctx context.Context, org *types.Organization) error {
+	if org.ID == uuid.Nil {
+		org.ID = uuid.New()
 	}
 	now := time.Now()
-	ws.CreatedAt = now
-	ws.UpdatedAt = now
-	if ws.Settings == nil {
-		ws.Settings = json.RawMessage(`{}`)
+	org.CreatedAt = now
+	org.UpdatedAt = now
+	if org.Settings == nil {
+		org.Settings = json.RawMessage(`{}`)
 	}
 
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO workspaces (id, name, slug, owner_id, plan, settings, created_at, updated_at)
+		`INSERT INTO organizations (id, name, slug, owner_id, plan, settings, created_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		ws.ID, ws.Name, ws.Slug, ws.OwnerID, ws.Plan, ws.Settings, ws.CreatedAt, ws.UpdatedAt,
+		org.ID, org.Name, org.Slug, org.OwnerID, org.Plan, org.Settings, org.CreatedAt, org.UpdatedAt,
 	)
 	if err != nil {
 		if isDuplicateKey(err) {
-			return errs.NewConflict("workspace slug already taken")
+			return errs.NewConflict("organization slug already taken")
 		}
 		return err
 	}
 	return nil
 }
 
-// GetWorkspace returns a workspace by ID.
-func (r *AuthRepo) GetWorkspace(ctx context.Context, id uuid.UUID) (*types.Workspace, error) {
-	var ws types.Workspace
+// GetOrganization returns an organization by ID.
+func (r *AuthRepo) GetOrganization(ctx context.Context, id uuid.UUID) (*types.Organization, error) {
+	var org types.Organization
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, name, slug, owner_id, plan, settings, created_at, updated_at
-		 FROM workspaces WHERE id = $1`, id,
-	).Scan(&ws.ID, &ws.Name, &ws.Slug, &ws.OwnerID, &ws.Plan, &ws.Settings, &ws.CreatedAt, &ws.UpdatedAt)
+		 FROM organizations WHERE id = $1`, id,
+	).Scan(&org.ID, &org.Name, &org.Slug, &org.OwnerID, &org.Plan, &org.Settings, &org.CreatedAt, &org.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, errs.NewNotFound("workspace not found")
+			return nil, errs.NewNotFound("organization not found")
 		}
 		return nil, err
 	}
-	return &ws, nil
+	return &org, nil
 }
 
-// GetWorkspaceBySlug returns a workspace by slug.
-func (r *AuthRepo) GetWorkspaceBySlug(ctx context.Context, slug string) (*types.Workspace, error) {
-	var ws types.Workspace
+// GetOrganizationBySlug returns an organization by slug.
+func (r *AuthRepo) GetOrganizationBySlug(ctx context.Context, slug string) (*types.Organization, error) {
+	var org types.Organization
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, name, slug, owner_id, plan, settings, created_at, updated_at
-		 FROM workspaces WHERE slug = $1`, slug,
-	).Scan(&ws.ID, &ws.Name, &ws.Slug, &ws.OwnerID, &ws.Plan, &ws.Settings, &ws.CreatedAt, &ws.UpdatedAt)
+		 FROM organizations WHERE slug = $1`, slug,
+	).Scan(&org.ID, &org.Name, &org.Slug, &org.OwnerID, &org.Plan, &org.Settings, &org.CreatedAt, &org.UpdatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return nil, errs.NewNotFound("workspace not found")
+			return nil, errs.NewNotFound("organization not found")
 		}
 		return nil, err
 	}
-	return &ws, nil
+	return &org, nil
 }
 
-// ListUserWorkspaces returns all workspaces a user belongs to.
-func (r *AuthRepo) ListUserWorkspaces(ctx context.Context, userID uuid.UUID) ([]types.Workspace, error) {
+// ListUserOrganizations returns all organizations a user belongs to.
+func (r *AuthRepo) ListUserOrganizations(ctx context.Context, userID uuid.UUID) ([]types.Organization, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT w.id, w.name, w.slug, w.owner_id, w.plan, w.settings, w.created_at, w.updated_at
-		 FROM workspaces w
-		 JOIN workspace_members wm ON w.id = wm.workspace_id
+		 FROM organizations w
+		 JOIN labors wm ON w.id = wm.organization_id
 		 WHERE wm.user_id = $1
 		 ORDER BY w.name`, userID,
 	)
@@ -150,43 +150,46 @@ func (r *AuthRepo) ListUserWorkspaces(ctx context.Context, userID uuid.UUID) ([]
 	}
 	defer rows.Close()
 
-	var workspaces []types.Workspace
+	var organizations []types.Organization
 	for rows.Next() {
-		var ws types.Workspace
-		if err := rows.Scan(&ws.ID, &ws.Name, &ws.Slug, &ws.OwnerID, &ws.Plan, &ws.Settings, &ws.CreatedAt, &ws.UpdatedAt); err != nil {
+		var org types.Organization
+		if err := rows.Scan(&org.ID, &org.Name, &org.Slug, &org.OwnerID, &org.Plan, &org.Settings, &org.CreatedAt, &org.UpdatedAt); err != nil {
 			return nil, err
 		}
-		workspaces = append(workspaces, ws)
+		organizations = append(organizations, org)
 	}
-	return workspaces, rows.Err()
+	return organizations, rows.Err()
 }
 
-// UpdateWorkspace updates workspace fields.
-func (r *AuthRepo) UpdateWorkspace(ctx context.Context, ws *types.Workspace) error {
-	ws.UpdatedAt = time.Now()
+// UpdateOrganization updates organization fields.
+func (r *AuthRepo) UpdateOrganization(ctx context.Context, org *types.Organization) error {
+	org.UpdatedAt = time.Now()
 	tag, err := r.pool.Exec(ctx,
-		`UPDATE workspaces SET name = $2, settings = $3, updated_at = $4 WHERE id = $1`,
-		ws.ID, ws.Name, ws.Settings, ws.UpdatedAt,
+		`UPDATE organizations SET name = $2, settings = $3, updated_at = $4 WHERE id = $1`,
+		org.ID, org.Name, org.Settings, org.UpdatedAt,
 	)
 	if err != nil {
 		return err
 	}
 	if tag.RowsAffected() == 0 {
-		return errs.NewNotFound("workspace not found")
+		return errs.NewNotFound("organization not found")
 	}
 	return nil
 }
 
-// AddMember adds a user to a workspace.
-func (r *AuthRepo) AddMember(ctx context.Context, m *types.WorkspaceMember) error {
+// AddMember adds a user to an organization.
+func (r *AuthRepo) AddMember(ctx context.Context, m *types.Labor) error {
 	if m.Permissions == nil {
 		m.Permissions = json.RawMessage(`[]`)
 	}
+	if m.ID == uuid.Nil {
+		m.ID = uuid.New()
+	}
 	m.JoinedAt = time.Now()
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO workspace_members (workspace_id, user_id, role, permissions, joined_at)
-		 VALUES ($1, $2, $3, $4, $5)`,
-		m.WorkspaceID, m.UserID, m.Role, m.Permissions, m.JoinedAt,
+		`INSERT INTO labors (id, organization_id, user_id, role, permissions, admin, joined_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		m.ID, m.OrganizationID, m.UserID, m.Role, m.Permissions, m.Admin, m.JoinedAt,
 	)
 	if err != nil {
 		if isDuplicateKey(err) {
@@ -197,14 +200,14 @@ func (r *AuthRepo) AddMember(ctx context.Context, m *types.WorkspaceMember) erro
 	return nil
 }
 
-// GetMember returns a workspace member.
-func (r *AuthRepo) GetMember(ctx context.Context, wsID, userID uuid.UUID) (*types.WorkspaceMember, error) {
-	var m types.WorkspaceMember
+// GetMember returns an organization member.
+func (r *AuthRepo) GetMember(ctx context.Context, orgID, userID uuid.UUID) (*types.Labor, error) {
+	var m types.Labor
 	err := r.pool.QueryRow(ctx,
-		`SELECT workspace_id, user_id, role, permissions, joined_at
-		 FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-		wsID, userID,
-	).Scan(&m.WorkspaceID, &m.UserID, &m.Role, &m.Permissions, &m.JoinedAt)
+		`SELECT organization_id, user_id, role, permissions, admin, joined_at
+		 FROM labors WHERE organization_id = $1 AND user_id = $2`,
+		orgID, userID,
+	).Scan(&m.OrganizationID, &m.UserID, &m.Role, &m.Permissions, &m.Admin, &m.JoinedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, errs.NewNotFound("member not found")
@@ -214,22 +217,22 @@ func (r *AuthRepo) GetMember(ctx context.Context, wsID, userID uuid.UUID) (*type
 	return &m, nil
 }
 
-// ListMembers returns all members of a workspace.
-func (r *AuthRepo) ListMembers(ctx context.Context, wsID uuid.UUID) ([]types.WorkspaceMember, error) {
+// ListMembers returns all members of an organization.
+func (r *AuthRepo) ListMembers(ctx context.Context, orgID uuid.UUID) ([]types.Labor, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT workspace_id, user_id, role, permissions, joined_at
-		 FROM workspace_members WHERE workspace_id = $1
-		 ORDER BY joined_at`, wsID,
+		`SELECT organization_id, user_id, role, permissions, admin, joined_at
+		 FROM labors WHERE organization_id = $1
+		 ORDER BY joined_at`, orgID,
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var members []types.WorkspaceMember
+	var members []types.Labor
 	for rows.Next() {
-		var m types.WorkspaceMember
-		if err := rows.Scan(&m.WorkspaceID, &m.UserID, &m.Role, &m.Permissions, &m.JoinedAt); err != nil {
+		var m types.Labor
+		if err := rows.Scan(&m.OrganizationID, &m.UserID, &m.Role, &m.Permissions, &m.Admin, &m.JoinedAt); err != nil {
 			return nil, err
 		}
 		members = append(members, m)
@@ -238,10 +241,10 @@ func (r *AuthRepo) ListMembers(ctx context.Context, wsID uuid.UUID) ([]types.Wor
 }
 
 // UpdateMemberRole changes a member's role.
-func (r *AuthRepo) UpdateMemberRole(ctx context.Context, wsID, userID uuid.UUID, role string) error {
+func (r *AuthRepo) UpdateMemberRole(ctx context.Context, orgID, userID uuid.UUID, role string) error {
 	tag, err := r.pool.Exec(ctx,
-		`UPDATE workspace_members SET role = $3 WHERE workspace_id = $1 AND user_id = $2`,
-		wsID, userID, role,
+		`UPDATE labors SET role = $3 WHERE organization_id = $1 AND user_id = $2`,
+		orgID, userID, role,
 	)
 	if err != nil {
 		return err
@@ -252,11 +255,11 @@ func (r *AuthRepo) UpdateMemberRole(ctx context.Context, wsID, userID uuid.UUID,
 	return nil
 }
 
-// RemoveMember removes a user from a workspace.
-func (r *AuthRepo) RemoveMember(ctx context.Context, wsID, userID uuid.UUID) error {
+// RemoveMember removes a user from an organization.
+func (r *AuthRepo) RemoveMember(ctx context.Context, orgID, userID uuid.UUID) error {
 	tag, err := r.pool.Exec(ctx,
-		`DELETE FROM workspace_members WHERE workspace_id = $1 AND user_id = $2`,
-		wsID, userID,
+		`DELETE FROM labors WHERE organization_id = $1 AND user_id = $2`,
+		orgID, userID,
 	)
 	if err != nil {
 		return err

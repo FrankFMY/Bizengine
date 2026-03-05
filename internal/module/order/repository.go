@@ -17,14 +17,14 @@ type Repository interface {
 	CreateOrder(ctx context.Context, tx pgx.Tx, o *Order) error
 	CreateOrderItems(ctx context.Context, tx pgx.Tx, items []OrderItem) error
 
-	// GetOrder returns an order by ID within a workspace.
-	GetOrder(ctx context.Context, wsID, orderID uuid.UUID) (*Order, error)
+	// GetOrder returns an order by ID within an organization.
+	GetOrder(ctx context.Context, orgID, orderID uuid.UUID) (*Order, error)
 
 	// GetOrderItems returns items for an order.
 	GetOrderItems(ctx context.Context, orderID uuid.UUID) ([]OrderItem, error)
 
 	// ListOrders returns orders matching the filter.
-	ListOrders(ctx context.Context, wsID uuid.UUID, filter OrderFilter) ([]Order, int, error)
+	ListOrders(ctx context.Context, orgID uuid.UUID, filter OrderFilter) ([]Order, int, error)
 
 	// UpdateOrder updates order fields.
 	UpdateOrder(ctx context.Context, tx pgx.Tx, o *Order) error
@@ -32,8 +32,8 @@ type Repository interface {
 	// UpdateOrderItems replaces order items (for draft orders).
 	UpdateOrderItems(ctx context.Context, tx pgx.Tx, orderID uuid.UUID, items []OrderItem) error
 
-	// NextOrderNumber atomically generates the next order number for a workspace.
-	NextOrderNumber(ctx context.Context, tx pgx.Tx, wsID uuid.UUID) (int64, error)
+	// NextOrderNumber atomically generates the next order number for an organization.
+	NextOrderNumber(ctx context.Context, tx pgx.Tx, orgID uuid.UUID) (int64, error)
 
 	// WithTx executes fn within a transaction.
 	WithTx(ctx context.Context, fn func(tx pgx.Tx) error) error
@@ -42,7 +42,7 @@ type Repository interface {
 // Order represents an order record.
 type Order struct {
 	ID          uuid.UUID  `json:"id"`
-	WorkspaceID uuid.UUID  `json:"workspace_id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
 	EntityID    uuid.UUID  `json:"entity_id"`
 	Number      string     `json:"number"`
 	CustomerID  *uuid.UUID `json:"customer_id,omitempty"`
@@ -69,7 +69,7 @@ type Order struct {
 type OrderItem struct {
 	ID        uuid.UUID `json:"id"`
 	OrderID   uuid.UUID `json:"order_id"`
-	WorkspaceID uuid.UUID `json:"workspace_id"`
+	OrganizationID uuid.UUID `json:"organization_id"`
 	ProductID uuid.UUID `json:"product_id"`
 	Name      string    `json:"name"`
 	SKU       string    `json:"sku"`

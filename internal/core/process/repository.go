@@ -15,21 +15,21 @@ import (
 type Repository interface {
 	// Definitions
 	UpsertDefinition(ctx context.Context, def *DefinitionRecord) error
-	GetDefinition(ctx context.Context, id string, wsID *uuid.UUID) (*DefinitionRecord, error)
-	ListDefinitions(ctx context.Context, wsID uuid.UUID) ([]DefinitionRecord, error)
+	GetDefinition(ctx context.Context, id string, orgID *uuid.UUID) (*DefinitionRecord, error)
+	ListDefinitions(ctx context.Context, orgID uuid.UUID) ([]DefinitionRecord, error)
 
 	// Instances
 	CreateInstance(ctx context.Context, inst *Instance) error
 	GetInstance(ctx context.Context, id uuid.UUID) (*Instance, error)
 	GetActiveByEntity(ctx context.Context, entityID uuid.UUID) ([]Instance, error)
-	ListInstances(ctx context.Context, wsID uuid.UUID, status *string, limit, offset int) ([]Instance, int, error)
+	ListInstances(ctx context.Context, orgID uuid.UUID, status *string, limit, offset int) ([]Instance, int, error)
 	UpdateInstance(ctx context.Context, inst *Instance) error
 }
 
 // DefinitionRecord is the DB representation of a process definition.
 type DefinitionRecord struct {
 	ID         string                `json:"id"`
-	WorkspaceID *uuid.UUID           `json:"workspace_id,omitempty"`
+	OrganizationID *uuid.UUID           `json:"organization_id,omitempty"`
 	Name       string                `json:"name"`
 	Description string               `json:"description"`
 	Definition dsl.ProcessDefinition `json:"definition"`
@@ -42,7 +42,7 @@ type DefinitionRecord struct {
 // Instance represents a running process instance.
 type Instance struct {
 	ID           uuid.UUID       `json:"id"`
-	WorkspaceID  uuid.UUID       `json:"workspace_id"`
+	OrganizationID  uuid.UUID       `json:"organization_id"`
 	DefinitionID string          `json:"definition_id"`
 	EntityID     uuid.UUID       `json:"entity_id"`
 	CurrentState string          `json:"current_state"`

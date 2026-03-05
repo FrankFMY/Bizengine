@@ -15,18 +15,18 @@ func ptrUUID(id uuid.UUID) *uuid.UUID { return &id }
 
 func TestEventToChanges_Entity(t *testing.T) {
 	eid := uuid.New()
-	wsID := uuid.New()
+	orgID := uuid.New()
 	ev := types.Event{
 		Type:        "entity.created",
 		EntityID:    ptrUUID(eid),
-		WorkspaceID: wsID,
+		OrganizationID: orgID,
 	}
 
 	changes := EventToChanges(ev)
 	require.Len(t, changes, 1)
 	assert.Equal(t, "entities", changes[0].Table)
 	assert.Equal(t, eid.String(), changes[0].RowID)
-	assert.Equal(t, wsID, changes[0].WorkspaceID)
+	assert.Equal(t, orgID, changes[0].OrganizationID)
 }
 
 func TestEventToChanges_Order(t *testing.T) {
@@ -34,7 +34,7 @@ func TestEventToChanges_Order(t *testing.T) {
 	ev := types.Event{
 		Type:        "order.status_changed",
 		EntityID:    ptrUUID(eid),
-		WorkspaceID: uuid.New(),
+		OrganizationID: uuid.New(),
 	}
 
 	changes := EventToChanges(ev)
@@ -48,7 +48,7 @@ func TestEventToChanges_CatalogProduct(t *testing.T) {
 	ev := types.Event{
 		Type:        "catalog.product.created",
 		EntityID:    ptrUUID(eid),
-		WorkspaceID: uuid.New(),
+		OrganizationID: uuid.New(),
 	}
 
 	changes := EventToChanges(ev)
@@ -60,7 +60,7 @@ func TestEventToChanges_WarehouseStock(t *testing.T) {
 	pid := uuid.New()
 	ev := types.Event{
 		Type:        "warehouse.stock.received",
-		WorkspaceID: uuid.New(),
+		OrganizationID: uuid.New(),
 		Data:        json.RawMessage(`{"product_id":"` + pid.String() + `"}`),
 	}
 
@@ -75,7 +75,7 @@ func TestEventToChanges_Component(t *testing.T) {
 	ev := types.Event{
 		Type:        "component.updated",
 		EntityID:    ptrUUID(eid),
-		WorkspaceID: uuid.New(),
+		OrganizationID: uuid.New(),
 		Data:        json.RawMessage(`{"type":"pricing"}`),
 	}
 
@@ -90,7 +90,7 @@ func TestEventToChanges_HR(t *testing.T) {
 	ev := types.Event{
 		Type:        "hr.employee.hired",
 		EntityID:    ptrUUID(eid),
-		WorkspaceID: uuid.New(),
+		OrganizationID: uuid.New(),
 	}
 
 	changes := EventToChanges(ev)
@@ -103,7 +103,7 @@ func TestEventToChanges_Finance(t *testing.T) {
 	ev := types.Event{
 		Type:        "finance.transaction.posted",
 		EntityID:    ptrUUID(eid),
-		WorkspaceID: uuid.New(),
+		OrganizationID: uuid.New(),
 	}
 
 	changes := EventToChanges(ev)
@@ -116,7 +116,7 @@ func TestEventToChanges_Logistics(t *testing.T) {
 	ev := types.Event{
 		Type:        "logistics.route.started",
 		EntityID:    ptrUUID(eid),
-		WorkspaceID: uuid.New(),
+		OrganizationID: uuid.New(),
 	}
 
 	changes := EventToChanges(ev)

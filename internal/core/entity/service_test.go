@@ -42,19 +42,19 @@ func (m *mockRepo) CreateTx(_ context.Context, _ pgx.Tx, e *types.Entity) error 
 	return nil
 }
 
-func (m *mockRepo) GetByID(_ context.Context, wsID, id uuid.UUID) (*types.Entity, error) {
+func (m *mockRepo) GetByID(_ context.Context, orgID, id uuid.UUID) (*types.Entity, error) {
 	e, ok := m.entities[id]
-	if !ok || e.WorkspaceID != wsID {
+	if !ok || e.OrganizationID != orgID {
 		return nil, errs.NewNotFound("entity not found")
 	}
 	cp := *e
 	return &cp, nil
 }
 
-func (m *mockRepo) List(_ context.Context, wsID uuid.UUID, filter ListFilter) ([]types.Entity, int, error) {
+func (m *mockRepo) List(_ context.Context, orgID uuid.UUID, filter ListFilter) ([]types.Entity, int, error) {
 	var result []types.Entity
 	for _, e := range m.entities {
-		if e.WorkspaceID != wsID {
+		if e.OrganizationID != orgID {
 			continue
 		}
 		if filter.Kind != nil && e.Kind != *filter.Kind {
@@ -74,9 +74,9 @@ func (m *mockRepo) Update(_ context.Context, e *types.Entity) error {
 	return nil
 }
 
-func (m *mockRepo) SoftDelete(_ context.Context, wsID, id uuid.UUID) error {
+func (m *mockRepo) SoftDelete(_ context.Context, orgID, id uuid.UUID) error {
 	e, ok := m.entities[id]
-	if !ok || e.WorkspaceID != wsID {
+	if !ok || e.OrganizationID != orgID {
 		return errs.NewNotFound("entity not found")
 	}
 	delete(m.entities, id)
@@ -97,7 +97,7 @@ func (m *mockRepo) SetComponentTx(_ context.Context, _ pgx.Tx, c *types.Componen
 	return nil
 }
 
-func (m *mockRepo) GetComponent(_ context.Context, wsID, entityID uuid.UUID, compType string) (*types.Component, error) {
+func (m *mockRepo) GetComponent(_ context.Context, orgID, entityID uuid.UUID, compType string) (*types.Component, error) {
 	key := entityID.String() + ":" + compType
 	c, ok := m.components[key]
 	if !ok {
@@ -107,7 +107,7 @@ func (m *mockRepo) GetComponent(_ context.Context, wsID, entityID uuid.UUID, com
 	return &cp, nil
 }
 
-func (m *mockRepo) ListComponents(_ context.Context, wsID, entityID uuid.UUID) ([]types.Component, error) {
+func (m *mockRepo) ListComponents(_ context.Context, orgID, entityID uuid.UUID) ([]types.Component, error) {
 	var result []types.Component
 	prefix := entityID.String() + ":"
 	for k, c := range m.components {
@@ -118,7 +118,7 @@ func (m *mockRepo) ListComponents(_ context.Context, wsID, entityID uuid.UUID) (
 	return result, nil
 }
 
-func (m *mockRepo) DeleteComponent(_ context.Context, wsID, entityID uuid.UUID, compType string) error {
+func (m *mockRepo) DeleteComponent(_ context.Context, orgID, entityID uuid.UUID, compType string) error {
 	key := entityID.String() + ":" + compType
 	if _, ok := m.components[key]; !ok {
 		return errs.NewNotFound("component not found")
@@ -149,7 +149,7 @@ func (m *mockEventStore) GetByEntity(_ context.Context, _, _ uuid.UUID, _ *time.
 	return nil, nil
 }
 
-func (m *mockEventStore) GetByWorkspace(_ context.Context, _ uuid.UUID, _, _ int) ([]types.Event, int, error) {
+func (m *mockEventStore) GetByOrganization(_ context.Context, _ uuid.UUID, _, _ int) ([]types.Event, int, error) {
 	return nil, 0, nil
 }
 
@@ -185,17 +185,17 @@ func ptr[T any](v T) *T { return &v }
 
 func TestCreateEntity(t *testing.T) {
 	svc, _, store, bus := newTestService()
-	wsID := uuid.New()
+	orgID := uuid.New()
 	actorID := uuid.New()
 
-	e, err := svc.Create(context.Background(), wsID, CreateEntityInput{
+	e, err := svc.Create(context.Background(), orgID, CreateEntityInput{
 		Kind: "product",
 		Name: "Widget",
 	}, &actorID)
 	require.NoError(t, err)
 	assert.Equal(t, "product", e.Kind)
 	assert.Equal(t, "Widget", e.Name)
-	assert.Equal(t, wsID, e.WorkspaceID)
+	assert.Equal(t, orgID, e.OrganizationID)
 
 	require.Len(t, store.events, 1)
 	assert.Equal(t, "entity.created", store.events[0].Type)
@@ -220,11 +220,11 @@ func TestCreateEntityEmptyKind(t *testing.T) {
 
 func TestGetEntity(t *testing.T) {
 	svc, repo, _, _ := newTestService()
-	wsID := uuid.New()
+	orgID := uuid.New()
 	id := uuid.New()
-	repo.entities[id] = &types.Entity{ID: id, WorkspaceID: wsID, Kind: "product", Name: "W"}
+	repo.entities[id] = &types.Entity{ID: id, OrganizationID: orgID, Kind: "product", Name: "W"}
 
-	e, err := svc.Get(context.Background(), wsID, id, false)
+	e, err := svc.Get(context.Background(), orgID, id, false)
 	require.NoError(t, err)
 	assert.Equal(t, "product", e.Kind)
 }
@@ -238,12 +238,12 @@ func TestGetEntityNotFound(t *testing.T) {
 
 func TestUpdateEntity(t *testing.T) {
 	svc, repo, store, bus := newTestService()
-	wsID := uuid.New()
+	orgID := uuid.New()
 	id := uuid.New()
 	actorID := uuid.New()
-	repo.entities[id] = &types.Entity{ID: id, WorkspaceID: wsID, Kind: "product", Name: "Old"}
+	repo.entities[id] = &types.Entity{ID: id, OrganizationID: orgID, Kind: "product", Name: "Old"}
 
-	e, err := svc.Update(context.Background(), wsID, id, UpdateEntityInput{Name: ptr("New")}, &actorID)
+	e, err := svc.Update(context.Background(), orgID, id, UpdateEntityInput{Name: ptr("New")}, &actorID)
 	require.NoError(t, err)
 	assert.Equal(t, "New", e.Name)
 
@@ -260,11 +260,11 @@ func TestUpdateEntityNotFound(t *testing.T) {
 
 func TestUpdateEntityNoChanges(t *testing.T) {
 	svc, repo, store, _ := newTestService()
-	wsID := uuid.New()
+	orgID := uuid.New()
 	id := uuid.New()
-	repo.entities[id] = &types.Entity{ID: id, WorkspaceID: wsID, Kind: "product", Name: "Same"}
+	repo.entities[id] = &types.Entity{ID: id, OrganizationID: orgID, Kind: "product", Name: "Same"}
 
-	e, err := svc.Update(context.Background(), wsID, id, UpdateEntityInput{Name: ptr("Same")}, nil)
+	e, err := svc.Update(context.Background(), orgID, id, UpdateEntityInput{Name: ptr("Same")}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "Same", e.Name)
 	assert.Len(t, store.events, 0)
@@ -272,12 +272,12 @@ func TestUpdateEntityNoChanges(t *testing.T) {
 
 func TestDeleteEntity(t *testing.T) {
 	svc, repo, store, bus := newTestService()
-	wsID := uuid.New()
+	orgID := uuid.New()
 	id := uuid.New()
 	actorID := uuid.New()
-	repo.entities[id] = &types.Entity{ID: id, WorkspaceID: wsID, Kind: "product", Name: "W"}
+	repo.entities[id] = &types.Entity{ID: id, OrganizationID: orgID, Kind: "product", Name: "W"}
 
-	err := svc.Delete(context.Background(), wsID, id, &actorID)
+	err := svc.Delete(context.Background(), orgID, id, &actorID)
 	require.NoError(t, err)
 
 	require.Len(t, store.events, 1)
@@ -293,13 +293,13 @@ func TestDeleteEntityNotFound(t *testing.T) {
 
 func TestSetComponent(t *testing.T) {
 	svc, repo, store, bus := newTestService()
-	wsID := uuid.New()
+	orgID := uuid.New()
 	entityID := uuid.New()
 	actorID := uuid.New()
-	repo.entities[entityID] = &types.Entity{ID: entityID, WorkspaceID: wsID, Kind: "product", Name: "W"}
+	repo.entities[entityID] = &types.Entity{ID: entityID, OrganizationID: orgID, Kind: "product", Name: "W"}
 
 	data := json.RawMessage(`{"color":"red"}`)
-	c, err := svc.SetComponent(context.Background(), wsID, entityID, "appearance", data, &actorID)
+	c, err := svc.SetComponent(context.Background(), orgID, entityID, "appearance", data, &actorID)
 	require.NoError(t, err)
 	assert.Equal(t, "appearance", c.Type)
 	assert.Equal(t, entityID, c.EntityID)
@@ -317,12 +317,12 @@ func TestSetComponentEntityNotFound(t *testing.T) {
 
 func TestDeleteComponent(t *testing.T) {
 	svc, repo, _, bus := newTestService()
-	wsID := uuid.New()
+	orgID := uuid.New()
 	entityID := uuid.New()
-	repo.entities[entityID] = &types.Entity{ID: entityID, WorkspaceID: wsID, Kind: "product", Name: "W"}
-	repo.components[entityID.String()+":geo"] = &types.Component{ID: uuid.New(), EntityID: entityID, WorkspaceID: wsID, Type: "geo"}
+	repo.entities[entityID] = &types.Entity{ID: entityID, OrganizationID: orgID, Kind: "product", Name: "W"}
+	repo.components[entityID.String()+":geo"] = &types.Component{ID: uuid.New(), EntityID: entityID, OrganizationID: orgID, Type: "geo"}
 
-	err := svc.DeleteComponent(context.Background(), wsID, entityID, "geo", nil)
+	err := svc.DeleteComponent(context.Background(), orgID, entityID, "geo", nil)
 	require.NoError(t, err)
 
 	require.Len(t, bus.published, 1)
@@ -331,15 +331,15 @@ func TestDeleteComponent(t *testing.T) {
 
 func TestListEntities(t *testing.T) {
 	svc, repo, _, _ := newTestService()
-	wsID := uuid.New()
+	orgID := uuid.New()
 	for i := 0; i < 3; i++ {
 		id := uuid.New()
-		repo.entities[id] = &types.Entity{ID: id, WorkspaceID: wsID, Kind: "product", Name: "P"}
+		repo.entities[id] = &types.Entity{ID: id, OrganizationID: orgID, Kind: "product", Name: "P"}
 	}
 	otherId := uuid.New()
-	repo.entities[otherId] = &types.Entity{ID: otherId, WorkspaceID: uuid.New(), Kind: "product", Name: "Other WS"}
+	repo.entities[otherId] = &types.Entity{ID: otherId, OrganizationID: uuid.New(), Kind: "product", Name: "Other WS"}
 
-	result, err := svc.List(context.Background(), wsID, ListFilter{}, false)
+	result, err := svc.List(context.Background(), orgID, ListFilter{}, false)
 	require.NoError(t, err)
 	assert.Len(t, result.Items, 3)
 	assert.Equal(t, 3, result.Total)
@@ -347,12 +347,12 @@ func TestListEntities(t *testing.T) {
 
 func TestGetWithComponents(t *testing.T) {
 	svc, repo, _, _ := newTestService()
-	wsID := uuid.New()
+	orgID := uuid.New()
 	entityID := uuid.New()
-	repo.entities[entityID] = &types.Entity{ID: entityID, WorkspaceID: wsID, Kind: "vehicle", Name: "V"}
-	repo.components[entityID.String()+":geo"] = &types.Component{ID: uuid.New(), EntityID: entityID, WorkspaceID: wsID, Type: "geo", Data: json.RawMessage(`{"lat":55.75}`)}
+	repo.entities[entityID] = &types.Entity{ID: entityID, OrganizationID: orgID, Kind: "vehicle", Name: "V"}
+	repo.components[entityID.String()+":geo"] = &types.Component{ID: uuid.New(), EntityID: entityID, OrganizationID: orgID, Type: "geo", Data: json.RawMessage(`{"lat":55.75}`)}
 
-	e, err := svc.Get(context.Background(), wsID, entityID, true)
+	e, err := svc.Get(context.Background(), orgID, entityID, true)
 	require.NoError(t, err)
 	assert.Len(t, e.Components, 1)
 	assert.Equal(t, "geo", e.Components[0].Type)

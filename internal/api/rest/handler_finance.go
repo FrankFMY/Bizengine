@@ -19,15 +19,15 @@ func NewFinanceHandler(financeSvc *finance.Service) *FinanceHandler {
 	return &FinanceHandler{financeSvc: financeSvc}
 }
 
-// ListAccounts handles GET /api/v1/workspaces/{wsID}/finance/accounts.
+// ListAccounts handles GET /api/v1/organizations/{orgID}/finance/accounts.
 func (h *FinanceHandler) ListAccounts(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
 	}
 
-	accounts, err := h.financeSvc.ListAccounts(r.Context(), wsID)
+	accounts, err := h.financeSvc.ListAccounts(r.Context(), orgID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -36,9 +36,9 @@ func (h *FinanceHandler) ListAccounts(w http.ResponseWriter, r *http.Request) {
 	respondOK(w, http.StatusOK,accounts)
 }
 
-// CreateAccount handles POST /api/v1/workspaces/{wsID}/finance/accounts.
+// CreateAccount handles POST /api/v1/organizations/{orgID}/finance/accounts.
 func (h *FinanceHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -50,7 +50,7 @@ func (h *FinanceHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	acct, err := h.financeSvc.CreateAccount(r.Context(), wsID, input)
+	acct, err := h.financeSvc.CreateAccount(r.Context(), orgID, input)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -59,9 +59,9 @@ func (h *FinanceHandler) CreateAccount(w http.ResponseWriter, r *http.Request) {
 	respondCreated(w,acct)
 }
 
-// GetAccountBalance handles GET /api/v1/workspaces/{wsID}/finance/accounts/{id}/balance.
+// GetAccountBalance handles GET /api/v1/organizations/{orgID}/finance/accounts/{id}/balance.
 func (h *FinanceHandler) GetAccountBalance(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -86,7 +86,7 @@ func (h *FinanceHandler) GetAccountBalance(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	bal, err := h.financeSvc.GetAccountBalance(r.Context(), wsID, id, from, to)
+	bal, err := h.financeSvc.GetAccountBalance(r.Context(), orgID, id, from, to)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -95,9 +95,9 @@ func (h *FinanceHandler) GetAccountBalance(w http.ResponseWriter, r *http.Reques
 	respondOK(w, http.StatusOK,bal)
 }
 
-// CreateTransaction handles POST /api/v1/workspaces/{wsID}/finance/transactions.
+// CreateTransaction handles POST /api/v1/organizations/{orgID}/finance/transactions.
 func (h *FinanceHandler) CreateTransaction(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -110,7 +110,7 @@ func (h *FinanceHandler) CreateTransaction(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	txn, err := h.financeSvc.CreateTransaction(r.Context(), wsID, input, &userID)
+	txn, err := h.financeSvc.CreateTransaction(r.Context(), orgID, input, &userID)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -119,9 +119,9 @@ func (h *FinanceHandler) CreateTransaction(w http.ResponseWriter, r *http.Reques
 	respondCreated(w,txn)
 }
 
-// GetTransaction handles GET /api/v1/workspaces/{wsID}/finance/transactions/{id}.
+// GetTransaction handles GET /api/v1/organizations/{orgID}/finance/transactions/{id}.
 func (h *FinanceHandler) GetTransaction(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -132,7 +132,7 @@ func (h *FinanceHandler) GetTransaction(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	txn, err := h.financeSvc.GetTransaction(r.Context(), wsID, id)
+	txn, err := h.financeSvc.GetTransaction(r.Context(), orgID, id)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -141,9 +141,9 @@ func (h *FinanceHandler) GetTransaction(w http.ResponseWriter, r *http.Request) 
 	respondOK(w, http.StatusOK,txn)
 }
 
-// ListTransactions handles GET /api/v1/workspaces/{wsID}/finance/transactions.
+// ListTransactions handles GET /api/v1/organizations/{orgID}/finance/transactions.
 func (h *FinanceHandler) ListTransactions(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -165,7 +165,7 @@ func (h *FinanceHandler) ListTransactions(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	txns, total, err := h.financeSvc.ListTransactions(r.Context(), wsID, filter)
+	txns, total, err := h.financeSvc.ListTransactions(r.Context(), orgID, filter)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -179,9 +179,9 @@ func (h *FinanceHandler) ListTransactions(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// PostTransaction handles POST /api/v1/workspaces/{wsID}/finance/transactions/{id}/post.
+// PostTransaction handles POST /api/v1/organizations/{orgID}/finance/transactions/{id}/post.
 func (h *FinanceHandler) PostTransaction(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -193,7 +193,7 @@ func (h *FinanceHandler) PostTransaction(w http.ResponseWriter, r *http.Request)
 	}
 	userID, _ := auth.UserIDFromCtx(r.Context())
 
-	if err := h.financeSvc.PostTransaction(r.Context(), wsID, id, &userID); err != nil {
+	if err := h.financeSvc.PostTransaction(r.Context(), orgID, id, &userID); err != nil {
 		respondError(w, err)
 		return
 	}
@@ -201,9 +201,9 @@ func (h *FinanceHandler) PostTransaction(w http.ResponseWriter, r *http.Request)
 	respondOK(w, http.StatusOK, nil)
 }
 
-// GetTrialBalance handles GET /api/v1/workspaces/{wsID}/finance/reports/trial-balance.
+// GetTrialBalance handles GET /api/v1/organizations/{orgID}/finance/reports/trial-balance.
 func (h *FinanceHandler) GetTrialBalance(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -219,7 +219,7 @@ func (h *FinanceHandler) GetTrialBalance(w http.ResponseWriter, r *http.Request)
 		}
 	}
 
-	rows, err := h.financeSvc.GetTrialBalance(r.Context(), wsID, date)
+	rows, err := h.financeSvc.GetTrialBalance(r.Context(), orgID, date)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -228,9 +228,9 @@ func (h *FinanceHandler) GetTrialBalance(w http.ResponseWriter, r *http.Request)
 	respondOK(w, http.StatusOK,rows)
 }
 
-// CreateInvoice handles POST /api/v1/workspaces/{wsID}/finance/invoices.
+// CreateInvoice handles POST /api/v1/organizations/{orgID}/finance/invoices.
 func (h *FinanceHandler) CreateInvoice(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -242,7 +242,7 @@ func (h *FinanceHandler) CreateInvoice(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	inv, err := h.financeSvc.CreateInvoice(r.Context(), wsID, input)
+	inv, err := h.financeSvc.CreateInvoice(r.Context(), orgID, input)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -251,9 +251,9 @@ func (h *FinanceHandler) CreateInvoice(w http.ResponseWriter, r *http.Request) {
 	respondCreated(w,inv)
 }
 
-// ListInvoices handles GET /api/v1/workspaces/{wsID}/finance/invoices.
+// ListInvoices handles GET /api/v1/organizations/{orgID}/finance/invoices.
 func (h *FinanceHandler) ListInvoices(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -265,7 +265,7 @@ func (h *FinanceHandler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 		Page:   parsePage(r),
 	}
 
-	invoices, total, err := h.financeSvc.ListInvoices(r.Context(), wsID, filter)
+	invoices, total, err := h.financeSvc.ListInvoices(r.Context(), orgID, filter)
 	if err != nil {
 		respondError(w, err)
 		return
@@ -279,9 +279,9 @@ func (h *FinanceHandler) ListInvoices(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// MarkInvoicePaid handles POST /api/v1/workspaces/{wsID}/finance/invoices/{id}/pay.
+// MarkInvoicePaid handles POST /api/v1/organizations/{orgID}/finance/invoices/{id}/pay.
 func (h *FinanceHandler) MarkInvoicePaid(w http.ResponseWriter, r *http.Request) {
-	wsID, err := parseUUID(r, "wsID")
+	orgID, err := parseUUID(r, "orgID")
 	if err != nil {
 		respondError(w, err)
 		return
@@ -292,7 +292,7 @@ func (h *FinanceHandler) MarkInvoicePaid(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if err := h.financeSvc.MarkInvoicePaid(r.Context(), wsID, id); err != nil {
+	if err := h.financeSvc.MarkInvoicePaid(r.Context(), orgID, id); err != nil {
 		respondError(w, err)
 		return
 	}

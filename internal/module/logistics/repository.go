@@ -13,25 +13,25 @@ import (
 type Repository interface {
 	// Routes
 	CreateRoute(ctx context.Context, r *Route) error
-	GetRoute(ctx context.Context, wsID, routeID uuid.UUID) (*Route, error)
-	ListRoutes(ctx context.Context, wsID uuid.UUID, filter RouteFilter) ([]Route, int, error)
+	GetRoute(ctx context.Context, orgID, routeID uuid.UUID) (*Route, error)
+	ListRoutes(ctx context.Context, orgID uuid.UUID, filter RouteFilter) ([]Route, int, error)
 	UpdateRoute(ctx context.Context, r *Route) error
 
 	// Stops
 	CreateStops(ctx context.Context, stops []RouteStop) error
-	GetStop(ctx context.Context, wsID, stopID uuid.UUID) (*RouteStop, error)
+	GetStop(ctx context.Context, orgID, stopID uuid.UUID) (*RouteStop, error)
 	ListStops(ctx context.Context, routeID uuid.UUID) ([]RouteStop, error)
 	UpdateStop(ctx context.Context, s *RouteStop) error
 
 	// Geo
-	InsertGeoPoint(ctx context.Context, wsID, entityID uuid.UUID, point GeoPoint) error
-	GetTrack(ctx context.Context, wsID, entityID uuid.UUID, from, to time.Time) ([]GeoPoint, error)
+	InsertGeoPoint(ctx context.Context, orgID, entityID uuid.UUID, point GeoPoint) error
+	GetTrack(ctx context.Context, orgID, entityID uuid.UUID, from, to time.Time) ([]GeoPoint, error)
 }
 
 // Route represents a delivery route.
 type Route struct {
 	ID           uuid.UUID   `json:"id"`
-	WorkspaceID  uuid.UUID   `json:"workspace_id"`
+	OrganizationID  uuid.UUID   `json:"organization_id"`
 	Name         string      `json:"name"`
 	VehicleID    *uuid.UUID  `json:"vehicle_id,omitempty"`
 	DriverID     *uuid.UUID  `json:"driver_id,omitempty"`
@@ -48,7 +48,7 @@ type Route struct {
 type RouteStop struct {
 	ID             uuid.UUID   `json:"id"`
 	RouteID        uuid.UUID   `json:"route_id"`
-	WorkspaceID    uuid.UUID   `json:"workspace_id"`
+	OrganizationID    uuid.UUID   `json:"organization_id"`
 	LocationID     *uuid.UUID  `json:"location_id,omitempty"`
 	Address        string      `json:"address"`
 	Latitude       *float64    `json:"latitude,omitempty"`
