@@ -212,6 +212,65 @@ func EventToChanges(eventType string, data map[string]any) []arcana.Change {
 			{Table: "notifications", Columns: []string{"read", "iat"}},
 		}
 
+	case "bank":
+		switch {
+		case len(parts) >= 2 && parts[1] == "reconciliation":
+			reconID := extractID(data, "reconciliation_id")
+			if reconID == "" {
+				return nil
+			}
+			return []arcana.Change{
+				{Table: "bank_reconciliations", RowID: reconID, Columns: []string{"status", "matched", "unmatched", "iat"}},
+				{Table: "bank_reconciliation_entries", Columns: []string{"status", "matched_type"}},
+			}
+		case len(parts) >= 2 && parts[1] == "payment":
+			return []arcana.Change{
+				{Table: "orders", Columns: []string{"status", "updated_at"}},
+			}
+		case len(parts) >= 2 && parts[1] == "payroll":
+			return []arcana.Change{
+				{Table: "payrolls", Columns: []string{"status"}},
+			}
+		default:
+			return nil
+		}
+
+	case "messenger":
+		switch {
+		case len(parts) >= 2 && parts[1] == "message":
+			convID := extractID(data, "conversation_id")
+			if convID == "" {
+				return nil
+			}
+			return []arcana.Change{
+				{Table: "messages", RowID: convID, Columns: []string{"content", "iat"}},
+				{Table: "conversations", RowID: convID, Columns: []string{"last_message_at", "last_message_preview"}},
+				{Table: "conversation_members", Columns: []string{"last_read_message_id"}},
+			}
+		case len(parts) >= 2 && parts[1] == "reaction":
+			msgID := extractID(data, "message_id")
+			if msgID == "" {
+				return nil
+			}
+			return []arcana.Change{
+				{Table: "message_reactions", RowID: msgID, Columns: []string{"emoji"}},
+			}
+		case len(parts) >= 2 && parts[1] == "conversation":
+			return []arcana.Change{
+				{Table: "conversations", Columns: []string{"name", "type", "iat"}},
+			}
+		case len(parts) >= 2 && (parts[1] == "member" || parts[1] == "typing"):
+			convID := extractID(data, "conversation_id")
+			if convID != "" {
+				return []arcana.Change{
+					{Table: "conversation_members", RowID: convID, Columns: []string{"user_id"}},
+				}
+			}
+			return nil
+		default:
+			return nil
+		}
+
 	default:
 		return nil
 	}

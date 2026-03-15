@@ -51,7 +51,7 @@ POST /arcana/sync
 
 ### Available Graphs
 
-21 graphs: `catalog_products_list`, `catalog_product_detail`, `catalog_categories_tree`, `warehouse_stock_list`, `warehouse_stock_detail`, `warehouse_low_stock`, `orders_list`, `order_detail`, `orders_dashboard`, `hr_employees_list`, `hr_employee_detail`, `hr_shifts_schedule`, `hr_timesheets_list`, `finance_trial_balance`, `finance_transactions_list`, `finance_account_balance`, `logistics_routes_list`, `logistics_route_detail`, `logistics_vehicles_map`, `notifications_unread`, `dashboard_summary`.
+37 graphs: `catalog_products_list`, `catalog_product_detail`, `catalog_categories_tree`, `warehouse_stock_list`, `warehouse_stock_detail`, `warehouse_low_stock`, `warehouse_inventory_detail`, `orders_list`, `order_detail`, `order_refunds_list`, `orders_dashboard`, `hr_employees_list`, `hr_employee_detail`, `hr_shifts_schedule`, `hr_timesheets_list`, `hr_payroll_list`, `hr_absences_list`, `finance_trial_balance`, `finance_transactions_list`, `finance_account_balance`, `finance_pnl`, `finance_periods_list`, `finance_cash_operations`, `logistics_routes_list`, `logistics_route_detail`, `logistics_vehicles_map`, `crm_customers_list`, `crm_customer_detail`, `crm_suppliers_list`, `organization_settings`, `notifications_list`, `notifications_unread`, `dashboard_summary`, `bank_reconciliation_list`, `bank_reconciliation_detail`, `chat_conversations_list`, `chat_messages`, `chat_unread_total`.
 
 Full schema: `GET /arcana/schema`.
 
@@ -63,6 +63,7 @@ Connect to Centrifugo WebSocket at `ws://localhost:8001/connection/websocket`. A
 
 - `org:{organization_id}` — subscribe for `table_diff` messages (row-level data changes, organization-wide)
 - `views:{seance_id}` — subscribe for `view_snapshot` and `view_diff` messages (per-seance)
+- `chat:{conversation_id}` — subscribe for real-time chat messages and typing indicators in a specific conversation
 
 Get `seance_id` and `organization_id` from `GET /api/v1/auth/check`.
 
@@ -238,3 +239,167 @@ The auth middleware returns `Content-Type: text/plain` (not JSON):
 ```
 
 HTTP statuses: 400 (bad params), 404 (graph not found), 409 (unauthorized/forbidden), 429 (too many subscriptions), 500 (internal).
+
+## 7. Banking
+
+White-label banking integration: initiate payments, check statuses, auto-reconcile bank transactions, and process payroll.
+
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/organizations/{orgID}/white-label` | Get white-label banking config |
+| POST | `/api/v1/organizations/{orgID}/payments/initiate` | Initiate a payment |
+| GET | `/api/v1/organizations/{orgID}/payments/{paymentID}/status` | Check payment status |
+| POST | `/api/v1/organizations/{orgID}/finance/bank/auto-reconcile` | Auto-reconcile bank transactions |
+| GET | `/api/v1/organizations/{orgID}/finance/bank/reconciliations` | List reconciliation runs |
+| POST | `/api/v1/organizations/{orgID}/hr/payroll/{year}/{month}/pay` | Execute payroll payment |
+
+### Bank OAuth
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/auth/bank/{bankCode}/login` | Redirect to bank OAuth login |
+| GET | `/api/v1/auth/bank/{bankCode}/callback` | Bank OAuth callback |
+
+### Payment Webhook
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/v1/webhooks/bank/payment-callback` | Receive payment status updates from bank |
+
+### Initiate Payment
+
+```
+POST /api/v1/organizations/{orgID}/payments/initiate
+Content-Type: application/json
+
+{
+  "data": {
+    "recipient_account": "40702810938000012345",
+    "recipient_bik": "044525225",
+    "recipient_name": "OOO Supplier",
+    "recipient_inn": "7707083893",
+    "amount": 1500000,
+    "currency": "RUB",
+    "purpose": "Payment for invoice #INV-2026-0042"
+  }
+}
+```
+
+Response:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "payment_id": "pay-uuid-1234",
+    "status": "pending",
+    "created_at": "2026-03-15T10:30:00Z"
+  }
+}
+```
+
+### Auto-Reconcile
+
+```
+POST /api/v1/organizations/{orgID}/finance/bank/auto-reconcile
+Content-Type: application/json
+
+{
+  "data": {
+    "bank_account_id": "acc-uuid-5678",
+    "date_from": "2026-03-01",
+    "date_to": "2026-03-15"
+  }
+}
+```
+
+Response:
+
+```json
+{
+  "ok": true,
+  "data": {
+    "reconciliation_id": "rec-uuid-9012",
+    "matched": 47,
+    "unmatched": 3,
+    "auto_matched": 44,
+    "manual_review": 3,
+    "status": "completed"
+  }
+}
+```
+
+## 8. Messenger
+
+Built-in organization chat. Supports direct messages, group conversations, and entity-linked conversations (auto-created for orders and routes).
+
+### Arcana Graphs
+
+Subscribe to these graphs for reactive chat data:
+
+| Graph | Params | Description |
+|-------|--------|-------------|
+| `chat_conversations_list` | `{ "limit": 50, "offset": 0 }` | Paginated list of conversations for the current user |
+| `chat_messages` | `{ "conversation_id": "uuid", "limit": 50, "before": "msg-uuid" }` | Messages in a conversation, cursor-paginated |
+| `chat_unread_total` | `{}` | Total unread message count across all conversations |
+
+### Real-Time
+
+Subscribe to Centrifugo channel `chat:{conversationID}` for real-time message delivery and typing indicators in a specific conversation. Messages arrive as:
+
+```json
+{
+  "type": "chat_message",
+  "data": {
+    "id": "msg-uuid",
+    "conversation_id": "conv-uuid",
+    "sender_id": "user-uuid",
+    "content": "Hello!",
+    "content_type": "text",
+    "created_at": "2026-03-15T10:30:00Z"
+  }
+}
+```
+
+Typing indicator:
+
+```json
+{
+  "type": "chat_typing",
+  "data": {
+    "conversation_id": "conv-uuid",
+    "user_id": "user-uuid"
+  }
+}
+```
+
+### REST Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/organizations/{orgID}/messenger/conversations` | List conversations |
+| POST | `/api/v1/organizations/{orgID}/messenger/conversations` | Create conversation |
+| GET | `/api/v1/organizations/{orgID}/messenger/conversations/{convID}` | Get conversation details |
+| POST | `/api/v1/organizations/{orgID}/messenger/conversations/{convID}/members` | Add member to conversation |
+| DELETE | `/api/v1/organizations/{orgID}/messenger/conversations/{convID}/members/{userID}` | Remove member |
+| POST | `/api/v1/organizations/{orgID}/messenger/conversations/{convID}/mute` | Mute/unmute conversation |
+| GET | `/api/v1/organizations/{orgID}/messenger/conversations/{convID}/messages` | List messages |
+| POST | `/api/v1/organizations/{orgID}/messenger/conversations/{convID}/messages` | Send message |
+| PUT | `/api/v1/organizations/{orgID}/messenger/conversations/{convID}/messages/{msgID}` | Edit message |
+| DELETE | `/api/v1/organizations/{orgID}/messenger/conversations/{convID}/messages/{msgID}` | Delete message |
+| POST | `/api/v1/organizations/{orgID}/messenger/conversations/{convID}/read` | Mark conversation as read |
+| GET | `/api/v1/organizations/{orgID}/messenger/unread-count` | Get total unread count |
+| POST | `/api/v1/organizations/{orgID}/messenger/messages/{msgID}/reactions` | Add reaction |
+| DELETE | `/api/v1/organizations/{orgID}/messenger/messages/{msgID}/reactions/{emoji}` | Remove reaction |
+| POST | `/api/v1/organizations/{orgID}/messenger/conversations/{convID}/typing` | Send typing indicator |
+| GET | `/api/v1/organizations/{orgID}/messenger/search` | Search messages |
+
+### Entity Conversations
+
+Conversations are auto-created when an order or route is created. These entity-linked conversations have `entity_type` and `entity_id` set and automatically include relevant participants (assigned employees, drivers, etc.).
+
+### System Messages
+
+System-generated messages (member joined, member left, order status changed) use `content_type='system'` and have structured content in the `metadata` field rather than plain text in `content`.

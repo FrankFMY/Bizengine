@@ -10,6 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/bizengine/engine/internal/core/auth"
+	"github.com/bizengine/engine/pkg/errs"
 )
 
 // ViewUnsubscriber cleans up view subscriptions (e.g., on logout).
@@ -49,6 +50,8 @@ type RouterDeps struct {
 	SettingsH      *SettingsHandler
 	DocumentsH     *DocumentsHandler
 	ImportH        *ImportHandler
+	BankingH       *BankingHandler
+	MessengerH     *MessengerHandler
 	HealthH        *HealthHandler
 }
 
@@ -105,6 +108,31 @@ func NewRouter(deps RouterDeps) http.Handler {
 				r.Get("/check", authH.Check)
 			})
 		})
+
+		// Bank OAuth (no full auth required)
+		if deps.BankingH != nil {
+			r.Route("/auth/bank/{bankCode}", func(r chi.Router) {
+				r.Get("/login", deps.BankingH.BankAuthLogin)
+				r.Get("/callback", deps.BankingH.BankAuthCallback)
+			})
+		}
+
+		// Bank payment callback webhook (no auth — bank calls this)
+		if deps.BankingH != nil {
+			r.Post("/webhooks/bank/payment-callback", func(w http.ResponseWriter, r *http.Request) {
+				// orgID can come from query or header
+				orgIDStr := r.URL.Query().Get("org_id")
+				if orgIDStr == "" {
+					respondError(w, errs.NewBadRequest("org_id is required"))
+					return
+				}
+				// Inject orgID into chi context for handler
+				rctx := chi.NewRouteContext()
+				rctx.URLParams.Add("orgID", orgIDStr)
+				r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+				deps.BankingH.PaymentCallback(w, r)
+			})
+		}
 
 		// Authenticated endpoints
 		r.Group(func(r chi.Router) {
@@ -422,6 +450,63 @@ func NewRouter(deps RouterDeps) http.Handler {
 						r.Route("/bank", func(r chi.Router) {
 							r.Post("/import", deps.IntegrationH.ImportBankStatement)
 							r.Post("/export", deps.IntegrationH.ExportPaymentOrders)
+						})
+					})
+				}
+
+				// Banking
+				if deps.BankingH != nil {
+					r.Route("/payments", func(r chi.Router) {
+						r.Group(func(r chi.Router) {
+							r.Use(auth.RequirePermission("banking.manage"))
+							r.Post("/initiate", deps.BankingH.InitiatePayment)
+							r.Get("/{paymentID}/status", deps.BankingH.GetPaymentStatus)
+						})
+					})
+
+					r.Route("/finance/bank", func(r chi.Router) {
+						r.Group(func(r chi.Router) {
+							r.Use(auth.RequirePermission("banking.manage"))
+							r.Post("/auto-reconcile", deps.BankingH.AutoReconcile)
+							r.Get("/reconciliations", deps.BankingH.ListReconciliations)
+							r.Get("/reconciliations/{id}", deps.BankingH.GetReconciliation)
+						})
+					})
+
+					r.Route("/hr/payroll/{year}/{month}", func(r chi.Router) {
+						r.Group(func(r chi.Router) {
+							r.Use(auth.RequirePermission("banking.manage"))
+							r.Post("/pay", deps.BankingH.PayrollViaBankPay)
+						})
+					})
+
+					r.Get("/white-label", deps.BankingH.GetWhiteLabel)
+				}
+
+				// Messenger
+				if deps.MessengerH != nil {
+					r.Route("/messenger", func(r chi.Router) {
+						r.Group(func(r chi.Router) {
+							r.Use(auth.RequirePermission("messenger.view"))
+							r.Get("/conversations", deps.MessengerH.ListConversations)
+							r.Get("/conversations/{convID}", deps.MessengerH.GetConversation)
+							r.Get("/conversations/{convID}/messages", deps.MessengerH.ListMessages)
+							r.Get("/unread-count", deps.MessengerH.GetUnreadCount)
+							r.Get("/search", deps.MessengerH.SearchMessages)
+						})
+						r.Group(func(r chi.Router) {
+							r.Use(auth.RequirePermission("messenger.send"))
+							r.Post("/conversations", deps.MessengerH.CreateConversation)
+							r.Post("/conversations/{convID}/members", deps.MessengerH.AddMember)
+							r.Delete("/conversations/{convID}/members/{userID}", deps.MessengerH.RemoveMember)
+							r.Post("/conversations/{convID}/mute", deps.MessengerH.MuteConversation)
+							r.Post("/conversations/{convID}/messages", deps.MessengerH.SendMessage)
+							r.Put("/conversations/{convID}/messages/{msgID}", deps.MessengerH.EditMessage)
+							r.Delete("/conversations/{convID}/messages/{msgID}", deps.MessengerH.DeleteMessage)
+							r.Post("/conversations/{convID}/read", deps.MessengerH.MarkRead)
+							r.Post("/messages/{msgID}/reactions", deps.MessengerH.AddReaction)
+							r.Delete("/messages/{msgID}/reactions/{emoji}", deps.MessengerH.RemoveReaction)
+							r.Post("/conversations/{convID}/typing", deps.MessengerH.SetTyping)
 						})
 					})
 				}

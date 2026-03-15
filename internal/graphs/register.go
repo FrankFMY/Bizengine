@@ -57,6 +57,15 @@ func RegisterAll(engine *arcana.Engine) {
 
 		// Dashboard
 		dashboardSummary,
+
+		// Banking
+		bankReconciliationList,
+		bankReconciliationDetail,
+
+		// Messenger
+		chatConversationsList,
+		chatMessages,
+		chatUnreadTotal,
 	}
 	for _, def := range defs {
 		engine.Register(def)

@@ -41,6 +41,10 @@ tags:
     description: Dashboard and revenue analytics
   - name: Webhooks
     description: Webhook management and delivery
+  - name: Banking
+    description: White-label banking, payments, and reconciliation
+  - name: Messenger
+    description: Built-in organization chat and messaging
 
 paths:
   /health:
@@ -511,6 +515,819 @@ paths:
       responses:
         '200':
           description: Definition deleted
+
+  /api/v1/organizations/{orgID}/white-label:
+    get:
+      tags: [Banking]
+      summary: Get white-label banking configuration
+      operationId: getWhiteLabel
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '200':
+          description: White-label config
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      bank_name: { type: string }
+                      bank_code: { type: string }
+                      connected: { type: boolean }
+                      features: { type: array, items: { type: string } }
+
+  /api/v1/organizations/{orgID}/payments/initiate:
+    post:
+      tags: [Banking]
+      summary: Initiate a payment
+      operationId: initiatePayment
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  type: object
+                  required: [recipient_account, recipient_bik, recipient_name, recipient_inn, amount, currency, purpose]
+                  properties:
+                    recipient_account: { type: string }
+                    recipient_bik: { type: string }
+                    recipient_name: { type: string }
+                    recipient_inn: { type: string }
+                    amount: { type: integer, description: Amount in minor units (kopecks) }
+                    currency: { type: string, enum: [RUB] }
+                    purpose: { type: string }
+      responses:
+        '201':
+          description: Payment initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      payment_id: { type: string, format: uuid }
+                      status: { type: string, enum: [pending, processing, completed, failed] }
+                      created_at: { type: string, format: date-time }
+
+  /api/v1/organizations/{orgID}/payments/{paymentID}/status:
+    get:
+      tags: [Banking]
+      summary: Check payment status
+      operationId: getPaymentStatus
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: paymentID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Payment status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      payment_id: { type: string, format: uuid }
+                      status: { type: string, enum: [pending, processing, completed, failed] }
+                      amount: { type: integer }
+                      currency: { type: string }
+                      created_at: { type: string, format: date-time }
+                      updated_at: { type: string, format: date-time }
+                      error_message: { type: string }
+
+  /api/v1/organizations/{orgID}/finance/bank/auto-reconcile:
+    post:
+      tags: [Banking]
+      summary: Auto-reconcile bank transactions
+      operationId: autoReconcile
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  type: object
+                  required: [bank_account_id, date_from, date_to]
+                  properties:
+                    bank_account_id: { type: string, format: uuid }
+                    date_from: { type: string, format: date }
+                    date_to: { type: string, format: date }
+      responses:
+        '200':
+          description: Reconciliation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      reconciliation_id: { type: string, format: uuid }
+                      matched: { type: integer }
+                      unmatched: { type: integer }
+                      auto_matched: { type: integer }
+                      manual_review: { type: integer }
+                      status: { type: string }
+
+  /api/v1/organizations/{orgID}/finance/bank/reconciliations:
+    get:
+      tags: [Banking]
+      summary: List reconciliation runs
+      operationId: listReconciliations
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '200':
+          description: Reconciliation list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        bank_account_id: { type: string, format: uuid }
+                        date_from: { type: string, format: date }
+                        date_to: { type: string, format: date }
+                        matched: { type: integer }
+                        unmatched: { type: integer }
+                        status: { type: string }
+                        created_at: { type: string, format: date-time }
+
+  /api/v1/organizations/{orgID}/finance/bank/reconciliations/{id}:
+    get:
+      tags: [Banking]
+      summary: Get reconciliation details
+      operationId: getReconciliation
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - $ref: '#/components/parameters/id'
+      responses:
+        '200':
+          description: Reconciliation details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      bank_account_id: { type: string, format: uuid }
+                      date_from: { type: string, format: date }
+                      date_to: { type: string, format: date }
+                      matched: { type: integer }
+                      unmatched: { type: integer }
+                      auto_matched: { type: integer }
+                      manual_review: { type: integer }
+                      status: { type: string }
+                      entries:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            bank_transaction_id: { type: string }
+                            matched_transaction_id: { type: string, format: uuid }
+                            match_type: { type: string, enum: [auto, manual, unmatched] }
+                            amount: { type: integer }
+
+  /api/v1/organizations/{orgID}/hr/payroll/{year}/{month}/pay:
+    post:
+      tags: [Banking]
+      summary: Execute payroll payment
+      operationId: executePayroll
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: year
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: month
+          in: path
+          required: true
+          schema: { type: integer, minimum: 1, maximum: 12 }
+      responses:
+        '200':
+          description: Payroll executed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      payroll_id: { type: string, format: uuid }
+                      total_amount: { type: integer }
+                      employee_count: { type: integer }
+                      status: { type: string }
+
+  /api/v1/auth/bank/{bankCode}/login:
+    get:
+      tags: [Banking]
+      summary: Redirect to bank OAuth login
+      operationId: bankOAuthLogin
+      parameters:
+        - name: bankCode
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '302':
+          description: Redirect to bank authorization page
+
+  /api/v1/auth/bank/{bankCode}/callback:
+    get:
+      tags: [Banking]
+      summary: Bank OAuth callback
+      operationId: bankOAuthCallback
+      parameters:
+        - name: bankCode
+          in: path
+          required: true
+          schema: { type: string }
+        - name: code
+          in: query
+          schema: { type: string }
+        - name: state
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Bank account linked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      bank_code: { type: string }
+                      account_linked: { type: boolean }
+
+  /api/v1/webhooks/bank/payment-callback:
+    post:
+      tags: [Banking]
+      summary: Receive payment status updates from bank
+      operationId: bankPaymentCallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payment_id: { type: string }
+                status: { type: string }
+                timestamp: { type: string, format: date-time }
+                error_code: { type: string }
+                error_message: { type: string }
+      responses:
+        '200':
+          description: Callback processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/v1/organizations/{orgID}/messenger/conversations:
+    get:
+      tags: [Messenger]
+      summary: List conversations
+      operationId: listConversations
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: offset
+          in: query
+          schema: { type: integer, default: 0 }
+      responses:
+        '200':
+          description: Conversation list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        title: { type: string }
+                        type: { type: string, enum: [direct, group, entity] }
+                        entity_type: { type: string }
+                        entity_id: { type: string, format: uuid }
+                        last_message_at: { type: string, format: date-time }
+                        unread_count: { type: integer }
+                        muted: { type: boolean }
+    post:
+      tags: [Messenger]
+      summary: Create conversation
+      operationId: createConversation
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data:
+                  type: object
+                  required: [type, member_ids]
+                  properties:
+                    title: { type: string }
+                    type: { type: string, enum: [direct, group] }
+                    member_ids: { type: array, items: { type: string, format: uuid } }
+      responses:
+        '201':
+          description: Conversation created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      title: { type: string }
+                      type: { type: string }
+                      created_at: { type: string, format: date-time }
+
+  /api/v1/organizations/{orgID}/messenger/conversations/{convID}:
+    get:
+      tags: [Messenger]
+      summary: Get conversation details
+      operationId: getConversation
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: convID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Conversation details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      title: { type: string }
+                      type: { type: string }
+                      entity_type: { type: string }
+                      entity_id: { type: string, format: uuid }
+                      members:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            user_id: { type: string, format: uuid }
+                            name: { type: string }
+                            role: { type: string }
+                      created_at: { type: string, format: date-time }
+
+  /api/v1/organizations/{orgID}/messenger/conversations/{convID}/members:
+    post:
+      tags: [Messenger]
+      summary: Add member to conversation
+      operationId: addConversationMember
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: convID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id]
+              properties:
+                user_id: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Member added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/v1/organizations/{orgID}/messenger/conversations/{convID}/members/{userID}:
+    delete:
+      tags: [Messenger]
+      summary: Remove member from conversation
+      operationId: removeConversationMember
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: convID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: userID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Member removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/v1/organizations/{orgID}/messenger/conversations/{convID}/mute:
+    post:
+      tags: [Messenger]
+      summary: Mute or unmute conversation
+      operationId: muteConversation
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: convID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [muted]
+              properties:
+                muted: { type: boolean }
+      responses:
+        '200':
+          description: Mute state updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/v1/organizations/{orgID}/messenger/conversations/{convID}/messages:
+    get:
+      tags: [Messenger]
+      summary: List messages in conversation
+      operationId: listMessages
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: convID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 50 }
+        - name: before
+          in: query
+          description: Cursor — message ID to paginate before
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Message list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        conversation_id: { type: string, format: uuid }
+                        sender_id: { type: string, format: uuid }
+                        content: { type: string }
+                        content_type: { type: string, enum: [text, system, file] }
+                        metadata: { type: object }
+                        created_at: { type: string, format: date-time }
+                        updated_at: { type: string, format: date-time }
+                        reactions:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              emoji: { type: string }
+                              user_ids: { type: array, items: { type: string, format: uuid } }
+    post:
+      tags: [Messenger]
+      summary: Send message
+      operationId: sendMessage
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: convID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string }
+                content_type: { type: string, enum: [text, file], default: text }
+                metadata: { type: object }
+      responses:
+        '201':
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      conversation_id: { type: string, format: uuid }
+                      sender_id: { type: string, format: uuid }
+                      content: { type: string }
+                      content_type: { type: string }
+                      created_at: { type: string, format: date-time }
+
+  /api/v1/organizations/{orgID}/messenger/conversations/{convID}/messages/{msgID}:
+    put:
+      tags: [Messenger]
+      summary: Edit message
+      operationId: editMessage
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: convID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: msgID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string }
+      responses:
+        '200':
+          description: Message updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      id: { type: string, format: uuid }
+                      content: { type: string }
+                      updated_at: { type: string, format: date-time }
+    delete:
+      tags: [Messenger]
+      summary: Delete message
+      operationId: deleteMessage
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: convID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: msgID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Message deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/v1/organizations/{orgID}/messenger/conversations/{convID}/read:
+    post:
+      tags: [Messenger]
+      summary: Mark conversation as read
+      operationId: markConversationRead
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: convID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/v1/organizations/{orgID}/messenger/unread-count:
+    get:
+      tags: [Messenger]
+      summary: Get total unread message count
+      operationId: getUnreadCount
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+      responses:
+        '200':
+          description: Unread count
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      total: { type: integer }
+
+  /api/v1/organizations/{orgID}/messenger/messages/{msgID}/reactions:
+    post:
+      tags: [Messenger]
+      summary: Add reaction to message
+      operationId: addReaction
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: msgID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [emoji]
+              properties:
+                emoji: { type: string }
+      responses:
+        '200':
+          description: Reaction added
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/v1/organizations/{orgID}/messenger/messages/{msgID}/reactions/{emoji}:
+    delete:
+      tags: [Messenger]
+      summary: Remove reaction from message
+      operationId: removeReaction
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: msgID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: emoji
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Reaction removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/v1/organizations/{orgID}/messenger/conversations/{convID}/typing:
+    post:
+      tags: [Messenger]
+      summary: Send typing indicator
+      operationId: sendTypingIndicator
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: convID
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Typing indicator sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+
+  /api/v1/organizations/{orgID}/messenger/search:
+    get:
+      tags: [Messenger]
+      summary: Search messages
+      operationId: searchMessages
+      parameters:
+        - $ref: '#/components/parameters/orgID'
+        - name: q
+          in: query
+          required: true
+          schema: { type: string }
+        - name: conversation_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        conversation_id: { type: string, format: uuid }
+                        sender_id: { type: string, format: uuid }
+                        content: { type: string }
+                        content_type: { type: string }
+                        created_at: { type: string, format: date-time }
 
 components:
   parameters:

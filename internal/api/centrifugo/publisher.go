@@ -40,6 +40,7 @@ type publishData struct {
 }
 
 // HandleEvent publishes an event to the organization channel in Centrifugo.
+// For messenger events, it also publishes to the chat:{conversationID} channel.
 func (p *Publisher) HandleEvent(ctx context.Context, ev types.Event) error {
 	channel := "org:" + ev.OrganizationID.String()
 
@@ -48,6 +49,20 @@ func (p *Publisher) HandleEvent(ctx context.Context, ev types.Event) error {
 		return err
 	}
 
+	p.publish(ctx, channel, payload)
+
+	// Messenger events: also publish to chat channel for real-time delivery
+	var data map[string]any
+	if json.Unmarshal(ev.Data, &data) == nil {
+		if chatChannel, ok := data["_channel"].(string); ok && chatChannel != "" {
+			p.publish(ctx, chatChannel, payload)
+		}
+	}
+
+	return nil
+}
+
+func (p *Publisher) publish(ctx context.Context, channel string, payload json.RawMessage) {
 	body, err := json.Marshal(publishRequest{
 		Method: "publish",
 		Params: publishData{
@@ -56,12 +71,12 @@ func (p *Publisher) HandleEvent(ctx context.Context, ev types.Event) error {
 		},
 	})
 	if err != nil {
-		return err
+		return
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.apiURL, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "apikey "+p.apiKey)
@@ -69,15 +84,13 @@ func (p *Publisher) HandleEvent(ctx context.Context, ev types.Event) error {
 	resp, err := p.client.Do(req)
 	if err != nil {
 		log.Error().Err(err).Str("channel", channel).Msg("centrifugo: publish failed")
-		return nil
+		return
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		log.Error().Int("status", resp.StatusCode).Str("channel", channel).Msg("centrifugo: unexpected status")
 	}
-
-	return nil
 }
 
 type disconnectRequest struct {

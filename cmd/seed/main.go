@@ -664,6 +664,172 @@ func main() {
 	progress("order_number_sequences: last_number=5")
 
 	// ---------------------------------------------------------------
+	// 17. Bank Partner (stub)
+	// ---------------------------------------------------------------
+	bankPartnerID := uuid.New()
+	_, err = tx.Exec(ctx,
+		`INSERT INTO bank_partners (id, name, code, api_base_url, credentials, settings, white_label, active, ver, upd, iat)
+		 VALUES ($1, 'Stub Bank', 'stub', NULL, '{}', '{}', $2, true, 1, $3, $4)
+		 ON CONFLICT DO NOTHING`,
+		bankPartnerID,
+		mustJSON(map[string]any{"logo_url": "", "primary_color": "#333333", "app_name": "BizEngine", "bank_name": "Stub Bank"}),
+		now, now,
+	)
+	if err != nil {
+		fatal("insert bank partner: %v", err)
+	}
+	progress("bank partner: Stub Bank (%s)", bankPartnerID)
+
+	// ---------------------------------------------------------------
+	// 18. Messenger: Conversations + Messages
+	// ---------------------------------------------------------------
+	// 18a. Second user for messaging (Мария as separate user)
+	userMaria := uuid.New()
+	mariaSecret, _ := auth.HashSecret("password")
+	mariaName := "Мария Сидорова"
+	_, err = tx.Exec(ctx,
+		`INSERT INTO users (id, email, password_hash, full_name, phone, is_active, name, secret, ver, upd, created_at, updated_at)
+		 VALUES ($1, 'maria@kofenya.test', '', 'Мария Сидорова', NULL, true, $2, $3, 1, $4, $5, $6)
+		 ON CONFLICT DO NOTHING`,
+		userMaria, &mariaName, mariaSecret, now, now, now,
+	)
+	if err != nil {
+		fatal("insert user maria: %v", err)
+	}
+	_, err = tx.Exec(ctx,
+		`INSERT INTO labors (id, organization_id, user_id, role, permissions, admin, ver, upd, iat, joined_at)
+		 VALUES ($1, $2, $3, 'manager', '[]', false, 1, $4, $5, $6)
+		 ON CONFLICT DO NOTHING`,
+		uuid.New(), orgID, userMaria, now, now, now,
+	)
+	if err != nil {
+		fatal("insert maria labor: %v", err)
+	}
+	progress("user for messenger: Мария Сидорова (%s)", userMaria)
+
+	// 18b. Entity conversation for order ORD-003
+	convOrderID := uuid.New()
+	convOrderName := "Order ORD-003 discussion"
+	refTypeOrder := "order"
+	_, err = tx.Exec(ctx,
+		`INSERT INTO conversations (id, organization_id, type, name, reference_type, reference_id, created_by, ver, upd, iat)
+		 VALUES ($1, $2, 'entity', $3, $4, $5, $6, 1, $7, $8)
+		 ON CONFLICT DO NOTHING`,
+		convOrderID, orgID, convOrderName, refTypeOrder, orderIDs[2], userID, now, now,
+	)
+	if err != nil {
+		fatal("insert entity conversation: %v", err)
+	}
+	// Add members
+	for _, mid := range []uuid.UUID{userID, userMaria} {
+		_, _ = tx.Exec(ctx,
+			`INSERT INTO conversation_members (id, conversation_id, user_id, role, joined_at, ver, upd, iat)
+			 VALUES ($1, $2, $3, 'member', $4, 1, $5, $6) ON CONFLICT DO NOTHING`,
+			uuid.New(), convOrderID, mid, now, now, now)
+	}
+	progress("conversation: entity (order ORD-003)")
+
+	// 18c. Direct conversation
+	convDirectID := uuid.New()
+	_, err = tx.Exec(ctx,
+		`INSERT INTO conversations (id, organization_id, type, created_by, ver, upd, iat)
+		 VALUES ($1, $2, 'direct', $3, 1, $4, $5)
+		 ON CONFLICT DO NOTHING`,
+		convDirectID, orgID, userID, now, now,
+	)
+	if err != nil {
+		fatal("insert direct conversation: %v", err)
+	}
+	for _, mid := range []uuid.UUID{userID, userMaria} {
+		_, _ = tx.Exec(ctx,
+			`INSERT INTO conversation_members (id, conversation_id, user_id, role, joined_at, ver, upd, iat)
+			 VALUES ($1, $2, $3, 'member', $4, 1, $5, $6) ON CONFLICT DO NOTHING`,
+			uuid.New(), convDirectID, mid, now, now, now)
+	}
+	progress("conversation: direct (owner <-> Maria)")
+
+	// 18d. Group conversation
+	convGroupID := uuid.New()
+	groupName := "Baristas"
+	_, err = tx.Exec(ctx,
+		`INSERT INTO conversations (id, organization_id, type, name, created_by, ver, upd, iat)
+		 VALUES ($1, $2, 'group', $3, $4, 1, $5, $6)
+		 ON CONFLICT DO NOTHING`,
+		convGroupID, orgID, groupName, userID, now, now,
+	)
+	if err != nil {
+		fatal("insert group conversation: %v", err)
+	}
+	for _, mid := range []uuid.UUID{userID, userMaria} {
+		_, _ = tx.Exec(ctx,
+			`INSERT INTO conversation_members (id, conversation_id, user_id, role, joined_at, ver, upd, iat)
+			 VALUES ($1, $2, $3, 'member', $4, 1, $5, $6) ON CONFLICT DO NOTHING`,
+			uuid.New(), convGroupID, mid, now, now, now)
+	}
+	progress("conversation: group (Baristas)")
+
+	// 18e. Messages
+	seedMessages := []struct {
+		convID  uuid.UUID
+		sender  uuid.UUID
+		content string
+		cType   string
+		attach  string
+	}{
+		{convOrderID, userID, "[System] Order ORD-003 confirmed", "system", "[]"},
+		{convOrderID, userID, "[System] Order paid (950.00, card)", "system", "[]"},
+		{convOrderID, userMaria, "Customer wants extra sugar", "text", "[]"},
+		{convOrderID, userID, "Got it, will add", "text", "[]"},
+		{convDirectID, userID, "Maria, can you cover the evening shift?", "text", "[]"},
+		{convDirectID, userMaria, "Sure, what time?", "text", "[]"},
+		{convDirectID, userID, "18:00 to 22:00", "text", "[]"},
+		{convGroupID, userID, "New coffee beans arriving tomorrow", "text", "[]"},
+		{convGroupID, userMaria, "Great, we're running low on Arabica", "text", "[]"},
+		{convGroupID, userID, "Check the order",
+			"text",
+			string(mustJSON([]map[string]any{{"type": "entity_ref", "entity_kind": "order", "entity_id": orderIDs[3].String(), "preview": map[string]any{"number": "ORD-004", "status": "shipped"}}})),
+		},
+	}
+
+	var lastMsgIDs [3]uuid.UUID
+	var lastMsgPreviews [3]string
+	convList := []uuid.UUID{convOrderID, convDirectID, convGroupID}
+
+	for _, sm := range seedMessages {
+		msgID := uuid.New()
+		msgTime := now.Add(-time.Duration(10-len(seedMessages)) * time.Minute)
+		_, err = tx.Exec(ctx,
+			`INSERT INTO messages (id, conversation_id, organization_id, sender_id, content, content_type, attachments, ver, upd, iat)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, 1, $8, $9) ON CONFLICT DO NOTHING`,
+			msgID, sm.convID, orgID, sm.sender, sm.content, sm.cType, []byte(sm.attach), msgTime, msgTime,
+		)
+		if err != nil {
+			fatal("insert message: %v", err)
+		}
+		// Track last message per conversation
+		for i, cid := range convList {
+			if cid == sm.convID {
+				lastMsgIDs[i] = msgID
+				preview := sm.content
+				if len(preview) > 100 {
+					preview = preview[:100]
+				}
+				lastMsgPreviews[i] = preview
+			}
+		}
+	}
+
+	// Update last_message on conversations
+	for i, cid := range convList {
+		if lastMsgIDs[i] != uuid.Nil {
+			_, _ = tx.Exec(ctx,
+				`UPDATE conversations SET last_message_id = $1, last_message_at = $2, last_message_preview = $3 WHERE id = $4`,
+				lastMsgIDs[i], now, lastMsgPreviews[i], cid)
+		}
+	}
+	progress("messages: %d messages across 3 conversations", len(seedMessages))
+
+	// ---------------------------------------------------------------
 	// Commit
 	// ---------------------------------------------------------------
 	if err := tx.Commit(ctx); err != nil {

@@ -28,6 +28,7 @@ import (
 	"github.com/bizengine/engine/internal/export"
 	"github.com/bizengine/engine/internal/graphs"
 	"github.com/bizengine/engine/internal/integration/bank"
+	"github.com/bizengine/engine/internal/integration/banking"
 	"github.com/bizengine/engine/internal/integration/chestnyznak"
 	"github.com/bizengine/engine/internal/integration/edo"
 	"github.com/bizengine/engine/internal/integration/fns"
@@ -36,11 +37,13 @@ import (
 	"github.com/bizengine/engine/internal/module/finance"
 	"github.com/bizengine/engine/internal/dataimport"
 	"github.com/bizengine/engine/internal/documents"
+	bankingMod "github.com/bizengine/engine/internal/module/banking"
 	"github.com/bizengine/engine/internal/module/crm"
 	"github.com/bizengine/engine/internal/module/hr"
-	"github.com/bizengine/engine/internal/module/settings"
 	"github.com/bizengine/engine/internal/module/logistics"
+	"github.com/bizengine/engine/internal/module/messenger"
 	"github.com/bizengine/engine/internal/module/order"
+	"github.com/bizengine/engine/internal/module/settings"
 	"github.com/bizengine/engine/internal/module/warehouse"
 	"github.com/bizengine/engine/internal/notification"
 	"github.com/bizengine/engine/internal/storage/postgres"
@@ -184,6 +187,15 @@ func main() {
 	webhookRepo := postgres.NewWebhookRepo(pool)
 	webhookSvc := webhook.NewService(webhookRepo)
 
+	// Modules: Banking
+	bankingRepo := postgres.NewBankingRepo(pool)
+	bankingAdapter := banking.NewStub()
+	bankingSvcNew := bankingMod.NewService(bankingRepo, bankingAdapter, eventBus, financeSvc)
+
+	// Modules: Messenger
+	messengerRepo := postgres.NewMessengerRepo(pool)
+	messengerSvc := messenger.NewService(messengerRepo, eventBus)
+
 	// Core: Process Engine
 	processRepo := postgres.NewProcessRepo(pool)
 	processEngine := process.NewEngine(processRepo, eventBus)
@@ -192,6 +204,7 @@ func main() {
 	// Inter-module event subscriptions
 	setupEventSubscriptions(eventBus, warehouseSvc, processEngine, financeSvc, orderSvc)
 	setupNotificationSubscriptions(eventBus, notifSvc, authRepo)
+	setupMessengerSubscriptions(eventBus, messengerSvc)
 
 	// Webhook dispatch: forward all events to matching webhooks
 	eventBus.SubscribeAll(event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
@@ -268,7 +281,7 @@ func main() {
 	}))
 
 	// Centrifugo connect/subscribe proxy handlers
-	connectHandler := centrifugo.NewConnectHandler(sessionStore, cfg.Session.SeanceTTL)
+	connectHandler := centrifugo.NewConnectHandler(sessionStore, cfg.Session.SeanceTTL, messengerSvc)
 	subscribeHandler := centrifugo.NewSubscribeHandler(sessionStore, cfg.Session.SeanceTTL)
 
 	// REST Router
@@ -317,6 +330,8 @@ func main() {
 		AnalyticsH:    rest.NewAnalyticsHandler(analyticsSvc),
 		WebhookH:      rest.NewWebhookHandler(webhookSvc),
 		NotificationH: rest.NewNotificationHandler(notifSvc),
+		BankingH:      rest.NewBankingHandler(bankingSvcNew, authSvc),
+		MessengerH:    rest.NewMessengerHandler(messengerSvc),
 		AdminH:        rest.NewAdminHandler(arcanaEngine, version),
 		HealthH:       rest.NewHealthHandler(pool, redisClient, arcanaEngine, cfg.Centrifugo.APIURL, version),
 	})
@@ -676,6 +691,115 @@ func cookieValue(r *http.Request, name string) string {
 		return ""
 	}
 	return c.Value
+}
+
+func setupMessengerSubscriptions(eventBus event.Bus, messengerSvc *messenger.Service) {
+	// Auto-create entity conversations on order/route creation
+	eventBus.Subscribe("order.created", event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
+		var data map[string]any
+		json.Unmarshal(ev.Data, &data)
+		orderID := ev.EntityID
+		if orderID == nil {
+			if idStr, ok := data["order_id"].(string); ok {
+				id, err := uuid.Parse(idStr)
+				if err == nil {
+					orderID = &id
+				}
+			}
+		}
+		if orderID == nil {
+			return nil
+		}
+		actorID := ev.ActorID
+		if actorID == nil {
+			actorID = orderID
+		}
+		messengerSvc.GetOrCreateEntityConversation(ctx, ev.OrganizationID, "order", *orderID, *actorID)
+		return nil
+	}))
+
+	eventBus.Subscribe("logistics.route.started", event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
+		if ev.EntityID == nil {
+			return nil
+		}
+		actorID := ev.ActorID
+		if actorID == nil {
+			actorID = ev.EntityID
+		}
+		messengerSvc.GetOrCreateEntityConversation(ctx, ev.OrganizationID, "route", *ev.EntityID, *actorID)
+		return nil
+	}))
+
+	// System messages from business events
+	eventBus.Subscribe("order.confirmed", event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
+		if ev.EntityID == nil {
+			return nil
+		}
+		var data map[string]any
+		json.Unmarshal(ev.Data, &data)
+		number, _ := data["number"].(string)
+		messengerSvc.SendSystemMessage(ctx, ev.OrganizationID, "order", *ev.EntityID,
+			"[System] Order "+number+" confirmed")
+		return nil
+	}))
+
+	eventBus.Subscribe("order.paid", event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
+		if ev.EntityID == nil {
+			return nil
+		}
+		var data map[string]any
+		json.Unmarshal(ev.Data, &data)
+		amount, _ := data["amount"].(float64)
+		method, _ := data["method"].(string)
+		messengerSvc.SendSystemMessage(ctx, ev.OrganizationID, "order", *ev.EntityID,
+			fmt.Sprintf("[System] Order paid (%.2f, %s)", amount/100, method))
+		return nil
+	}))
+
+	eventBus.Subscribe("order.shipped", event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
+		if ev.EntityID == nil {
+			return nil
+		}
+		messengerSvc.SendSystemMessage(ctx, ev.OrganizationID, "order", *ev.EntityID,
+			"[System] Order shipped")
+		return nil
+	}))
+
+	eventBus.Subscribe("warehouse.stock.low", event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
+		var data map[string]any
+		json.Unmarshal(ev.Data, &data)
+		productName, _ := data["product_name"].(string)
+		quantity, _ := data["quantity"].(float64)
+		if ev.EntityID != nil {
+			messengerSvc.SendSystemMessage(ctx, ev.OrganizationID, "product", *ev.EntityID,
+				fmt.Sprintf("[System] Low stock: %s — %.0f units", productName, quantity))
+		}
+		return nil
+	}))
+
+	eventBus.Subscribe("logistics.route.stop.completed", event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
+		if ev.EntityID == nil {
+			return nil
+		}
+		var data map[string]any
+		json.Unmarshal(ev.Data, &data)
+		address, _ := data["address"].(string)
+		messengerSvc.SendSystemMessage(ctx, ev.OrganizationID, "route", *ev.EntityID,
+			"[System] Delivery stop completed: "+address)
+		return nil
+	}))
+
+	// Bank payment completed → auto pay order
+	eventBus.Subscribe("bank.payment.completed", event.SubscriberFunc(func(ctx context.Context, ev types.Event) error {
+		var data map[string]any
+		json.Unmarshal(ev.Data, &data)
+		if orderIDStr, ok := data["order_id"].(string); ok && orderIDStr != "" {
+			orderID, _ := uuid.Parse(orderIDStr)
+			messengerSvc.SendSystemMessage(ctx, ev.OrganizationID, "order", orderID,
+				"[System] Payment received via bank")
+		}
+		return nil
+	}))
 }
 
 func setupLogger(level, env string) {

@@ -1,22 +1,35 @@
 package centrifugo
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/bizengine/engine/internal/core/auth"
 )
+
+// ConversationIDsGetter retrieves user conversation IDs for real-time subscriptions.
+type ConversationIDsGetter interface {
+	GetUserConversationIDs(ctx context.Context, userID, orgID uuid.UUID) ([]uuid.UUID, error)
+}
 
 // ConnectHandler handles Centrifugo connect proxy requests.
 type ConnectHandler struct {
 	store     auth.SessionStore
 	seanceTTL time.Duration
+	convGetter ConversationIDsGetter
 }
 
 // NewConnectHandler creates a new connect proxy handler.
-func NewConnectHandler(store auth.SessionStore, seanceTTL time.Duration) *ConnectHandler {
-	return &ConnectHandler{store: store, seanceTTL: seanceTTL}
+func NewConnectHandler(store auth.SessionStore, seanceTTL time.Duration, convGetter ...ConversationIDsGetter) *ConnectHandler {
+	h := &ConnectHandler{store: store, seanceTTL: seanceTTL}
+	if len(convGetter) > 0 {
+		h.convGetter = convGetter[0]
+	}
+	return h
 }
 
 type connectResult struct {
@@ -72,15 +85,26 @@ func (h *ConnectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		"role":            sess.Role,
 	})
 
+	channels := []string{
+		"org:" + sess.OrganizationID.String(),
+		"workspace:" + sess.OrganizationID.String(),
+		"views:" + seanceID,
+	}
+
+	if h.convGetter != nil {
+		convIDs, err := h.convGetter.GetUserConversationIDs(ctx, sess.UserID, sess.OrganizationID)
+		if err == nil {
+			for _, cid := range convIDs {
+				channels = append(channels, "chat:"+cid.String())
+			}
+		}
+	}
+
 	resp := connectResponse{
 		Result: &connectResult{
-			User: sess.UserID.String(),
-			Channels: []string{
-				"org:" + sess.OrganizationID.String(),
-				"workspace:" + sess.OrganizationID.String(),
-				"views:" + seanceID,
-			},
-			Data: data,
+			User:     sess.UserID.String(),
+			Channels: channels,
+			Data:     data,
 		},
 	}
 
