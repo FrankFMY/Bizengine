@@ -317,4 +317,3 @@ var financeCashOperations = arcana.GraphDef{
 		return result, rows.Err()
 	},
 }
-

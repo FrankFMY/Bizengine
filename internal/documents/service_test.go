@@ -14,9 +14,9 @@ type mockOrderFetcher struct{}
 
 func (m *mockOrderFetcher) GetOrderForDocument(_ context.Context, _, _ uuid.UUID) (*OrderData, error) {
 	return &OrderData{
-		ID:     uuid.New(),
-		Number: "ORD-001",
-		Date:   time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC),
+		ID:           uuid.New(),
+		Number:       "ORD-001",
+		Date:         time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC),
 		CustomerName: "Test Customer",
 		Items: []OrderItemRow{
 			{Index: 1, Name: "Кофе Латте", SKU: "LATTE-01", Quantity: 2, UnitPrice: "250.00", Total: "500.00", VATRate: 20},
@@ -102,4 +102,3 @@ func TestRenderPriceTagsEmpty(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "product_ids")
 }
-

@@ -1,3 +1,4 @@
+//go:build ignore
 // +build ignore
 
 // Command gen_view_types generates TypeScript types for all registered Arcana graphs.

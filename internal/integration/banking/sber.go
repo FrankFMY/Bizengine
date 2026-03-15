@@ -251,11 +251,11 @@ func (a *SberAdapter) ExchangeCode(ctx context.Context, code string) (*BankUser,
 	var tokenResp struct {
 		AccessToken string `json:"access_token"`
 		UserInfo    struct {
-			Sub      string `json:"sub"`
-			Name     string `json:"name"`
-			INN      string `json:"inn"`
-			Phone    string `json:"phone_number"`
-			Email    string `json:"email"`
+			Sub   string `json:"sub"`
+			Name  string `json:"name"`
+			INN   string `json:"inn"`
+			Phone string `json:"phone_number"`
+			Email string `json:"email"`
 		} `json:"user_info"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResp); err != nil {

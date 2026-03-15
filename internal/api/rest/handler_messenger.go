@@ -389,8 +389,8 @@ func (h *MessengerHandler) GetUnreadCount(w http.ResponseWriter, r *http.Request
 	}
 
 	respondOK(w, http.StatusOK, map[string]any{
-		"total":          total,
-		"conversations":  counts,
+		"total":         total,
+		"conversations": counts,
 	})
 }
 

@@ -32,13 +32,13 @@ var organizationSettings = arcana.GraphDef{
 		result := arcana.NewResult()
 		result.AddRef(arcana.Ref{Table: "organization_settings", ID: orgID, Fields: []string{"currency", "timezone", "features"}})
 		result.AddRow("organization_settings", orgID, map[string]any{
-			"organization_id":    orgID,
-			"currency":           currency,
-			"timezone":           timezone,
+			"organization_id":     orgID,
+			"currency":            currency,
+			"timezone":            timezone,
 			"order_number_format": orderFmt,
-			"requisites":         string(requisites),
-			"integrations":       string(integrations),
-			"features":           string(features),
+			"requisites":          string(requisites),
+			"integrations":        string(integrations),
+			"features":            string(features),
 		})
 		return result, nil
 	},

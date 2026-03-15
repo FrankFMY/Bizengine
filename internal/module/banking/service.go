@@ -247,10 +247,10 @@ func (s *Service) PayViaBank(ctx context.Context, orgID uuid.UUID, batch adapter
 	}
 
 	s.publishEvent(ctx, orgID, nil, "bank.payroll.sent", map[string]any{
-		"batch_id":  result.BatchID,
-		"count":     result.Count,
-		"month":     batch.Month,
-		"year":      batch.Year,
+		"batch_id": result.BatchID,
+		"count":    result.Count,
+		"month":    batch.Month,
+		"year":     batch.Year,
 	})
 
 	return result, nil

@@ -206,4 +206,3 @@ func TestParsePriceFormats(t *testing.T) {
 	assert.Equal(t, int64(15050), parsePrice("150.50"))
 	assert.Equal(t, int64(999), parsePrice("9.99"))
 }
-

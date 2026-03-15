@@ -18,8 +18,8 @@ type ConversationIDsGetter interface {
 
 // ConnectHandler handles Centrifugo connect proxy requests.
 type ConnectHandler struct {
-	store     auth.SessionStore
-	seanceTTL time.Duration
+	store      auth.SessionStore
+	seanceTTL  time.Duration
 	convGetter ConversationIDsGetter
 }
 

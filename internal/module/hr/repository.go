@@ -138,19 +138,19 @@ type EmployeeFilter struct {
 
 // Payroll represents a monthly payroll calculation.
 type Payroll struct {
-	ID             uuid.UUID    `json:"id"`
-	OrganizationID uuid.UUID    `json:"organization_id"`
-	EmployeeID     uuid.UUID    `json:"employee_id"`
-	Year           int          `json:"year"`
-	Month          int          `json:"month"`
-	GrossSalary    int64        `json:"gross_salary"`
-	NDFL           int64        `json:"ndfl"`
-	Deductions     int64        `json:"deductions"`
-	NetSalary      int64        `json:"net_salary"`
-	Status         string       `json:"status"` // draft, approved, paid
-	ApprovedAt     *time.Time   `json:"approved_at,omitempty"`
-	ApprovedBy     *uuid.UUID   `json:"approved_by,omitempty"`
-	CreatedAt      time.Time    `json:"created_at"`
+	ID             uuid.UUID  `json:"id"`
+	OrganizationID uuid.UUID  `json:"organization_id"`
+	EmployeeID     uuid.UUID  `json:"employee_id"`
+	Year           int        `json:"year"`
+	Month          int        `json:"month"`
+	GrossSalary    int64      `json:"gross_salary"`
+	NDFL           int64      `json:"ndfl"`
+	Deductions     int64      `json:"deductions"`
+	NetSalary      int64      `json:"net_salary"`
+	Status         string     `json:"status"` // draft, approved, paid
+	ApprovedAt     *time.Time `json:"approved_at,omitempty"`
+	ApprovedBy     *uuid.UUID `json:"approved_by,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 // Absence represents an employee leave record.

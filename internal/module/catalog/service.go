@@ -344,7 +344,7 @@ func (s *Service) DeleteCategory(ctx context.Context, orgID uuid.UUID, categoryI
 type PricingRule struct {
 	ID            string         `json:"id"`
 	Name          string         `json:"name"`
-	Type          string         `json:"type"` // schedule_discount, quantity_bonus, customer_discount
+	Type          string         `json:"type"`                     // schedule_discount, quantity_bonus, customer_discount
 	DiscountType  string         `json:"discount_type,omitempty"`  // percent, fixed
 	DiscountValue int64          `json:"discount_value,omitempty"` // percent (whole number) or fixed (kopecks)
 	BuyQuantity   float64        `json:"buy_quantity,omitempty"`
@@ -372,9 +372,9 @@ type PriceInput struct {
 
 // PriceResult holds the calculated price details.
 type PriceResult struct {
-	BasePrice      int64   `json:"base_price"`
-	EffectivePrice int64   `json:"effective_price"`
-	TotalQuantity  float64 `json:"total_quantity"` // includes bonus items
+	BasePrice      int64    `json:"base_price"`
+	EffectivePrice int64    `json:"effective_price"`
+	TotalQuantity  float64  `json:"total_quantity"` // includes bonus items
 	AppliedRules   []string `json:"applied_rules,omitempty"`
 }
 
