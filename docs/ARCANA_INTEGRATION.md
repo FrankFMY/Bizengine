@@ -38,7 +38,7 @@ arcana.Identity{
 
 Note: Arcana uses `WorkspaceID` internally — it maps to BizEngine's `organization_id`.
 
-## 21 Graph Definitions
+## 38 Graph Definitions
 
 Defined in `internal/graphs/`, registered via `graphs.RegisterAll(engine)`.
 
@@ -47,24 +47,41 @@ Defined in `internal/graphs/`, registered via `graphs.RegisterAll(engine)`.
 | `catalog_products_list` | Catalog | entities, components | `category_id` (uuid), `search` (string), `limit` (int, default 50), `offset` (int, default 0) |
 | `catalog_product_detail` | Catalog | entities, components, stock_levels | `product_id` (uuid, required) |
 | `catalog_categories_tree` | Catalog | entities | — |
-| `warehouse_stock_list` | Warehouse | stock_levels, entities | `warehouse_id` (uuid), `limit`, `offset` |
+| `warehouse_stock_list` | Warehouse | stock_levels, entities | `warehouse_id` (uuid, required), `search`, `limit`, `offset` |
 | `warehouse_stock_detail` | Warehouse | stock_levels, stock_movements, entities | `product_id` (uuid, required), `warehouse_id` (uuid, required) |
-| `warehouse_low_stock` | Warehouse | stock_levels, entities | — |
+| `warehouse_inventory_detail` | Warehouse | stock_levels, entities | `product_id` (uuid, required) |
+| `warehouse_low_stock` | Warehouse | stock_levels, entities | `warehouse_id` (uuid, required) |
 | `orders_list` | Orders | orders, entities | `status` (string), `limit`, `offset` |
 | `order_detail` | Orders | orders, order_items, entities | `order_id` (uuid, required) |
+| `order_refunds_list` | Orders | orders | `limit`, `offset` |
 | `orders_dashboard` | Orders | orders | — |
-| `hr_employees_list` | HR | entities, components | `limit`, `offset` |
+| `hr_employees_list` | HR | entities, components | `search`, `status`, `limit`, `offset` |
 | `hr_employee_detail` | HR | entities, components, shifts | `employee_id` (uuid, required) |
 | `hr_shifts_schedule` | HR | shifts, entities | — (current week) |
-| `hr_timesheets_list` | HR | timesheets, entities | `limit`, `offset` |
+| `hr_timesheets_list` | HR | timesheets, entities | `employee_id`, `status`, `limit`, `offset` |
+| `hr_payroll_list` | HR | payrolls, entities | `year`, `month` |
+| `hr_absences_list` | HR | absences, entities | `employee_id`, `status`, `limit`, `offset` |
 | `finance_trial_balance` | Finance | accounts, transaction_lines | — |
-| `finance_transactions_list` | Finance | transactions | `limit`, `offset` |
+| `finance_transactions_list` | Finance | transactions, transaction_lines | `account_id`, `limit`, `offset` |
 | `finance_account_balance` | Finance | accounts, transaction_lines | `account_id` (uuid, required) |
+| `finance_pnl` | Finance | accounts, transactions | `from`, `to` |
+| `finance_periods_list` | Finance | finance_periods | — |
+| `finance_cash_operations` | Finance | cash_operations | `limit`, `offset` |
+| `crm_customers_list` | CRM | entities, components | `search`, `tag`, `category`, `limit`, `offset` |
+| `crm_customer_detail` | CRM | entities, components, orders | `id` (required) |
+| `crm_suppliers_list` | CRM | entities, components | `search`, `limit`, `offset` |
+| `organization_settings` | Settings | organization_settings | — |
 | `logistics_routes_list` | Logistics | routes, entities | `status` (string), `limit`, `offset` |
 | `logistics_route_detail` | Logistics | routes, route_stops, entities | `route_id` (uuid, required) |
 | `logistics_vehicles_map` | Logistics | geo_tracks, entities | — |
 | `notifications_unread` | Notifications | notifications | — |
+| `notifications_list` | Notifications | notifications | `unread_only`, `limit`, `offset` |
 | `dashboard_summary` | Dashboard | orders, stock_levels, entities | — |
+| `bank_reconciliation_list` | Banking | bank_reconciliations | `limit`, `offset` |
+| `bank_reconciliation_detail` | Banking | bank_reconciliations, bank_reconciliation_entries | `reconciliation_id` (uuid, required) |
+| `chat_conversations_list` | Messenger | conversations, messages, conversation_members | `type`, `search`, `limit`, `offset` |
+| `chat_messages` | Messenger | messages, message_reactions | `conversation_id` (uuid, required), `before`, `limit` |
+| `chat_unread_total` | Messenger | conversation_members, messages | — |
 
 ## Event to Change Mapping
 
@@ -106,7 +123,8 @@ eventBus.SubscribeAll(event.SubscriberFunc(func(ctx context.Context, ev types.Ev
 
 | Channel Pattern | Message Types | Scope |
 |----------------|---------------|-------|
-| `org:{organization_id}` | `table_diff` | All users in the organization see row-level data changes |
+| `workspace:{organization_id}` | `table_diff` | All users in the organization see row-level data changes |
+| `org:{organization_id}` | Raw BizEngine events | Organization-wide domain event stream |
 | `views:{seance_id}` | `view_snapshot`, `view_diff` | Per-seance: initial data and ref-list changes |
 
 ## Message Formats

@@ -2,6 +2,9 @@
 
 Server engine for creating digital twins of businesses. Turns any business — from a coffee shop to a logistics company — into a programmable system of entities, components, events, and automated processes.
 
+- **Repository:** [github.com/FrankFMY/Bizengine](https://github.com/FrankFMY/Bizengine)
+- **License model:** public source visibility with proprietary, all-rights-reserved usage terms.
+
 ## What it does
 
 BizEngine provides a unified backend for managing business operations through an Entity-Component-System (ECS) architecture combined with Event Sourcing. Every business object (product, order, warehouse, employee, vehicle, point of sale) is an **Entity** with attached **Components** (typed JSONB data). Every mutation produces an **Event** in an append-only log. Business workflows are **state machines** defined in YAML. Real-time UI updates are delivered through **Arcana** (reactive data sync engine) powered by Centrifugo.
@@ -11,7 +14,7 @@ BizEngine provides a unified backend for managing business operations through an
 - **Universal entity model** — any business object is an Entity with flexible Components, no schema migrations needed for new object types
 - **Event sourcing** — full audit trail, reactive views via Centrifugo, replay to any point in time
 - **Process engine** — YAML-defined state machines for order fulfillment, stock replenishment, delivery tracking, employee onboarding
-- **Arcana integration** — reactive data sync engine with 32 graph definitions, JSON Patch diffs, pagination support, and Centrifugo delivery
+- **Arcana integration** — reactive data sync engine with 38 business graph definitions, JSON Patch diffs, pagination support, and Centrifugo delivery
 - **Multi-tenancy** — organization-based isolation, every query scoped by `organization_id`
 - **Double-entry accounting** — financial module with proper debit/credit bookkeeping (int64 kopeks, no floats)
 - **3D space validation** — AABB collision detection and parent containment checks for spatial layouts
@@ -83,7 +86,7 @@ Dependency direction: API -> Module -> Core -> Storage. Never reversed.
 | File Storage | MinIO (S3-compatible) | Presigned URLs for direct browser uploads |
 | HTTP Router | chi/v5 | Lightweight, net/http compatible |
 | Auth | Cookie sessions + argon2id | HttpOnly cookies + Redis session store |
-| Reactive Sync | [Arcana v0.1.3](https://github.com/FrankFMY/arcana) | Graph-based subscriptions, JSON Patch diffs, pagination |
+| Reactive Sync | [Arcana v0.2.0](https://github.com/FrankFMY/Arcana) | Graph-based subscriptions, JSON Patch diffs, pagination |
 | SQL Driver | pgx/v5 | Native PostgreSQL, no ORM |
 | Logging | zerolog | Structured JSON logs |
 | Config | go-envconfig | Env-based configuration |
@@ -117,7 +120,7 @@ bizengine/
 |   +-- api/
 |   |   +-- rest/                # Chi router, all HTTP handlers
 |   |   +-- centrifugo/          # Connect/subscribe proxy, publisher
-|   +-- graphs/                  # Arcana graph definitions (33 graphs)
+|   +-- graphs/                  # Arcana graph definitions (38 graphs)
 |   +-- notification/            # Notification inbox service
 |   +-- webhook/                 # Webhook dispatch service
 |   +-- dataimport/              # Mass CSV/XLSX data import
@@ -134,7 +137,7 @@ bizengine/
 |   +-- errs/                    # Typed errors (NotFound, Conflict, BadRequest)
 |   +-- money/                   # Financial arithmetic (int64 kopeks)
 |   +-- dsl/                     # YAML process definition parser + validator
-+-- migrations/                  # 19 numbered up/down SQL migrations
++-- migrations/                  # 22 numbered up/down SQL migrations
 +-- processes/                   # 4 YAML business process definitions
 +-- deploy/                      # Dockerfile, docker-compose, centrifugo.json
 +-- docs/                        # Technical documentation
@@ -364,7 +367,7 @@ POST   /api/v1/organizations/{orgID}/processes/trigger               # Trigger p
 
 ### Arcana (reactive data sync)
 ```
-POST   /arcana/subscribe             # Subscribe to a graph (20 available)
+POST   /arcana/subscribe             # Subscribe to a graph (38 available)
 POST   /arcana/unsubscribe           # Unsubscribe by params_hash
 POST   /arcana/sync                  # Reconnect sync
 GET    /arcana/active                # List active subscriptions
@@ -532,7 +535,7 @@ make run          # Build and run
 ### Testing
 
 ```bash
-make test                 # Unit tests (~320 tests, ~5s)
+make test                 # Go test suite with race detector (414 test functions)
 make test-integration     # Integration tests (requires Docker)
 make test-coverage        # Coverage report -> coverage.html
 ```
@@ -608,24 +611,24 @@ Request processing order:
 
 ## Codebase stats
 
-- **~35,000 lines** of Go code
-- **318 unit tests** across 26 test suites
-- **19 database migrations** (38 files with up/down)
+- **~41,000 lines** of Go code
+- **414 Go test functions** across 49 test files
+- **22 database migrations** (44 files with up/down)
 - **4 YAML process definitions** + custom definitions via API
-- **33 Arcana graph definitions** for reactive data sync
-- **180+ REST API endpoints** + 6 Arcana endpoints
+- **38 Arcana graph definitions** for reactive data sync
+- **199 REST API endpoints** + 6 Arcana endpoints
 - **40+ event types** with async subscriber fan-out
 
 ## Author
 
 **Pryanishnikov Artem Alekseevich**
 
-- Email: Pryanishnikovartem@gmail.com
+- Email: frankfmy@proton.me
 - Telegram: [@FrankFMY](https://t.me/FrankFMY)
 - GitHub: [@FrankFMY](https://github.com/FrankFMY)
 
 ## License
 
-Proprietary. All rights reserved. See [LICENSE](LICENSE) for details.
+Proprietary. All rights reserved. This repository is public for source review and portfolio visibility; usage, copying, modification, hosting, redistribution, and derivative works require prior written permission. See [LICENSE](LICENSE) for details.
 
 No part of this software may be used, copied, modified, or distributed without prior written consent of the author.

@@ -10,7 +10,7 @@ import (
 var notificationsList = arcana.GraphDef{
 	Key: "notifications_list",
 	Deps: []arcana.TableDep{
-		{Table: "notifications", Columns: []string{"read", "iat"}},
+		{Table: "notifications", Columns: []string{"severity", "read", "iat"}},
 	},
 	Params: arcana.ParamSchema{
 		"unread_only": arcana.ParamString().Build(),
@@ -26,7 +26,7 @@ var notificationsList = arcana.GraphDef{
 		unreadOnly := p.String("unread_only")
 
 		query := `
-			SELECT id, type, title, body, read, iat, COUNT(*) OVER() AS total_count
+			SELECT id, severity, title, body, read, iat, COUNT(*) OVER() AS total_count
 			FROM notifications
 			WHERE organization_id = $1 AND user_id = $2
 		`
@@ -48,17 +48,17 @@ var notificationsList = arcana.GraphDef{
 
 		result := arcana.NewResult()
 		for rows.Next() {
-			var id, nType, title, body string
+			var id, severity, title, body string
 			var isRead bool
 			var iat any
 			var cnt int
-			if err := rows.Scan(&id, &nType, &title, &body, &isRead, &iat, &cnt); err != nil {
+			if err := rows.Scan(&id, &severity, &title, &body, &isRead, &iat, &cnt); err != nil {
 				return nil, err
 			}
 			result.SetTotal(cnt)
-			result.AddRef(arcana.Ref{Table: "notifications", ID: id, Fields: []string{"read", "iat"}})
+			result.AddRef(arcana.Ref{Table: "notifications", ID: id, Fields: []string{"severity", "read", "iat"}})
 			result.AddRow("notifications", id, map[string]any{
-				"id": id, "type": nType, "title": title, "body": body,
+				"id": id, "severity": severity, "title": title, "body": body,
 				"read": isRead, "iat": iat,
 			})
 		}

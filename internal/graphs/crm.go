@@ -25,6 +25,8 @@ var crmCustomersList = arcana.GraphDef{
 		limit := p.Int("limit")
 		offset := p.Int("offset")
 		search := p.String("search")
+		tag := p.String("tag")
+		category := p.String("category")
 
 		query := `
 			SELECT e.id, e.name, e.status,
@@ -46,6 +48,16 @@ var crmCustomersList = arcana.GraphDef{
 		if search != "" {
 			query += fmt.Sprintf(` AND e.name ILIKE $%d`, argIdx)
 			args = append(args, "%"+search+"%")
+			argIdx++
+		}
+		if tag != "" {
+			query += fmt.Sprintf(` AND COALESCE(cp.data->'tags', '[]'::jsonb) ? $%d`, argIdx)
+			args = append(args, tag)
+			argIdx++
+		}
+		if category != "" {
+			query += fmt.Sprintf(` AND cp.data->>'category' = $%d`, argIdx)
+			args = append(args, category)
 			argIdx++
 		}
 

@@ -51,7 +51,7 @@ POST /arcana/sync
 
 ### Available Graphs
 
-37 graphs: `catalog_products_list`, `catalog_product_detail`, `catalog_categories_tree`, `warehouse_stock_list`, `warehouse_stock_detail`, `warehouse_low_stock`, `warehouse_inventory_detail`, `orders_list`, `order_detail`, `order_refunds_list`, `orders_dashboard`, `hr_employees_list`, `hr_employee_detail`, `hr_shifts_schedule`, `hr_timesheets_list`, `hr_payroll_list`, `hr_absences_list`, `finance_trial_balance`, `finance_transactions_list`, `finance_account_balance`, `finance_pnl`, `finance_periods_list`, `finance_cash_operations`, `logistics_routes_list`, `logistics_route_detail`, `logistics_vehicles_map`, `crm_customers_list`, `crm_customer_detail`, `crm_suppliers_list`, `organization_settings`, `notifications_list`, `notifications_unread`, `dashboard_summary`, `bank_reconciliation_list`, `bank_reconciliation_detail`, `chat_conversations_list`, `chat_messages`, `chat_unread_total`.
+38 graphs: `catalog_products_list`, `catalog_product_detail`, `catalog_categories_tree`, `warehouse_stock_list`, `warehouse_stock_detail`, `warehouse_low_stock`, `warehouse_inventory_detail`, `orders_list`, `order_detail`, `order_refunds_list`, `orders_dashboard`, `hr_employees_list`, `hr_employee_detail`, `hr_shifts_schedule`, `hr_timesheets_list`, `hr_payroll_list`, `hr_absences_list`, `finance_trial_balance`, `finance_transactions_list`, `finance_account_balance`, `finance_pnl`, `finance_periods_list`, `finance_cash_operations`, `logistics_routes_list`, `logistics_route_detail`, `logistics_vehicles_map`, `crm_customers_list`, `crm_customer_detail`, `crm_suppliers_list`, `organization_settings`, `notifications_list`, `notifications_unread`, `dashboard_summary`, `bank_reconciliation_list`, `bank_reconciliation_detail`, `chat_conversations_list`, `chat_messages`, `chat_unread_total`.
 
 Full schema: `GET /arcana/schema`.
 
@@ -61,7 +61,8 @@ Connect to Centrifugo WebSocket at `ws://localhost:8001/connection/websocket`. A
 
 ### Channels
 
-- `org:{organization_id}` — subscribe for `table_diff` messages (row-level data changes, organization-wide)
+- `workspace:{organization_id}` — subscribe for Arcana `table_diff` messages (row-level data changes, organization-wide)
+- `org:{organization_id}` — subscribe for raw BizEngine domain events
 - `views:{seance_id}` — subscribe for `view_snapshot` and `view_diff` messages (per-seance)
 - `chat:{conversation_id}` — subscribe for real-time chat messages and typing indicators in a specific conversation
 
