@@ -488,6 +488,7 @@ states:
 - Go 1.24+
 - Docker and Docker Compose
 - Make
+- The [golang-migrate CLI](https://github.com/golang-migrate/migrate) with PostgreSQL support for `make migrate-up`
 
 ### Setup
 
@@ -501,6 +502,8 @@ docker compose up -d
 
 # Copy environment config
 cp .env.example .env
+# In .env, set DB_PORT=5436 and REDIS_ADDR=localhost:6381
+# to match the host ports published by docker-compose.yml.
 
 # Run migrations
 make migrate-up
@@ -508,11 +511,13 @@ make migrate-up
 # Seed demo data (optional)
 go run ./cmd/seed
 
-# Start server (with hot-reload)
-make dev
+# Build and start the server
+make run
 ```
 
-The server starts on `http://localhost:8080`. Health check: `GET /health`.
+The server starts on `http://localhost:8080`. Health check: `GET /health`. For optional hot reload, install [Air](https://github.com/air-verse/air) and use `make dev`.
+
+For frontend integration, see [SDK_README.md](SDK_README.md). The SDK is part of this repository and remains subject to the same proprietary [LICENSE](LICENSE); it is not a separately published open-source package.
 
 ### Infrastructure ports
 
@@ -619,13 +624,13 @@ Request processing order:
 - **199 REST API endpoints** + 6 Arcana endpoints
 - **40+ event types** with async subscriber fan-out
 
-## Author
+## Author and contact
 
-**Pryanishnikov Artem Alekseevich**
+**Artem Prianishnikov** · [FrankFMY](https://github.com/FrankFMY)
 
-- Email: frankfmy@proton.me
-- Telegram: [@FrankFMY](https://t.me/FrankFMY)
-- GitHub: [@FrankFMY](https://github.com/FrankFMY)
+[Website](https://frankfmy.com) · [Telegram](https://t.me/FrankFMY) · [LinkedIn](https://www.linkedin.com/in/frankfmy/) · [X](https://x.com/FrankFMY) · [npm profile](https://www.npmjs.com/~frankfmy)
+
+Email: [frankfmy@proton.me](mailto:frankfmy@proton.me) · [Pryanishnikovartem@gmail.com](mailto:Pryanishnikovartem@gmail.com)
 
 ## License
 
